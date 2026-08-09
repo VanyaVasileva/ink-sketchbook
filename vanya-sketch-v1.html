@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Ink Pen Brush — Test</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #f6f4f0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    overscroll-behavior: none; touch-action: none; position: fixed; width: 100%;
+  }
+  #app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+  header {
+    padding: 10px 14px; display: flex; align-items: center; justify-content: space-between;
+    background: #fff; border-bottom: 1px solid #e5e1d8; flex-wrap: wrap; gap: 8px;
+  }
+  h1 { font-size: 15px; margin: 0; color: #2a2620; font-weight: 600; }
+  .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  button, label.filebtn {
+    border: 1px solid #d8d3c6; background: #fff; color: #2a2620;
+    padding: 7px 13px; border-radius: 7px; font-size: 13px; cursor: pointer; display: inline-block;
+  }
+  button.active { background: #2a2620; color: #fff; border-color: #2a2620; }
+  input[type=file] { display: none; }
+  .slider-group { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #6b6558; }
+  input[type=range] { width: 70px; }
+  .canvas-wrap { flex: 1; position: relative; overflow: hidden; background: #ffffff; }
+  canvas { position: absolute; touch-action: none; transform-origin: 0 0; box-shadow: 0 0 0 1px #ddd8cc; }
+  #refCanvas { z-index: 1; }
+  #drawCanvas { z-index: 2; }
+  .palette { display: flex; gap: 5px; }
+  .swatch {
+    width: 24px; height: 24px; border-radius: 50%; border: 2px solid #fff;
+    box-shadow: 0 0 0 1px #d8d3c6; cursor: pointer;
+  }
+  .swatch.active { box-shadow: 0 0 0 2px #2a2620; }
+  footer {
+    padding: 8px 14px; background: #fff; border-top: 1px solid #e5e1d8;
+    font-size: 12px; color: #8a8373; text-align: center;
+  }
+  #exportOverlay {
+    display: none; position: fixed; inset: 0; background: rgba(30,28,24,0.92);
+    z-index: 10; flex-direction: column; align-items: center; justify-content: center;
+    padding: 20px; gap: 14px;
+  }
+  #exportOverlay.show { display: flex; }
+  #exportOverlay img {
+    max-width: 90%; max-height: 65vh;
+    background: repeating-conic-gradient(#3a352c 0% 25%, #46403590 0% 50%) 0 0 / 20px 20px;
+    border-radius: 6px;
+  }
+  #exportOverlay p { color: #f0ede5; font-size: 13px; text-align: center; max-width: 320px; margin: 0; }
+  #exportOverlay button { background: #fff; }
+  #loadOverlay {
+    display: none; position: fixed; inset: 0; background: rgba(30,28,24,0.92);
+    z-index: 10; flex-direction: column; align-items: center; justify-content: center;
+    padding: 20px; gap: 14px;
+  }
+  #loadOverlay.show { display: flex; }
+  #loadOverlay button { background: #fff; }
+  .drawing-thumb {
+    width: 100px; height: 100px; background: #fffdf8; border-radius: 8px; overflow: hidden;
+    position: relative; cursor: pointer; border: 2px solid transparent;
+  }
+  .drawing-thumb img { width: 100%; height: 100%; object-fit: contain; }
+  .drawing-thumb .del {
+    position: absolute; top: 2px; right: 2px; background: rgba(30,28,24,0.8); color: #fff;
+    width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center;
+    justify-content: center; font-size: 12px; cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>Vanya Sketch &amp; Colour</h1>
+    <div class="row">
+      <button id="drawModeBtn" class="active">✏️ Draw</button>
+      <button id="fillModeBtn">🎨 Fill</button>
+      <label class="filebtn" for="fileInput">📷 Reference</label>
+      <input type="file" id="fileInput" accept="image/*" />
+      <button id="toggleRefBtn" class="active">👁</button>
+      <div class="slider-group">Fade <input type="range" id="opacitySlider" min="10" max="100" value="70"></div>
+      <div class="slider-group">Wobble <input type="range" id="wobbleSlider" min="0" max="3" value="1" step="0.5"></div>
+      <div class="slider-group">Thickness <input type="range" id="thicknessSlider" min="0.5" max="3" value="1" step="0.25"></div>
+      <div class="slider-group">Min <input type="range" id="minSlider" min="0.5" max="6" value="1" step="0.5"></div>
+      <div class="slider-group">Max <input type="range" id="maxSlider" min="2" max="16" value="8" step="0.5"></div>
+      <div class="row palette" id="palette"></div>
+      <input type="color" id="colorPicker" value="#2a2620" style="width:32px; height:32px; border:none; border-radius:6px; padding:0; cursor:pointer;">
+      <span style="width:1px; height:24px; background:#e5e1d8; display:inline-block;"></span>
+      <div class="slider-group">🎨 Paper color <input type="color" id="paperColorPicker" value="#ffffff" style="width:28px; height:28px; border:none; border-radius:6px; padding:0; cursor:pointer;"></div>
+      <button id="undoBtn">↩</button>
+      <button id="clearBtn">Clear</button>
+      <button id="resetZoomBtn">Reset View</button>
+      <button id="saveBtn">💾 Save</button>
+      <button id="loadBtn">📂 My Drawings</button>
+      <button id="exportBtn">⬇ Export</button>
+    </div>
+  </header>
+  <div class="canvas-wrap">
+    <canvas id="refCanvas"></canvas>
+    <canvas id="drawCanvas"></canvas>
+  </div>
+  <footer id="hint">Upload a reference to trace, or just draw freehand. Pinch to zoom · two-finger tap to undo. <span id="inputMode" style="color:#a89f8c;"></span></footer>
+</div>
+<div id="exportOverlay">
+  <img id="exportImg" alt="Exported line art" />
+  <p>On iPad: press and hold the image, then choose "Add to Photos." On desktop: right-click and choose "Save Image As."</p>
+  <button id="closeExportBtn">Close</button>
+</div>
+<div id="loadOverlay">
+  <h2 style="color:#f0ede5; font-size:16px; margin:0;">My Drawings</h2>
+  <div id="drawingsList" style="display:flex; flex-wrap:wrap; gap:12px; max-width:600px; justify-content:center;"></div>
+  <p id="noDrawings" style="color:#a89f8c; font-size:13px; display:none;">Nothing saved yet.</p>
+  <button id="closeLoadBtn">Close</button>
+</div>
+
+<script>
+const refCanvas = document.getElementById('refCanvas');
+const drawCanvas = document.getElementById('drawCanvas');
+const refCtx = refCanvas.getContext('2d');
+const ctx = drawCanvas.getContext('2d', { willReadFrequently: true });
+const wrap = document.querySelector('.canvas-wrap');
+const fileInput = document.getElementById('fileInput');
+const toggleRefBtn = document.getElementById('toggleRefBtn');
+const opacitySlider = document.getElementById('opacitySlider');
+const wobbleSlider = document.getElementById('wobbleSlider');
+const thicknessSlider = document.getElementById('thicknessSlider');
+const minSlider = document.getElementById('minSlider');
+const maxSlider = document.getElementById('maxSlider');
+const colorPicker = document.getElementById('colorPicker');
+const paperColorPicker = document.getElementById('paperColorPicker');
+const drawModeBtn = document.getElementById('drawModeBtn');
+const fillModeBtn = document.getElementById('fillModeBtn');
+const undoBtn = document.getElementById('undoBtn');
+const clearBtn = document.getElementById('clearBtn');
+const resetZoomBtn = document.getElementById('resetZoomBtn');
+const exportBtn = document.getElementById('exportBtn');
+const saveBtn = document.getElementById('saveBtn');
+const loadBtn = document.getElementById('loadBtn');
+const inputModeEl = document.getElementById('inputMode');
+const paletteEl = document.getElementById('palette');
+const hint = document.getElementById('hint');
+
+let mode = 'draw'; // 'draw' or 'fill'
+let refImage = null;
+let refVisible = true;
+let smoothedWobbleX = 0, smoothedWobbleY = 0;
+let drawing = false;
+let points = [];
+let history = [];
+let usingPressure = false;
+let moved = false;
+let lastPressure = 0.5;
+let smoothedWidth = null;
+let currentColor = '#2a2620';
+let view = { scale: 1, x: 0, y: 0, rotation: 0 }; // rotation in degrees
+
+const colors = ['#2a2620', '#8a3b2e', '#3b5c48', '#3a5578', '#7a5230'];
+colors.forEach((c, i) => {
+  const sw = document.createElement('div');
+  sw.className = 'swatch' + (i === 0 ? ' active' : '');
+  sw.style.background = c;
+  sw.onclick = () => {
+    currentColor = c;
+    colorPicker.value = c;
+    document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+    sw.classList.add('active');
+  };
+  paletteEl.appendChild(sw);
+});
+colorPicker.addEventListener('input', () => {
+  currentColor = colorPicker.value;
+  document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+});
+
+// Paper color only changes the visual background behind the transparent
+// drawing layer — never baked into the exported line art, same principle
+// as keeping the reference layer separate. Bound to both events since
+// mobile Safari's color picker doesn't always fire 'input' reliably.
+function applyPaperColor() {
+  wrap.style.backgroundColor = paperColorPicker.value;
+}
+paperColorPicker.addEventListener('input', applyPaperColor);
+paperColorPicker.addEventListener('change', applyPaperColor);
+applyPaperColor();
+
+const EDGE_MARGIN = 16; // keeps the drawable area off the physical screen edges,
+                         // where iOS swipe gestures intercept touches before JS sees them
+
+function resize() {
+  const rect = wrap.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  const w = Math.max(50, rect.width - EDGE_MARGIN * 2);
+  const h = Math.max(50, rect.height - EDGE_MARGIN * 2);
+  const prev = drawCanvas.width ? ctx.getImageData(0,0,drawCanvas.width,drawCanvas.height) : null;
+  [refCanvas, drawCanvas].forEach(c => {
+    c.width = w * dpr;
+    c.height = h * dpr;
+    c.style.width = w + 'px';
+    c.style.height = h + 'px';
+    c.style.top = EDGE_MARGIN + 'px';
+    c.style.left = EDGE_MARGIN + 'px';
+  });
+  if (prev) ctx.putImageData(prev, 0, 0);
+  drawRef();
+  applyView();
+}
+window.addEventListener('resize', resize);
+resize();
+
+function drawRef() {
+  refCtx.clearRect(0, 0, refCanvas.width, refCanvas.height);
+  if (!refImage || !refVisible) return;
+  const cw = refCanvas.width, ch = refCanvas.height;
+  const iw = refImage.width, ih = refImage.height;
+  const scale = Math.min(cw / iw, ch / ih) * 0.9;
+  const w = iw * scale, h = ih * scale;
+  const x = (cw - w) / 2, y = (ch - h) / 2;
+  refCtx.globalAlpha = opacitySlider.value / 100;
+  refCtx.drawImage(refImage, x, y, w, h);
+  refCtx.globalAlpha = 1;
+}
+
+fileInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const img = new Image();
+    img.onload = () => {
+      refImage = img;
+      refVisible = true;
+      toggleRefBtn.classList.add('active');
+      drawRef();
+      hint.textContent = 'Trace your outline on top, or fade/hide the reference to check your work.';
+    };
+    img.onerror = () => { hint.textContent = 'That image could not be loaded — try a different file.'; };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+});
+toggleRefBtn.onclick = () => {
+  refVisible = !refVisible;
+  toggleRefBtn.classList.toggle('active', refVisible);
+  drawRef();
+};
+opacitySlider.addEventListener('input', drawRef);
+
+function saveHistory() {
+  history.push(ctx.getImageData(0,0,drawCanvas.width,drawCanvas.height));
+  if (history.length > 30) history.shift();
+}
+saveHistory();
+
+function getPos(e) {
+  const wrapRect = wrap.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  // Undo translate, then undo rotation, then undo scale — in that order,
+  // reversing exactly how applyView() builds the transform. A simple
+  // bounding-box ratio (like before rotation existed) only works for pure
+  // translate+scale; once rotated, the bounding box no longer matches the
+  // visual rectangle, so touches would land in the wrong place.
+  const qx = e.clientX - wrapRect.left - EDGE_MARGIN - view.x;
+  const qy = e.clientY - wrapRect.top - EDGE_MARGIN - view.y;
+  const rad = view.rotation * Math.PI / 180;
+  const cos = Math.cos(rad), sin = Math.sin(rad);
+  const localX = (qx * cos + qy * sin) / view.scale;
+  const localY = (-qx * sin + qy * cos) / view.scale;
+  return {
+    x: localX * dpr,
+    y: localY * dpr,
+    t: performance.now()
+  };
+}
+
+function applyView() {
+  const t = `translate(${view.x}px, ${view.y}px) rotate(${view.rotation}deg) scale(${view.scale})`;
+  refCanvas.style.transform = t;
+  drawCanvas.style.transform = t;
+}
+
+function hexToRgbFill(hex) {
+  const v = parseInt(hex.slice(1), 16);
+  return [(v>>16)&255, (v>>8)&255, v&255];
+}
+
+// Fills a closed region of line art with the current color. Uses a tolerance
+// rather than exact match, since anti-aliased hand-drawn lines aren't pure
+// pixel values — an exact match would fail on real linework.
+function floodFill(startX, startY, fillColor) {
+  const w = drawCanvas.width, h = drawCanvas.height;
+  startX = Math.floor(startX); startY = Math.floor(startY);
+  if (startX < 0 || startY < 0 || startX >= w || startY >= h) return;
+
+  const imgData = ctx.getImageData(0, 0, w, h);
+  const data = imgData.data;
+  const idx = (startY * w + startX) * 4;
+  const target = [data[idx], data[idx+1], data[idx+2], data[idx+3]];
+  const [fr, fg, fb] = hexToRgbFill(fillColor);
+  const tolerance = 60;
+
+  // don't fill onto dark line pixels themselves
+  if (target[3] > 40 && target[0] < 100 && target[1] < 100 && target[2] < 100) return;
+
+  function matches(i) {
+    return Math.abs(data[i]-target[0]) <= tolerance &&
+           Math.abs(data[i+1]-target[1]) <= tolerance &&
+           Math.abs(data[i+2]-target[2]) <= tolerance &&
+           Math.abs(data[i+3]-target[3]) <= tolerance;
+  }
+
+  const stack = [[startX, startY]];
+  const visited = new Uint8Array(w * h);
+  const edgeSeen = new Uint8Array(w * h);
+  let frontier = [];
+
+  while (stack.length) {
+    const [x, y] = stack.pop();
+    if (x < 0 || y < 0 || x >= w || y >= h) continue;
+    const vIdx = y * w + x;
+    if (visited[vIdx]) continue;
+    const i = vIdx * 4;
+    if (!matches(i)) {
+      // a boundary pixel that didn't match — if it's semi-transparent (likely
+      // anti-aliasing on the line), remember it as a candidate to grow into,
+      // instead of rescanning the whole canvas afterward
+      if (data[i+3] < 220 && !edgeSeen[vIdx]) {
+        edgeSeen[vIdx] = 1;
+        frontier.push(vIdx);
+      }
+      continue;
+    }
+    visited[vIdx] = 1;
+    data[i] = fr; data[i+1] = fg; data[i+2] = fb; data[i+3] = 255;
+    stack.push([x+1,y],[x-1,y],[x,y+1],[x,y-1]);
+  }
+
+  // Grow only from the boundary we already found, a couple pixels deep —
+  // closes the anti-aliasing gap without touching solid ink or re-scanning
+  // the whole canvas.
+  for (let pass = 0; pass < 2 && frontier.length; pass++) {
+    const next = [];
+    for (const vIdx of frontier) {
+      if (visited[vIdx]) continue;
+      const x = vIdx % w, y = (vIdx / w) | 0;
+      const neighbors = [[x+1,y],[x-1,y],[x,y+1],[x,y-1]];
+      let adjacentToFilled = false;
+      for (const [nx, ny] of neighbors) {
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        if (visited[ny * w + nx]) { adjacentToFilled = true; break; }
+      }
+      if (!adjacentToFilled) { next.push(vIdx); continue; }
+      visited[vIdx] = 1;
+      const i = vIdx * 4;
+      data[i] = fr; data[i+1] = fg; data[i+2] = fb; data[i+3] = 255;
+      for (const [nx, ny] of neighbors) {
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        const nIdx = ny * w + nx;
+        if (!visited[nIdx] && data[nIdx*4+3] < 220 && !edgeSeen[nIdx]) {
+          edgeSeen[nIdx] = 1;
+          next.push(nIdx);
+        }
+      }
+    }
+    frontier = next;
+  }
+
+  ctx.putImageData(imgData, 0, 0);
+}
+
+drawModeBtn.onclick = () => {
+  mode = 'draw';
+  drawModeBtn.classList.add('active');
+  fillModeBtn.classList.remove('active');
+  hint.textContent = 'Draw with pressure or speed. Pinch to zoom · two-finger tap to undo.';
+};
+fillModeBtn.onclick = () => {
+  mode = 'fill';
+  fillModeBtn.classList.add('active');
+  drawModeBtn.classList.remove('active');
+  hint.textContent = 'Tap inside a closed shape to fill it with the selected color.';
+};
+
+function startStroke(e) {
+  drawing = true;
+  points = [getPos(e)];
+  smoothedWidth = null;
+  smoothedWobbleX = 0;
+  smoothedWobbleY = 0;
+  moved = false;
+  lastPressure = e.pressure;
+  usingPressure = e.pointerType === 'pen';
+  inputModeEl.textContent = usingPressure ? '(Pencil pressure detected)' : '(no pressure — using speed)';
+}
+
+function continueStroke(e) {
+  if (!drawing) return;
+  const p = getPos(e);
+  const prev = points[points.length - 1];
+  const dt = Math.max(1, p.t - prev.t);
+  const dist = Math.hypot(p.x - prev.x, p.y - prev.y);
+  const dpr = window.devicePixelRatio || 1;
+  if (dist < 1.2 * dpr) return;
+  moved = true;
+
+  const thicknessMult = parseFloat(thicknessSlider.value);
+  const minW = parseFloat(minSlider.value) * dpr * thicknessMult;
+  const maxW = parseFloat(maxSlider.value) * dpr * thicknessMult;
+  let targetWidth;
+  if (usingPressure) {
+    const pressure = Math.max(0.08, e.pressure);
+    lastPressure = e.pressure;
+    targetWidth = minW + pressure * (maxW - minW);
+  } else {
+    const speed = dist / dt;
+    const speedFactor = Math.max(0, Math.min(1, 1 - speed * 3));
+    targetWidth = minW + speedFactor * (maxW - minW);
+  }
+  smoothedWidth = smoothedWidth === null ? targetWidth : smoothedWidth + (targetWidth - smoothedWidth) * 0.35;
+
+  let x = p.x, y = p.y;
+  const wobbleIntensity = parseFloat(wobbleSlider.value);
+  if (wobbleIntensity > 0) {
+    // a fresh random target each move, but the applied offset only drifts
+    // toward it gradually — this is what makes it read as a natural hand
+    // tremor instead of jittery digital noise
+    const targetX = (Math.random() - 0.5) * wobbleIntensity * dpr;
+    const targetY = (Math.random() - 0.5) * wobbleIntensity * dpr;
+    smoothedWobbleX += (targetX - smoothedWobbleX) * 0.25;
+    smoothedWobbleY += (targetY - smoothedWobbleY) * 0.25;
+    x += smoothedWobbleX;
+    y += smoothedWobbleY;
+  }
+
+  ctx.strokeStyle = currentColor;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.lineWidth = smoothedWidth;
+  ctx.beginPath();
+  ctx.moveTo(prev.x, prev.y);
+  ctx.lineTo(x, y);
+  ctx.stroke();
+
+  points.push({ x, y, t: p.t });
+}
+
+function endStroke() {
+  if (!drawing) return;
+  drawing = false;
+  if (!moved && points.length > 0) {
+    const dpr = window.devicePixelRatio || 1;
+    const thicknessMult = parseFloat(thicknessSlider.value);
+    const minW = parseFloat(minSlider.value) * dpr * thicknessMult;
+    const maxW = parseFloat(maxSlider.value) * dpr * thicknessMult;
+    const pressure = usingPressure ? Math.max(0.08, lastPressure) : 0.5;
+    const width = minW + pressure * (maxW - minW);
+    const p = points[0];
+    ctx.fillStyle = currentColor;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, width / 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  saveHistory();
+}
+
+const activePointers = new Map();
+let gesture = null;
+let tapCandidate = null;
+function dist2(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+function mid2(a, b) { return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; }
+
+let fillTapStart = null;
+
+drawCanvas.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (activePointers.size === 1) {
+    if (mode === 'draw') {
+      startStroke(e);
+    } else {
+      fillTapStart = { x: e.clientX, y: e.clientY, time: Date.now() };
+    }
+  } else if (activePointers.size === 2) {
+    drawing = false;
+    fillTapStart = null;
+    const pts = [...activePointers.values()];
+    gesture = { prevDist: dist2(pts[0], pts[1]), prevMid: mid2(pts[0], pts[1]) };
+    tapCandidate = { time: Date.now(), moved: false };
+  }
+});
+
+drawCanvas.addEventListener('pointermove', (e) => {
+  if (!activePointers.has(e.pointerId)) return;
+  activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+  if (activePointers.size === 2 && gesture) {
+    e.preventDefault();
+    const pts = [...activePointers.values()];
+    const newDist = dist2(pts[0], pts[1]);
+    const newMid = mid2(pts[0], pts[1]);
+    const wrapRect = wrap.getBoundingClientRect();
+    const focal = { x: newMid.x - wrapRect.left, y: newMid.y - wrapRect.top };
+
+    view.x += newMid.x - gesture.prevMid.x;
+    view.y += newMid.y - gesture.prevMid.y;
+
+    const scaleDelta = newDist / gesture.prevDist;
+    const newScale = Math.min(4, Math.max(1, view.scale * scaleDelta));
+    const applied = newScale / view.scale;
+    view.x = focal.x - applied * (focal.x - view.x);
+    view.y = focal.y - applied * (focal.y - view.y);
+    view.scale = newScale;
+
+    applyView();
+    if (Math.abs(newDist - gesture.prevDist) > 8 ||
+        Math.hypot(newMid.x - gesture.prevMid.x, newMid.y - gesture.prevMid.y) > 8) {
+      tapCandidate.moved = true;
+    }
+    gesture.prevDist = newDist;
+    gesture.prevMid = newMid;
+  } else if (activePointers.size === 1) {
+    e.preventDefault();
+    if (mode === 'draw') continueStroke(e);
+  }
+});
+
+function onPointerEnd(e) {
+  const wasInTwoFingerGesture = gesture !== null;
+  activePointers.delete(e.pointerId);
+
+  if (wasInTwoFingerGesture) {
+    // real hands never lift both fingers at the exact same instant, so we
+    // must decide on the FIRST finger lifting (2 fingers -> 1), not wait
+    // for a simultaneous drop to 0 that will basically never happen
+    if (activePointers.size <= 1) {
+      if (tapCandidate && !tapCandidate.moved && Date.now() - tapCandidate.time < 300) {
+        undoBtn.click();
+      }
+      gesture = null;
+      tapCandidate = null;
+    }
+  }
+
+  if (activePointers.size === 0) {
+    if (mode === 'fill' && fillTapStart) {
+      const moved = Math.hypot(e.clientX - fillTapStart.x, e.clientY - fillTapStart.y);
+      if (moved < 8 && Date.now() - fillTapStart.time < 400) {
+        const p = getPos(e);
+        floodFill(p.x, p.y, currentColor);
+        saveHistory();
+      }
+      fillTapStart = null;
+    }
+    endStroke();
+  }
+}
+drawCanvas.addEventListener('pointerup', onPointerEnd);
+drawCanvas.addEventListener('pointercancel', onPointerEnd);
+drawCanvas.addEventListener('pointerleave', (e) => {
+  if (e.pointerType !== 'touch') onPointerEnd(e);
+});
+drawCanvas.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
+drawCanvas.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+
+resetZoomBtn.onclick = () => { view = { scale: 1, x: 0, y: 0, rotation: 0 }; applyView(); };
+undoBtn.onclick = () => {
+  if (history.length > 1) {
+    history.pop();
+    ctx.putImageData(history[history.length - 1], 0, 0);
+  }
+};
+clearBtn.onclick = () => {
+  ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+  history = [];
+  saveHistory();
+};
+exportBtn.onclick = () => {
+  const dataUrl = drawCanvas.toDataURL('image/png');
+  document.getElementById('exportImg').src = dataUrl;
+  document.getElementById('exportOverlay').classList.add('show');
+};
+document.getElementById('closeExportBtn').onclick = () => {
+  document.getElementById('exportOverlay').classList.remove('show');
+};
+
+// --- Save / load, using the browser's own localStorage (this device only, but
+// actually works — window.storage only exists inside Claude.ai's own preview,
+// not on a real deployed site, which is why it failed there) ---
+saveBtn.onclick = () => {
+  try {
+    const dataUrl = drawCanvas.toDataURL('image/png');
+    const id = 'drawing_' + Date.now();
+    const entry = { id, dataUrl, savedAt: new Date().toISOString() };
+    localStorage.setItem(id, JSON.stringify(entry));
+    let index = [];
+    try { index = JSON.parse(localStorage.getItem('drawings_index')) || []; }
+    catch (e) { index = []; }
+    index.unshift(id);
+    localStorage.setItem('drawings_index', JSON.stringify(index));
+    hint.textContent = 'Saved.';
+  } catch (err) {
+    // most likely localStorage quota exceeded — drawings as PNGs can be large
+    hint.textContent = 'Save failed (' + (err && err.message ? err.message : String(err)) + ') — use Export to keep this drawing for now.';
+  }
+};
+
+function renderDrawingsList() {
+  const listEl = document.getElementById('drawingsList');
+  const noneEl = document.getElementById('noDrawings');
+  listEl.innerHTML = '';
+  let index = [];
+  try { index = JSON.parse(localStorage.getItem('drawings_index')) || []; }
+  catch (err) { index = []; }
+  if (index.length === 0) {
+    noneEl.style.display = 'block';
+    return;
+  }
+  noneEl.style.display = 'none';
+  for (const id of index) {
+    const raw = localStorage.getItem(id);
+    if (!raw) continue; // skip missing/corrupt entries
+    const entry = JSON.parse(raw);
+    const thumb = document.createElement('div');
+    thumb.className = 'drawing-thumb';
+    const img = document.createElement('img');
+    img.src = entry.dataUrl;
+    thumb.appendChild(img);
+    thumb.onclick = () => {
+      const loadImg = new Image();
+      loadImg.onload = () => {
+        ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+        ctx.drawImage(loadImg, 0, 0, drawCanvas.width, drawCanvas.height);
+        saveHistory();
+        document.getElementById('loadOverlay').classList.remove('show');
+        hint.textContent = 'Drawing loaded.';
+      };
+      loadImg.src = entry.dataUrl;
+    };
+    const del = document.createElement('div');
+    del.className = 'del';
+    del.textContent = '×';
+    del.onclick = (ev) => {
+      ev.stopPropagation();
+      localStorage.removeItem(id);
+      const idx = (JSON.parse(localStorage.getItem('drawings_index')) || []).filter(x => x !== id);
+      localStorage.setItem('drawings_index', JSON.stringify(idx));
+      renderDrawingsList();
+    };
+    thumb.appendChild(del);
+    listEl.appendChild(thumb);
+  }
+}
+
+loadBtn.onclick = () => {
+  document.getElementById('loadOverlay').classList.add('show');
+  renderDrawingsList();
+};
+document.getElementById('closeLoadBtn').onclick = () => {
+  document.getElementById('loadOverlay').classList.remove('show');
+};
+</script>
+</body>
+</html>
