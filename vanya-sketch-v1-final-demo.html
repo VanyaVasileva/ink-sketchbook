@@ -1,0 +1,1367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Ink Sketchbook</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #f6f4f0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    overscroll-behavior: none; touch-action: none; position: fixed; width: 100%;
+  }
+  #app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+  header {
+    padding: 10px 14px; display: flex; align-items: center; justify-content: space-between;
+    background: #fff; border-bottom: 1px solid #e5e1d8; flex-wrap: wrap; gap: 8px;
+  }
+  h1 { font-size: 15px; margin: 0; color: #2a2620; font-weight: 600; }
+  .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  button, label.filebtn {
+    border: 1px solid #d8d3c6; background: #fff; color: #2a2620;
+    padding: 7px 13px; border-radius: 7px; font-size: 13px; cursor: pointer; display: inline-block;
+  }
+  button.active { background: #2a2620; color: #fff; border-color: #2a2620; }
+  input[type=file] { display: none; }
+  .slider-group { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #6b6558; }
+  input[type=range] { width: 70px; }
+  .canvas-wrap { flex: 1; position: relative; overflow: hidden; background: #ffffff; }
+  .main-row { flex: 1; display: flex; overflow: hidden; min-height: 0; }
+  #sidePanel {
+    width: 300px; flex-shrink: 0; overflow-y: auto; background: #fff;
+    border-left: 1px solid #e5e1d8; padding: 12px; display: flex;
+    flex-direction: column; gap: 10px; align-items: stretch;
+  }
+  #sidePanel.collapsed { display: none; }
+  #sidePanel input[type=range] { width: 100%; } /* full-length sliders, not shortened */
+  #sidePanel .slider-group { flex-direction: column; align-items: stretch; gap: 3px; }
+  #sidePanel .row.palette { flex-wrap: wrap; }
+  canvas { position: absolute; touch-action: none; transform-origin: 0 0; box-shadow: 0 0 0 1px #ddd8cc; }
+  #refCanvas { z-index: 1; }
+  #drawCanvas { z-index: 2; }
+  .palette { display: flex; gap: 5px; }
+  .swatch {
+    width: 24px; height: 24px; border-radius: 50%; border: 2px solid #fff;
+    box-shadow: 0 0 0 1px #d8d3c6; cursor: pointer;
+  }
+  .swatch.active { box-shadow: 0 0 0 2px #2a2620; }
+  footer {
+    padding: 8px 14px; background: #fff; border-top: 1px solid #e5e1d8;
+    font-size: 12px; color: #8a8373; text-align: center;
+  }
+  #exportOverlay {
+    display: none; position: fixed; inset: 0; background: rgba(30,28,24,0.92);
+    z-index: 10; flex-direction: column; align-items: center; justify-content: center;
+    padding: 20px; gap: 14px;
+  }
+  #exportOverlay.show { display: flex; }
+  #exportOverlay img {
+    max-width: 90%; max-height: 65vh;
+    background: repeating-conic-gradient(#3a352c 0% 25%, #46403590 0% 50%) 0 0 / 20px 20px;
+    border-radius: 6px;
+  }
+  #exportOverlay p { color: #f0ede5; font-size: 13px; text-align: center; max-width: 320px; margin: 0; }
+  #exportOverlay button { background: #fff; }
+  #exportChoices button { padding: 14px 18px; line-height: 1.5; text-align: center; max-width: 200px; }
+  #printArea { display: none; }
+  @media print {
+    body > *:not(#printArea) { display: none !important; }
+    #printArea { display: block !important; }
+    #printArea canvas { position: static; width: 100%; height: auto; display: block; }
+    @page { margin: 0; }
+  }
+  #lockScreen {
+    position: fixed; inset: 0; background: #f6f4f0; z-index: 100;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 16px; padding: 24px; text-align: center;
+  }
+  #lockScreen h2 { margin: 0; font-size: 18px; color: #2a2620; }
+  #lockScreen p { margin: 0; font-size: 13px; color: #8a8373; max-width: 280px; }
+  #lockScreen input {
+    border: 2px solid #d8d3c6; border-radius: 8px; padding: 10px 14px;
+    font-size: 16px; text-align: center; width: 200px;
+  }
+  #lockScreen button {
+    background: #2a2620; color: #fff; border: none; padding: 10px 24px;
+    border-radius: 8px; font-size: 14px; cursor: pointer;
+  }
+  #lockScreen .lockError { color: #a13f3f; font-size: 12px; min-height: 16px; }
+  #loadOverlay {
+    display: none; position: fixed; inset: 0; background: rgba(30,28,24,0.92);
+    z-index: 10; flex-direction: column; align-items: center; justify-content: center;
+    padding: 20px; gap: 14px;
+  }
+  #loadOverlay.show { display: flex; }
+  #loadOverlay button { background: #fff; }
+  #helpOverlay {
+    display: none; position: fixed; inset: 0; background: rgba(30,28,24,0.92);
+    z-index: 10; flex-direction: column; align-items: center; justify-content: center;
+    padding: 20px; gap: 14px;
+  }
+  #helpOverlay.show { display: flex; }
+  #helpOverlay button { background: #fff; }
+  .help-item { margin-bottom: 16px; }
+  .help-item .help-name { color: #f0ede5; font-weight: 700; font-size: 14px; margin-bottom: 3px; }
+  .help-item .help-desc { color: #cfc9bb; font-size: 13px; line-height: 1.5; }
+  .drawing-thumb {
+    width: 100px; height: 100px; background: #fffdf8; border-radius: 8px; overflow: hidden;
+    position: relative; cursor: pointer; border: 2px solid transparent;
+  }
+  .drawing-thumb img { width: 100%; height: 100%; object-fit: contain; }
+  .drawing-thumb .del {
+    position: absolute; top: 2px; right: 2px; background: rgba(30,28,24,0.8); color: #fff;
+    width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center;
+    justify-content: center; font-size: 12px; cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<div id="lockScreen">
+  <h2>🔒 Ink Sketchbook</h2>
+  <p id="lockText" data-i18n="lockText">Enter the access code from your purchase to unlock the tool.</p>
+  <input type="text" id="passcodeInput" data-i18n-placeholder="passcodePlaceholder" placeholder="Access code" autocapitalize="off" autocorrect="off" />
+  <button id="unlockBtn" data-i18n="unlockBtn">Unlock</button>
+  <div class="lockError" id="lockError"></div>
+</div>
+<div id="app">
+  <header>
+    <h1>Ink Sketchbook</h1>
+    <div class="row">
+      <button id="drawModeBtn" class="active">✏️ <span data-i18n="drawBtn">Draw</span></button>
+      <button id="eraseModeBtn">🧹 <span data-i18n="eraserBtn">Eraser</span></button>
+      <button id="undoBtn">↩</button>
+      <button id="redoBtn">↪</button>
+      <button id="exportBtn">⬇ <span data-i18n="exportBtn">Export</span></button>
+      <button id="panelToggleBtn" data-i18n="moreSettingsBtn">More settings ▼</button>
+    </div>
+  </header>
+  <div class="main-row">
+    <div class="canvas-wrap">
+      <canvas id="refCanvas"></canvas>
+      <canvas id="drawCanvas"></canvas>
+    </div>
+    <div id="sidePanel">
+      <select id="langSelect" style="border:1px solid #d8d3c6; border-radius:7px; padding:6px 8px; font-size:13px; background:#fff;">
+        <option value="en">English</option>
+        <option value="es">Español</option>
+        <option value="fr">Français</option>
+        <option value="de">Deutsch</option>
+        <option value="it">Italiano</option>
+        <option value="pt">Português</option>
+        <option value="nl">Nederlands</option>
+        <option value="ja">日本語</option>
+        <option value="zh">中文</option>
+      </select>
+      <div class="slider-group"><span data-i18n="eraserSizeLabel">Eraser size</span> <input type="range" id="eraserSizeSlider" min="10" max="200" value="60"></div>
+      <label class="filebtn" for="fileInput">📷 <span data-i18n="referenceBtn">Reference</span></label>
+      <input type="file" id="fileInput" accept="image/*" />
+      <button id="toggleRefBtn" class="active">👁</button>
+      <button id="removeRefBtn" style="display:none;">✕ <span data-i18n="removeRefBtn">Remove</span></button>
+      <div class="slider-group"><span data-i18n="fadeLabel">Fade</span> <input type="range" id="opacitySlider" min="10" max="100" value="70"></div>
+      <div class="slider-group"><span data-i18n="refSizeLabel">Reference size</span> <input type="range" id="refSizeSlider" min="25" max="300" value="100"></div>
+      <div class="slider-group"><span data-i18n="wobbleLabel">Wobble</span> <input type="range" id="wobbleSlider" min="0" max="3" value="1" step="0.5"></div>
+      <div class="slider-group"><span data-i18n="thicknessLabel">Thickness</span> <input type="range" id="thicknessSlider" min="0.5" max="3" value="1" step="0.25"></div>
+      <div class="slider-group"><span data-i18n="minLabel">Min</span> <input type="range" id="minSlider" min="0.5" max="6" value="1" step="0.5"></div>
+      <div class="slider-group"><span data-i18n="maxLabel">Max</span> <input type="range" id="maxSlider" min="2" max="16" value="8" step="0.5"></div>
+      <div class="row palette" id="palette"></div>
+      <input type="color" id="colorPicker" value="#2a2620" style="width:32px; height:32px; border:2px solid #d8d3c6; border-radius:6px; padding:0; cursor:pointer;">
+      <div class="slider-group">🎨 <span data-i18n="paperLabel">Paper color</span> <input type="color" id="paperColorPicker" value="#ffffff" style="width:28px; height:28px; border:2px solid #d8d3c6; border-radius:6px; padding:0; cursor:pointer;"></div>
+      <button id="clearBtn" data-i18n="clearBtn">Clear</button>
+      <button id="helpBtn">?</button>
+      <button id="zoomOutBtn" title="Zoom out">−</button>
+      <button id="zoomInBtn" title="Zoom in">+</button>
+      <button id="resetZoomBtn" data-i18n="resetViewBtn">Reset View</button>
+      <button id="saveBtn">💾 <span data-i18n="saveBtn">Save</span></button>
+      <button id="loadBtn">📂 <span data-i18n="loadBtn">My Drawings</span></button>
+    </div>
+  </div>
+  <footer id="hint"><span id="hintText" data-i18n="hintDefault">Upload a reference to trace, or just draw freehand. Pinch to zoom · two-finger tap to undo.</span> <span id="inputMode" style="color:#a89f8c;"></span></footer>
+</div>
+<div id="exportOverlay">
+  <p id="exportSizeInfo" style="color:#a89f8c; font-size:13px; margin:0 0 4px 0; text-align:center;"></p>
+  <div id="exportChoices" style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;">
+    <button id="exportPngBtn">PNG — transparent<br><span style="font-weight:400; font-size:11px;">for digital use / coloring pages</span></button>
+    <button id="exportJpgBtn"><span data-i18n="jpegExportLabel">JPEG — solid background</span><br><span style="font-weight:400; font-size:11px;" data-i18n="jpegExportSub">uses your current paper color, for printing</span></button>
+    <button id="exportPdfBtn">Print / Save as PDF<br><span style="font-weight:400; font-size:11px;">opens your device's print dialog</span></button>
+  </div>
+  <img id="exportImg" alt="Exported line art" style="display:none;" />
+  <p id="exportInstructionsText" data-i18n="exportInstructions" style="display:none;">On iPad: press and hold the image, then choose "Add to Photos." On desktop: right-click and choose "Save Image As."</p>
+  <button id="closeExportBtn" data-i18n="closeBtn">Close</button>
+</div>
+<div id="loadOverlay">
+  <h2 style="color:#f0ede5; font-size:16px; margin:0;" data-i18n="myDrawingsHeading">My Drawings</h2>
+  <div id="drawingsList" style="display:flex; flex-wrap:wrap; gap:12px; max-width:600px; justify-content:center;"></div>
+  <p id="noDrawings" style="color:#a89f8c; font-size:13px; display:none;" data-i18n="noDrawings">Nothing saved yet.</p>
+  <button id="closeLoadBtn" data-i18n="closeBtn">Close</button>
+</div>
+<div id="helpOverlay">
+  <div id="helpList" style="max-width: 480px; max-height: 70vh; overflow-y: auto; text-align: left; padding: 0 10px;"></div>
+  <button id="closeHelpBtn" data-i18n="closeBtn">Close</button>
+</div>
+
+<div id="printArea"></div>
+
+<script>
+// --- Access code gate ---
+// CHANGE THIS to whatever code you want to give paying buyers. It's plain
+// text in this file, so it's a soft deterrent (like a shared file), not real
+// security — same honest tradeoff as any small-creator digital product.
+const ACCESS_CODE = 'PLANT-CHAIR-42';
+
+// A separate code for early testers/beta feedback — keep this different from
+// your real launch code so you can retire it later (e.g. once you launch)
+// without needing to change anything for actual paying customers.
+const BETA_ACCESS_CODE = 'GOOSE-SKATE-07';
+
+const lockScreen = document.getElementById('lockScreen');
+const passcodeInput = document.getElementById('passcodeInput');
+const unlockBtn = document.getElementById('unlockBtn');
+const lockError = document.getElementById('lockError');
+
+if (localStorage.getItem('vanya_sketch_unlocked') === 'true') {
+  lockScreen.style.display = 'none';
+}
+
+function tryUnlock() {
+  const entered = passcodeInput.value.trim().toUpperCase();
+  if (entered === ACCESS_CODE.toUpperCase() || entered === BETA_ACCESS_CODE.toUpperCase()) {
+    localStorage.setItem('vanya_sketch_unlocked', 'true');
+    lockScreen.style.display = 'none';
+  } else {
+    lockError.textContent = t('lockError');
+  }
+}
+unlockBtn.onclick = tryUnlock;
+passcodeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') tryUnlock(); });
+
+const refCanvas = document.getElementById('refCanvas');
+const drawCanvas = document.getElementById('drawCanvas');
+const refCtx = refCanvas.getContext('2d');
+const ctx = drawCanvas.getContext('2d', { willReadFrequently: true });
+const wrap = document.querySelector('.canvas-wrap');
+const fileInput = document.getElementById('fileInput');
+const toggleRefBtn = document.getElementById('toggleRefBtn');
+const opacitySlider = document.getElementById('opacitySlider');
+const refSizeSlider = document.getElementById('refSizeSlider');
+const wobbleSlider = document.getElementById('wobbleSlider');
+const thicknessSlider = document.getElementById('thicknessSlider');
+const minSlider = document.getElementById('minSlider');
+const maxSlider = document.getElementById('maxSlider');
+const colorPicker = document.getElementById('colorPicker');
+const paperColorPicker = document.getElementById('paperColorPicker');
+const undoBtn = document.getElementById('undoBtn');
+const redoBtn = document.getElementById('redoBtn');
+const clearBtn = document.getElementById('clearBtn');
+const resetZoomBtn = document.getElementById('resetZoomBtn');
+const exportBtn = document.getElementById('exportBtn');
+const saveBtn = document.getElementById('saveBtn');
+const loadBtn = document.getElementById('loadBtn');
+const inputModeEl = document.getElementById('inputMode');
+const paletteEl = document.getElementById('palette');
+const drawModeBtn = document.getElementById('drawModeBtn');
+const eraseModeBtn = document.getElementById('eraseModeBtn');
+const eraserSizeSlider = document.getElementById('eraserSizeSlider');
+let mode = 'draw'; // 'draw' or 'erase'
+const hint = document.getElementById('hint');
+const hintText = document.getElementById('hintText');
+const langSelect = document.getElementById('langSelect');
+
+const TRANSLATIONS = {
+  en: {
+    lockText: "Enter the access code from your purchase to unlock the tool.",
+    unlockBtn: "Unlock", passcodePlaceholder: "Access code",
+    lockError: "That code isn't right — check your purchase email and try again.",
+    drawBtn: "Draw", eraserBtn: "Eraser", eraserSizeLabel: "Eraser size", referenceBtn: "Reference", removeRefBtn: "Remove",
+    fadeLabel: "Fade", refSizeLabel: "Reference size", wobbleLabel: "Wobble", thicknessLabel: "Thickness",
+    minLabel: "Min", maxLabel: "Max", paperLabel: "Paper color",
+    clearBtn: "Clear", resetViewBtn: "Reset View", saveBtn: "Save", moreSettingsBtn: "More settings ▼", lessSettingsBtn: "Less settings ▲",
+    loadBtn: "My Drawings", exportBtn: "Export", closeBtn: "Close",
+    myDrawingsHeading: "My Drawings", noDrawings: "Nothing saved yet.",
+    hintDefault: "Upload a reference to trace, or just draw freehand. Pinch to zoom · two-finger tap to undo.",
+    exportInstructions: 'On iPad: press and hold the image, then choose "Add to Photos." On desktop: right-click and choose "Save Image As."',
+    referenceLoadedMsg: "Trace your outline on top, or fade/hide the reference to check your work.",
+    referenceErrorMsg: "That image could not be loaded — try a different file.",
+    savedMsg: "Saved.", drawingLoadedMsg: "Drawing loaded.",
+    saveFailedPrefix: "Save failed (", saveFailedSuffix: ") — use Export to keep this drawing for now.",
+    canvasSizeLabel: "Canvas", approxWord: "about", dpiSuffix: "at 300dpi (standard print quality)", jpegExportLabel: "JPEG — solid background", jpegExportSub: "uses your current paper color, for printing",
+  },
+  es: {
+    lockText: "Introduce el código de acceso de tu compra para desbloquear la herramienta.",
+    unlockBtn: "Desbloquear", passcodePlaceholder: "Código de acceso",
+    lockError: "Ese código no es correcto — revisa tu email de compra e inténtalo de nuevo.",
+    drawBtn: "Dibujar", eraserBtn: "Borrador", eraserSizeLabel: "Tamaño del borrador", referenceBtn: "Referencia", removeRefBtn: "Quitar",
+    fadeLabel: "Opacidad", refSizeLabel: "Tamaño de referencia", wobbleLabel: "Temblor", thicknessLabel: "Grosor",
+    minLabel: "Mín", maxLabel: "Máx", paperLabel: "Color del papel",
+    clearBtn: "Borrar", resetViewBtn: "Restablecer vista", saveBtn: "Guardar", moreSettingsBtn: "Más ajustes ▼", lessSettingsBtn: "Menos ajustes ▲",
+    loadBtn: "Mis dibujos", exportBtn: "Exportar", closeBtn: "Cerrar",
+    myDrawingsHeading: "Mis dibujos", noDrawings: "Aún no hay nada guardado.",
+    hintDefault: "Sube una imagen de referencia para calcar, o dibuja a mano alzada. Pellizca para hacer zoom · toca con dos dedos para deshacer.",
+    exportInstructions: 'En iPad: mantén pulsada la imagen y elige "Añadir a Fotos". En ordenador: clic derecho y "Guardar imagen como".',
+    referenceLoadedMsg: "Calca tu dibujo encima, o reduce/oculta la referencia para revisar tu trabajo.",
+    referenceErrorMsg: "No se pudo cargar esa imagen — prueba con otro archivo.",
+    savedMsg: "Guardado.", drawingLoadedMsg: "Dibujo cargado.",
+    saveFailedPrefix: "Error al guardar (", saveFailedSuffix: ") — usa Exportar para conservar este dibujo por ahora.",
+    canvasSizeLabel: "Lienzo", approxWord: "aprox.", dpiSuffix: "a 300ppp (calidad de impresión estándar)", jpegExportLabel: "JPEG — fondo sólido", jpegExportSub: "usa el color de papel actual, para imprimir",
+  },
+  fr: {
+    lockText: "Entrez le code d'accès de votre achat pour déverrouiller l'outil.",
+    unlockBtn: "Déverrouiller", passcodePlaceholder: "Code d'accès",
+    lockError: "Ce code n'est pas correct — vérifiez votre e-mail d'achat et réessayez.",
+    drawBtn: "Dessiner", eraserBtn: "Gomme", eraserSizeLabel: "Taille de la gomme", referenceBtn: "Référence", removeRefBtn: "Retirer",
+    fadeLabel: "Opacité", refSizeLabel: "Taille de la référence", wobbleLabel: "Tremblement", thicknessLabel: "Épaisseur",
+    minLabel: "Min", maxLabel: "Max", paperLabel: "Couleur du papier",
+    clearBtn: "Effacer", resetViewBtn: "Réinitialiser la vue", saveBtn: "Enregistrer", moreSettingsBtn: "Plus de réglages ▼", lessSettingsBtn: "Moins de réglages ▲",
+    loadBtn: "Mes dessins", exportBtn: "Exporter", closeBtn: "Fermer",
+    myDrawingsHeading: "Mes dessins", noDrawings: "Rien d'enregistré pour l'instant.",
+    hintDefault: "Importez une image de référence à calquer, ou dessinez à main levée. Pincez pour zoomer · tapez à deux doigts pour annuler.",
+    exportInstructions: 'Sur iPad : appuyez longuement sur l\'image puis choisissez "Ajouter aux photos". Sur ordinateur : clic droit puis "Enregistrer l\'image sous".',
+    referenceLoadedMsg: "Calquez votre dessin par-dessus, ou réduisez/masquez la référence pour vérifier votre travail.",
+    referenceErrorMsg: "Cette image n'a pas pu être chargée — essayez un autre fichier.",
+    savedMsg: "Enregistré.", drawingLoadedMsg: "Dessin chargé.",
+    saveFailedPrefix: "Échec de l'enregistrement (", saveFailedSuffix: ") — utilisez Exporter pour conserver ce dessin pour l'instant.",
+    canvasSizeLabel: "Canevas", approxWord: "environ", dpiSuffix: "à 300dpi (qualité d'impression standard)", jpegExportLabel: "JPEG — fond opaque", jpegExportSub: "utilise la couleur de papier actuelle, pour l'impression",
+  },
+  de: {
+    lockText: "Gib den Zugangscode aus deinem Kauf ein, um das Tool freizuschalten.",
+    unlockBtn: "Entsperren", passcodePlaceholder: "Zugangscode",
+    lockError: "Dieser Code ist nicht richtig — prüfe deine Kauf-E-Mail und versuche es erneut.",
+    drawBtn: "Zeichnen", eraserBtn: "Radierer", eraserSizeLabel: "Radierergröße", referenceBtn: "Referenz", removeRefBtn: "Entfernen",
+    fadeLabel: "Deckkraft", refSizeLabel: "Referenzgröße", wobbleLabel: "Zittern", thicknessLabel: "Dicke",
+    minLabel: "Min", maxLabel: "Max", paperLabel: "Papierfarbe",
+    clearBtn: "Leeren", resetViewBtn: "Ansicht zurücksetzen", saveBtn: "Speichern", moreSettingsBtn: "Mehr Einstellungen ▼", lessSettingsBtn: "Weniger Einstellungen ▲",
+    loadBtn: "Meine Zeichnungen", exportBtn: "Exportieren", closeBtn: "Schließen",
+    myDrawingsHeading: "Meine Zeichnungen", noDrawings: "Noch nichts gespeichert.",
+    hintDefault: "Lade ein Referenzbild zum Nachzeichnen hoch oder zeichne freihand. Zum Zoomen zusammenziehen · mit zwei Fingern tippen zum Rückgängigmachen.",
+    exportInstructions: 'Auf dem iPad: Bild gedrückt halten und "Zu Fotos hinzufügen" wählen. Am Computer: Rechtsklick und "Bild speichern unter".',
+    referenceLoadedMsg: "Zeichne deine Linien darüber, oder blende die Referenz aus, um deine Arbeit zu prüfen.",
+    referenceErrorMsg: "Dieses Bild konnte nicht geladen werden — versuche eine andere Datei.",
+    savedMsg: "Gespeichert.", drawingLoadedMsg: "Zeichnung geladen.",
+    saveFailedPrefix: "Speichern fehlgeschlagen (", saveFailedSuffix: ") — nutze Exportieren, um diese Zeichnung vorerst zu behalten.",
+    canvasSizeLabel: "Leinwand", approxWord: "etwa", dpiSuffix: "bei 300dpi (Standard-Druckqualität)", jpegExportLabel: "JPEG — deckender Hintergrund", jpegExportSub: "verwendet deine aktuelle Papierfarbe, zum Drucken",
+  },
+  it: {
+    lockText: "Inserisci il codice di accesso del tuo acquisto per sbloccare lo strumento.",
+    unlockBtn: "Sblocca", passcodePlaceholder: "Codice di accesso",
+    lockError: "Quel codice non è corretto — controlla la tua email d'acquisto e riprova.",
+    drawBtn: "Disegna", eraserBtn: "Gomma", eraserSizeLabel: "Dimensione gomma", referenceBtn: "Riferimento", removeRefBtn: "Rimuovi",
+    fadeLabel: "Opacità", refSizeLabel: "Dimensione riferimento", wobbleLabel: "Tremolio", thicknessLabel: "Spessore",
+    minLabel: "Min", maxLabel: "Max", paperLabel: "Colore carta",
+    clearBtn: "Cancella", resetViewBtn: "Reimposta vista", saveBtn: "Salva", moreSettingsBtn: "Altre impostazioni ▼", lessSettingsBtn: "Meno impostazioni ▲",
+    loadBtn: "I miei disegni", exportBtn: "Esporta", closeBtn: "Chiudi",
+    myDrawingsHeading: "I miei disegni", noDrawings: "Ancora nulla di salvato.",
+    hintDefault: "Carica un'immagine di riferimento da ricalcare, oppure disegna a mano libera. Pizzica per zoomare · tocca con due dita per annullare.",
+    exportInstructions: 'Su iPad: tieni premuta l\'immagine e scegli "Aggiungi a Foto". Su desktop: clic destro e "Salva immagine con nome".',
+    referenceLoadedMsg: "Ricalca il tuo disegno sopra, oppure riduci/nascondi il riferimento per controllare il lavoro.",
+    referenceErrorMsg: "Impossibile caricare quell'immagine — prova un altro file.",
+    savedMsg: "Salvato.", drawingLoadedMsg: "Disegno caricato.",
+    saveFailedPrefix: "Salvataggio non riuscito (", saveFailedSuffix: ") — usa Esporta per conservare questo disegno per ora.",
+    canvasSizeLabel: "Tela", approxWord: "circa", dpiSuffix: "a 300dpi (qualità di stampa standard)", jpegExportLabel: "JPEG — sfondo pieno", jpegExportSub: "usa il colore carta attuale, per la stampa",
+  },
+  pt: {
+    lockText: "Introduza o código de acesso da sua compra para desbloquear a ferramenta.",
+    unlockBtn: "Desbloquear", passcodePlaceholder: "Código de acesso",
+    lockError: "Esse código não está certo — verifique o seu email de compra e tente novamente.",
+    drawBtn: "Desenhar", eraserBtn: "Borracha", eraserSizeLabel: "Tamanho da borracha", referenceBtn: "Referência", removeRefBtn: "Remover",
+    fadeLabel: "Opacidade", refSizeLabel: "Tamanho da referência", wobbleLabel: "Tremor", thicknessLabel: "Espessura",
+    minLabel: "Mín", maxLabel: "Máx", paperLabel: "Cor do papel",
+    clearBtn: "Limpar", resetViewBtn: "Repor vista", saveBtn: "Guardar", moreSettingsBtn: "Mais definições ▼", lessSettingsBtn: "Menos definições ▲",
+    loadBtn: "Os meus desenhos", exportBtn: "Exportar", closeBtn: "Fechar",
+    myDrawingsHeading: "Os meus desenhos", noDrawings: "Ainda nada guardado.",
+    hintDefault: "Carregue uma imagem de referência para decalcar, ou desenhe à mão livre. Belisque para ampliar · toque com dois dedos para desfazer.",
+    exportInstructions: 'No iPad: mantenha premida a imagem e escolha "Adicionar a Fotos". No computador: clique direito e "Guardar imagem como".',
+    referenceLoadedMsg: "Decalque o seu desenho por cima, ou reduza/oculte a referência para verificar o seu trabalho.",
+    referenceErrorMsg: "Não foi possível carregar essa imagem — experimente outro ficheiro.",
+    savedMsg: "Guardado.", drawingLoadedMsg: "Desenho carregado.",
+    saveFailedPrefix: "Falha ao guardar (", saveFailedSuffix: ") — use Exportar para manter este desenho por agora.",
+    canvasSizeLabel: "Tela", approxWord: "aprox.", dpiSuffix: "a 300dpi (qualidade de impressão padrão)", jpegExportLabel: "JPEG — fundo sólido", jpegExportSub: "usa a cor de papel atual, para impressão",
+  },
+  nl: {
+    lockText: "Voer de toegangscode van je aankoop in om de tool te ontgrendelen.",
+    unlockBtn: "Ontgrendelen", passcodePlaceholder: "Toegangscode",
+    lockError: "Die code klopt niet — controleer je aankoopmail en probeer het opnieuw.",
+    drawBtn: "Tekenen", eraserBtn: "Gum", eraserSizeLabel: "Gumgrootte", referenceBtn: "Referentie", removeRefBtn: "Verwijderen",
+    fadeLabel: "Vervaging", refSizeLabel: "Referentiegrootte", wobbleLabel: "Trilling", thicknessLabel: "Dikte",
+    minLabel: "Min", maxLabel: "Max", paperLabel: "Papierkleur",
+    clearBtn: "Wissen", resetViewBtn: "Weergave resetten", saveBtn: "Opslaan", moreSettingsBtn: "Meer instellingen ▼", lessSettingsBtn: "Minder instellingen ▲",
+    loadBtn: "Mijn tekeningen", exportBtn: "Exporteren", closeBtn: "Sluiten",
+    myDrawingsHeading: "Mijn tekeningen", noDrawings: "Nog niets opgeslagen.",
+    hintDefault: "Upload een referentiebeeld om over te trekken, of teken freehand. Knijp om in te zoomen · tik met twee vingers om ongedaan te maken.",
+    exportInstructions: 'Op iPad: houd de afbeelding ingedrukt en kies "Aan Foto\'s toevoegen". Op desktop: rechtsklik en "Afbeelding opslaan als".',
+    referenceLoadedMsg: "Trek je tekening erover, of dim/verberg de referentie om je werk te controleren.",
+    referenceErrorMsg: "Die afbeelding kon niet worden geladen — probeer een ander bestand.",
+    savedMsg: "Opgeslagen.", drawingLoadedMsg: "Tekening geladen.",
+    saveFailedPrefix: "Opslaan mislukt (", saveFailedSuffix: ") — gebruik Exporteren om deze tekening voorlopig te bewaren.",
+    canvasSizeLabel: "Canvas", approxWord: "ongeveer", dpiSuffix: "bij 300dpi (standaard afdrukkwaliteit)", jpegExportLabel: "JPEG — dekkende achtergrond", jpegExportSub: "gebruikt je huidige papierkleur, voor afdrukken",
+  },
+  ja: {
+    lockText: "購入時のアクセスコードを入力してツールのロックを解除してください。",
+    unlockBtn: "ロック解除", passcodePlaceholder: "アクセスコード",
+    lockError: "コードが正しくありません。購入時のメールを確認して再度お試しください。",
+    drawBtn: "描く", eraserBtn: "消しゴム", eraserSizeLabel: "消しゴムのサイズ", referenceBtn: "下絵", removeRefBtn: "削除",
+    fadeLabel: "不透明度", refSizeLabel: "下絵のサイズ", wobbleLabel: "手ブレ", thicknessLabel: "太さ",
+    minLabel: "最小", maxLabel: "最大", paperLabel: "紙の色",
+    clearBtn: "消去", resetViewBtn: "表示をリセット", saveBtn: "保存", moreSettingsBtn: "詳細設定 ▼", lessSettingsBtn: "設定を閉じる ▲",
+    loadBtn: "作品一覧", exportBtn: "書き出し", closeBtn: "閉じる",
+    myDrawingsHeading: "作品一覧", noDrawings: "まだ保存された作品はありません。",
+    hintDefault: "下絵にする画像をアップロードするか、フリーハンドで描いてください。ピンチでズーム・二本指タップで元に戻します。",
+    exportInstructions: "iPadの場合：画像を長押しして「写真に追加」を選択してください。パソコンの場合：右クリックして「名前を付けて画像を保存」を選択してください。",
+    referenceLoadedMsg: "下絵の上からなぞって描いてください。下絵を薄くしたり非表示にして仕上がりを確認できます。",
+    referenceErrorMsg: "この画像を読み込めませんでした。別のファイルをお試しください。",
+    savedMsg: "保存しました。", drawingLoadedMsg: "作品を読み込みました。",
+    saveFailedPrefix: "保存に失敗しました（", saveFailedSuffix: "）。ひとまずエクスポートでこの作品を保存してください。",
+    canvasSizeLabel: "キャンバス", approxWord: "約", dpiSuffix: "（300dpi・標準印刷品質）", jpegExportLabel: "JPEG　— 不透明な背景", jpegExportSub: "現在の紙の色を使用します（印刷用）",
+  },
+  zh: {
+    lockText: "请输入购买时获得的访问码以解锁此工具。",
+    unlockBtn: "解锁", passcodePlaceholder: "访问码",
+    lockError: "访问码不正确，请检查您的购买邮件后重试。",
+    drawBtn: "画笔", eraserBtn: "橡皮擦", eraserSizeLabel: "橡皮擦大小", referenceBtn: "参考图", removeRefBtn: "移除",
+    fadeLabel: "透明度", refSizeLabel: "参考图大小", wobbleLabel: "手抖效果", thicknessLabel: "粗细",
+    minLabel: "最小", maxLabel: "最大", paperLabel: "纸张颜色",
+    clearBtn: "清除", resetViewBtn: "重置视图", saveBtn: "保存", moreSettingsBtn: "更多设置 ▼", lessSettingsBtn: "收起设置 ▲",
+    loadBtn: "我的作品", exportBtn: "导出", closeBtn: "关闭",
+    myDrawingsHeading: "我的作品", noDrawings: "还没有保存任何作品。",
+    hintDefault: "上传一张参考图进行描线，或直接手绘。双指捏合缩放 · 双指点按撤销。",
+    exportInstructions: "iPad：长按图片，选择「添加到照片」。电脑：右键点击图片，选择「图片另存为」。",
+    referenceLoadedMsg: "在参考图上方描线，也可以降低透明度或隐藏参考图来查看效果。",
+    referenceErrorMsg: "无法加载该图片，请尝试其他文件。",
+    savedMsg: "已保存。", drawingLoadedMsg: "作品已加载。",
+    saveFailedPrefix: "保存失败（", saveFailedSuffix: "）— 请先使用导出功能保留此作品。",
+    canvasSizeLabel: "画布", approxWord: "约", dpiSuffix: "（300dpi 标准印刷质量）", jpegExportLabel: "JPEG — 不透明背景", jpegExportSub: "使用当前的纸张颜色，适合打印",
+  },
+};
+
+function t(key) {
+  const lang = langSelect.value;
+  return (TRANSLATIONS[lang] && TRANSLATIONS[lang][key]) || TRANSLATIONS.en[key] || key;
+}
+
+function applyTranslations() {
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    el.textContent = t(el.getAttribute('data-i18n'));
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    el.placeholder = t(el.getAttribute('data-i18n-placeholder'));
+  });
+  hintText.textContent = t('hintDefault');
+}
+
+// Default to the browser's language if we support it, otherwise English
+const supportedLangs = Object.keys(TRANSLATIONS);
+const browserLang = (navigator.language || 'en').slice(0, 2);
+const savedLang = localStorage.getItem('vanya_sketch_lang');
+langSelect.value = savedLang && supportedLangs.includes(savedLang)
+  ? savedLang
+  : (supportedLangs.includes(browserLang) ? browserLang : 'en');
+
+langSelect.addEventListener('change', () => {
+  localStorage.setItem('vanya_sketch_lang', langSelect.value);
+  applyTranslations();
+  updatePanelToggleLabel(); // otherwise switching language while the panel is
+                             // open would reset this button's text back to
+                             // "More settings", even though it's actually open
+});
+applyTranslations();
+
+let refImage = null;
+let refVisible = true;
+let smoothedWobbleX = 0, smoothedWobbleY = 0;
+let drawing = false;
+let points = [];
+let history = [];
+let redoStack = []; // states popped by Undo, restorable by Redo — cleared
+                     // whenever a genuinely new stroke is drawn, since that
+                     // invalidates any "future" redo could go back to
+let usingPressure = false;
+let moved = false;
+let lastPressure = 0.5;
+let smoothedWidth = null;
+let currentColor = '#2a2620';
+let view = { scale: 1, x: 0, y: 0, rotation: 0 }; // rotation in degrees
+
+const colors = ['#2a2620', '#8a3b2e', '#3b5c48', '#3a5578', '#7a5230'];
+colors.forEach((c, i) => {
+  const sw = document.createElement('div');
+  sw.className = 'swatch' + (i === 0 ? ' active' : '');
+  sw.style.background = c;
+  sw.onclick = () => {
+    currentColor = c;
+    colorPicker.value = c;
+    document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+    sw.classList.add('active');
+  };
+  paletteEl.appendChild(sw);
+});
+colorPicker.addEventListener('input', () => {
+  currentColor = colorPicker.value;
+  document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+});
+
+// Paper color only changes the visual background behind the transparent
+// drawing layer — never baked into the exported line art, same principle
+// as keeping the reference layer separate. Bound to both events since
+// mobile Safari's color picker doesn't always fire 'input' reliably.
+function applyPaperColor() {
+  wrap.style.backgroundColor = paperColorPicker.value;
+}
+paperColorPicker.addEventListener('input', applyPaperColor);
+paperColorPicker.addEventListener('change', applyPaperColor);
+applyPaperColor();
+
+const EDGE_MARGIN = 16; // keeps the drawable area off the physical screen edges,
+                         // where iOS swipe gestures intercept touches before JS sees them
+const MIN_PRINT_LONG_SIDE = 3000; // ~10in at 300dpi — a real device's natural
+                                    // resolution varies a lot (a basic laptop screen
+                                    // can be under half this), so we enforce a floor
+                                    // rather than trusting whatever the screen provides
+
+let currentDpr = 1; // the actual multiplier resize() used for canvas resolution —
+                     // getPos() MUST use this same value, not recompute its own,
+                     // or touch coordinates drift once print-resolution scaling differs
+                     // from the device's raw pixel ratio
+
+function resize() {
+  const rect = wrap.getBoundingClientRect();
+  const rawDpr = window.devicePixelRatio || 1;
+  const w = Math.max(50, rect.width - EDGE_MARGIN * 2);
+  const h = Math.max(50, rect.height - EDGE_MARGIN * 2);
+  const longSideCss = Math.max(w, h);
+  const dpr = Math.max(rawDpr, MIN_PRINT_LONG_SIDE / longSideCss);
+  currentDpr = dpr;
+  const prev = drawCanvas.width ? ctx.getImageData(0,0,drawCanvas.width,drawCanvas.height) : null;
+  [refCanvas, drawCanvas].forEach(c => {
+    c.width = w * dpr;
+    c.height = h * dpr;
+    c.style.width = w + 'px';
+    c.style.height = h + 'px';
+    c.style.top = EDGE_MARGIN + 'px';
+    c.style.left = EDGE_MARGIN + 'px';
+  });
+  if (prev) ctx.putImageData(prev, 0, 0);
+  drawRef();
+  applyView();
+}
+let printingInProgress = false;
+window.addEventListener('resize', () => {
+  if (!printingInProgress) resize();
+});
+window.addEventListener('beforeprint', () => { printingInProgress = true; });
+window.addEventListener('afterprint', () => {
+  printingInProgress = false;
+  resize(); // restore the canvas properly now that the print UI is gone
+});
+resize();
+
+function drawRef() {
+  refCtx.clearRect(0, 0, refCanvas.width, refCanvas.height);
+  if (!refImage || !refVisible) return;
+  const cw = refCanvas.width, ch = refCanvas.height;
+  const iw = refImage.width, ih = refImage.height;
+  const fitScale = Math.min(cw / iw, ch / ih) * 0.9;
+  // Cap how far we auto-stretch a small source image. A photo's own
+  // resolution is a hard limit — stretching it further than ~2x its native
+  // size just softens it before the person has even zoomed in at all.
+  // Never upscale beyond native resolution — even a modest stretch visibly
+  // softens fine detail like crosshatching or dense linework, which a photo
+  // could tolerate but detailed line-art references can't. Only ever shrink
+  // to fit, never stretch bigger. (The Reference size slider and pinch-zoom
+  // are how someone views it larger if they want to, without permanently
+  // softening the source.)
+  const autoScale = Math.min(fitScale, 1);
+  // User's manual size control (25%-300%), layered on top of the auto-fit —
+  // separate from the shared canvas zoom, so resizing the reference doesn't
+  // also change how the person is viewing their own drawing.
+  const userScale = (parseFloat(refSizeSlider.value) || 100) / 100;
+  const scale = autoScale * userScale;
+  const w = iw * scale, h = ih * scale;
+  const x = (cw - w) / 2, y = (ch - h) / 2;
+  refCtx.imageSmoothingEnabled = true;
+  refCtx.imageSmoothingQuality = 'high';
+  refCtx.globalAlpha = opacitySlider.value / 100;
+  refCtx.drawImage(refImage, x, y, w, h);
+  refCtx.globalAlpha = 1;
+}
+refSizeSlider.addEventListener('input', drawRef);
+
+fileInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const img = new Image();
+    img.onload = () => {
+      refImage = img;
+      refVisible = true;
+      toggleRefBtn.classList.add('active');
+      document.getElementById('removeRefBtn').style.display = 'inline-block';
+      refSizeSlider.value = 100;
+      drawRef();
+      hintText.textContent = t('referenceLoadedMsg');
+    };
+    img.onerror = () => { hintText.textContent = t('referenceErrorMsg'); };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+});
+toggleRefBtn.onclick = () => {
+  refVisible = !refVisible;
+  toggleRefBtn.classList.toggle('active', refVisible);
+  drawRef();
+};
+document.getElementById('removeRefBtn').onclick = () => {
+  refImage = null;
+  fileInput.value = ''; // so choosing the same file again still triggers 'change'
+  document.getElementById('removeRefBtn').style.display = 'none';
+  drawRef();
+};
+opacitySlider.addEventListener('input', drawRef);
+
+function saveHistory() {
+  history.push(ctx.getImageData(0,0,drawCanvas.width,drawCanvas.height));
+  if (history.length > 30) history.shift();
+  redoStack = []; // a new stroke invalidates whatever redo could have restored
+}
+saveHistory();
+
+function getPos(e) {
+  const wrapRect = wrap.getBoundingClientRect();
+  // Undo translate, then undo rotation, then undo scale — in that order,
+  // reversing exactly how applyView() builds the transform. A simple
+  // bounding-box ratio (like before rotation existed) only works for pure
+  // translate+scale; once rotated, the bounding box no longer matches the
+  // visual rectangle, so touches would land in the wrong place.
+  const qx = e.clientX - wrapRect.left - EDGE_MARGIN - view.x;
+  const qy = e.clientY - wrapRect.top - EDGE_MARGIN - view.y;
+  const rad = view.rotation * Math.PI / 180;
+  const cos = Math.cos(rad), sin = Math.sin(rad);
+  const localX = (qx * cos + qy * sin) / view.scale;
+  const localY = (-qx * sin + qy * cos) / view.scale;
+  return {
+    x: localX * currentDpr,
+    y: localY * currentDpr,
+    t: performance.now()
+  };
+}
+
+let lastRefResUpdate = 0;
+function updateRefResolutionForZoom() {
+  if (!refImage) return;
+  const now = performance.now();
+  if (now - lastRefResUpdate < 150) return; // throttle — don't resize the canvas on every touch event
+  lastRefResUpdate = now;
+
+  const baseLong = MIN_PRINT_LONG_SIDE;
+  // Render at higher internal resolution as the user zooms in, so they see
+  // genuine extra detail from the original photo — capped by the photo's own
+  // native resolution, since no amount of rendering can invent detail that
+  // wasn't in the source.
+  const targetLong = Math.min(baseLong * view.scale, Math.max(refImage.width, refImage.height));
+  const currentLong = Math.max(refCanvas.width, refCanvas.height);
+  if (targetLong <= currentLong * 1.05) return; // not enough of a jump to bother re-rendering yet
+
+  const ratio = targetLong / Math.max(refCanvas.width, refCanvas.height);
+  refCanvas.width = Math.round(refCanvas.width * ratio);
+  refCanvas.height = Math.round(refCanvas.height * ratio);
+  drawRef();
+}
+
+function applyView() {
+  const t = `translate(${view.x}px, ${view.y}px) rotate(${view.rotation}deg) scale(${view.scale})`;
+  refCanvas.style.transform = t;
+  drawCanvas.style.transform = t;
+}
+
+drawModeBtn.onclick = () => {
+  mode = 'draw';
+  drawModeBtn.classList.add('active');
+  eraseModeBtn.classList.remove('active');
+};
+eraseModeBtn.onclick = () => {
+  mode = 'erase';
+  eraseModeBtn.classList.add('active');
+  drawModeBtn.classList.remove('active');
+};
+
+function startStroke(e) {
+  drawing = true;
+  points = [getPos(e)];
+  smoothedWidth = null;
+  smoothedWobbleX = 0;
+  smoothedWobbleY = 0;
+  moved = false;
+  lastPressure = e.pressure;
+  usingPressure = e.pointerType === 'pen';
+  inputModeEl.textContent = usingPressure ? '(Pencil pressure detected)' : '(no pressure — using speed)';
+}
+
+function continueStroke(e) {
+  if (!drawing) return;
+  const p = getPos(e);
+  const prev = points[points.length - 1];
+  const dt = Math.max(1, p.t - prev.t);
+  const dist = Math.hypot(p.x - prev.x, p.y - prev.y);
+  const dpr = currentDpr;
+  if (dist < 1.2 * dpr) return;
+  moved = true;
+
+  const thicknessMult = parseFloat(thicknessSlider.value);
+  const minW = parseFloat(minSlider.value) * dpr * thicknessMult;
+  const maxW = parseFloat(maxSlider.value) * dpr * thicknessMult;
+  const speed = dist / dt;
+  const speedFactor = Math.max(0, Math.min(1, 1 - speed * 3));
+  let targetWidth;
+  if (mode === 'erase') {
+    // The eraser uses its own fixed size, not the pen's pressure/speed range —
+    // a predictable, consistent eraser is more usable than one that varies
+    // stroke to stroke like ink does.
+    targetWidth = parseFloat(eraserSizeSlider.value) * dpr;
+  } else if (usingPressure) {
+    // Blend real pressure with speed, weighted toward speed — pressure alone
+    // felt more deliberate/mechanical, while speed varies more instinctively
+    // as you draw, which read as more natural even with a real stylus.
+    const pressure = Math.max(0.08, e.pressure);
+    lastPressure = e.pressure;
+    const combinedFactor = speedFactor * 0.65 + pressure * 0.35;
+    targetWidth = minW + combinedFactor * (maxW - minW);
+  } else {
+    targetWidth = minW + speedFactor * (maxW - minW);
+  }
+  smoothedWidth = smoothedWidth === null ? targetWidth : smoothedWidth + (targetWidth - smoothedWidth) * 0.35;
+
+  let x = p.x, y = p.y;
+
+  if (mode === 'draw') {
+    const wobbleIntensity = parseFloat(wobbleSlider.value);
+    if (wobbleIntensity > 0) {
+      // a fresh random target each move, but the applied offset only drifts
+      // toward it gradually — this is what makes it read as a natural hand
+      // tremor instead of jittery digital noise
+      const targetX = (Math.random() - 0.5) * wobbleIntensity * dpr;
+      const targetY = (Math.random() - 0.5) * wobbleIntensity * dpr;
+      smoothedWobbleX += (targetX - smoothedWobbleX) * 0.25;
+      smoothedWobbleY += (targetY - smoothedWobbleY) * 0.25;
+      x += smoothedWobbleX;
+      y += smoothedWobbleY;
+    }
+  }
+
+  if (mode === 'erase') {
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.strokeStyle = 'rgba(0,0,0,1)'; // color is irrelevant for destination-out — only alpha matters
+  } else {
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.strokeStyle = currentColor;
+  }
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.lineWidth = smoothedWidth;
+  ctx.beginPath();
+  ctx.moveTo(prev.x, prev.y);
+  ctx.lineTo(x, y);
+  ctx.stroke();
+  ctx.globalCompositeOperation = 'source-over'; // always reset immediately after
+
+  points.push({ x: p.x, y: p.y, t: p.t });
+}
+
+function endStroke() {
+  if (!drawing) return;
+  drawing = false;
+  if (!moved && points.length > 0) {
+    const dpr = currentDpr;
+    const thicknessMult = parseFloat(thicknessSlider.value);
+    const minW = parseFloat(minSlider.value) * dpr * thicknessMult;
+    const maxW = parseFloat(maxSlider.value) * dpr * thicknessMult;
+    const pressure = usingPressure ? Math.max(0.08, lastPressure) : 0.5;
+    const width = mode === 'erase'
+      ? parseFloat(eraserSizeSlider.value) * dpr
+      : minW + pressure * (maxW - minW);
+    const p = points[0];
+    if (mode === 'erase') {
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.fillStyle = 'rgba(0,0,0,1)';
+    } else {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = currentColor;
+    }
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, width / 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+  }
+  saveHistory();
+}
+
+const activePointers = new Map();
+let gesture = null;
+let tapCandidate = null;
+let tapCandidate3 = null; // mirrors tapCandidate, but for a three-finger tap (redo)
+function dist2(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+function mid2(a, b) { return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; }
+
+drawCanvas.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (activePointers.size === 1) {
+    startStroke(e);
+  } else if (activePointers.size === 2) {
+    drawing = false;
+    const pts = [...activePointers.values()];
+    gesture = { prevDist: dist2(pts[0], pts[1]), prevMid: mid2(pts[0], pts[1]) };
+    tapCandidate = { time: Date.now(), moved: false };
+  } else if (activePointers.size === 3) {
+    // no pinch/zoom for three fingers, just tap detection for redo — store
+    // each finger's starting position so movement can be measured per-finger
+    tapCandidate3 = { time: Date.now(), moved: false, initial: new Map(activePointers) };
+  }
+});
+
+drawCanvas.addEventListener('pointermove', (e) => {
+  if (!activePointers.has(e.pointerId)) return;
+  activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+  if (activePointers.size === 2 && gesture) {
+    e.preventDefault();
+    const pts = [...activePointers.values()];
+    const newDist = dist2(pts[0], pts[1]);
+    const newMid = mid2(pts[0], pts[1]);
+    const wrapRect = wrap.getBoundingClientRect();
+    const focal = { x: newMid.x - wrapRect.left, y: newMid.y - wrapRect.top };
+
+    view.x += newMid.x - gesture.prevMid.x;
+    view.y += newMid.y - gesture.prevMid.y;
+
+    const scaleDelta = newDist / gesture.prevDist;
+    const newScale = Math.min(4, Math.max(1, view.scale * scaleDelta));
+    const applied = newScale / view.scale;
+    view.x = focal.x - applied * (focal.x - view.x);
+    view.y = focal.y - applied * (focal.y - view.y);
+    view.scale = newScale;
+
+    applyView();
+    updateRefResolutionForZoom();
+    if (Math.abs(newDist - gesture.prevDist) > 8 ||
+        Math.hypot(newMid.x - gesture.prevMid.x, newMid.y - gesture.prevMid.y) > 8) {
+      tapCandidate.moved = true;
+    }
+    gesture.prevDist = newDist;
+    gesture.prevMid = newMid;
+  } else if (activePointers.size === 1) {
+    e.preventDefault();
+    continueStroke(e);
+  } else if (activePointers.size === 3 && tapCandidate3) {
+    const start = tapCandidate3.initial.get(e.pointerId);
+    const now = activePointers.get(e.pointerId);
+    if (start && dist2(start, now) > 8) {
+      tapCandidate3.moved = true;
+    }
+  }
+});
+
+function onPointerEnd(e) {
+  const wasInTwoFingerGesture = gesture !== null;
+  const wasInThreeFingerGesture = tapCandidate3 !== null;
+  activePointers.delete(e.pointerId);
+
+  if (wasInThreeFingerGesture) {
+    // same reasoning as the two-finger case: check on the FIRST finger
+    // lifting from three, not a simultaneous drop to two, which real hands
+    // essentially never do
+    if (activePointers.size <= 2) {
+      if (!tapCandidate3.moved && Date.now() - tapCandidate3.time < 300) {
+        redoBtn.click();
+      }
+      tapCandidate3 = null;
+      // the second finger touching down (on the way to three) already set
+      // the two-finger gesture/tap state below — if we don't clear it here
+      // too, lifting the remaining fingers after this would ALSO fire Undo
+      // right after Redo, since that stale tap would still look "recent"
+      gesture = null;
+      tapCandidate = null;
+    }
+  }
+
+  if (wasInTwoFingerGesture) {
+    // real hands never lift both fingers at the exact same instant, so we
+    // must decide on the FIRST finger lifting (2 fingers -> 1), not wait
+    // for a simultaneous drop to 0 that will basically never happen
+    if (activePointers.size <= 1) {
+      if (tapCandidate && !tapCandidate.moved && Date.now() - tapCandidate.time < 300) {
+        undoBtn.click();
+      }
+      gesture = null;
+      tapCandidate = null;
+      lastRefResUpdate = 0; // bypass the throttle for one final, settled-quality render
+      updateRefResolutionForZoom();
+    }
+  }
+
+  if (activePointers.size === 0) {
+    endStroke();
+  }
+}
+drawCanvas.addEventListener('pointerup', onPointerEnd);
+drawCanvas.addEventListener('pointercancel', onPointerEnd);
+drawCanvas.addEventListener('pointerleave', (e) => {
+  if (e.pointerType !== 'touch') onPointerEnd(e);
+});
+drawCanvas.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
+drawCanvas.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+
+resetZoomBtn.onclick = () => { view = { scale: 1, x: 0, y: 0, rotation: 0 }; applyView(); };
+
+// Button-based zoom — for mouse/stylus/graphics-tablet users, who have no
+// way to pinch at all. Anchors around the center of the visible canvas,
+// using the same focal-point math the pinch gesture already uses, just
+// without a real pinch point to anchor to.
+function zoomByButton(factor) {
+  const wrapRect = wrap.getBoundingClientRect();
+  const focal = { x: wrapRect.width / 2, y: wrapRect.height / 2 };
+  const newScale = Math.min(4, Math.max(1, view.scale * factor));
+  const applied = newScale / view.scale;
+  view.x = focal.x - applied * (focal.x - view.x);
+  view.y = focal.y - applied * (focal.y - view.y);
+  view.scale = newScale;
+  applyView();
+  lastRefResUpdate = 0;
+  updateRefResolutionForZoom();
+}
+document.getElementById('zoomInBtn').onclick = () => zoomByButton(1.25);
+document.getElementById('zoomOutBtn').onclick = () => zoomByButton(1 / 1.25);
+undoBtn.onclick = () => {
+  if (history.length > 1) {
+    redoStack.push(history.pop());
+    ctx.putImageData(history[history.length - 1], 0, 0);
+  }
+};
+redoBtn.onclick = () => {
+  if (redoStack.length > 0) {
+    const state = redoStack.pop();
+    history.push(state);
+    ctx.putImageData(state, 0, 0);
+  }
+};
+clearBtn.onclick = () => {
+  ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+  history = [];
+  saveHistory();
+};
+function flattenOntoBackground(bgColor) {
+  // JPEG/print need an opaque background since transparency isn't meaningful
+  // there — flatten the current paper color (or white) behind the artwork.
+  const w = drawCanvas.width, h = drawCanvas.height;
+  const flat = document.createElement('canvas');
+  flat.width = w; flat.height = h;
+  const fctx = flat.getContext('2d');
+  fctx.fillStyle = bgColor;
+  fctx.fillRect(0, 0, w, h);
+  fctx.drawImage(drawCanvas, 0, 0);
+  return flat;
+}
+
+function showExportImage(dataUrl) {
+  document.getElementById('exportChoices').style.display = 'none';
+  document.getElementById('exportSizeInfo').style.display = 'none';
+  const img = document.getElementById('exportImg');
+  img.src = dataUrl;
+  img.style.display = 'block';
+  document.getElementById('exportInstructionsText').style.display = 'block';
+}
+
+exportBtn.onclick = () => {
+  const w = drawCanvas.width, h = drawCanvas.height;
+  const dpi = 300; // standard print quality — same figure used for MIN_PRINT_LONG_SIDE
+  const wIn = (w / dpi).toFixed(1), hIn = (h / dpi).toFixed(1);
+  const wCm = (w / dpi * 2.54).toFixed(1), hCm = (h / dpi * 2.54).toFixed(1);
+  document.getElementById('exportSizeInfo').textContent =
+    `${t('canvasSizeLabel')}: ${w}×${h}px — ${t('approxWord')} ${wIn}×${hIn}in / ${wCm}×${hCm}cm ${t('dpiSuffix')}`;
+  document.getElementById('exportSizeInfo').style.display = 'block';
+  document.getElementById('exportChoices').style.display = 'flex';
+  document.getElementById('exportImg').style.display = 'none';
+  document.getElementById('exportInstructionsText').style.display = 'none';
+  document.getElementById('exportOverlay').classList.add('show');
+};
+
+document.getElementById('exportPngBtn').onclick = () => {
+  showExportImage(drawCanvas.toDataURL('image/png')); // stays transparent
+};
+document.getElementById('exportJpgBtn').onclick = () => {
+  const bg = paperColorPicker.value || '#ffffff';
+  const flat = flattenOntoBackground(bg);
+  showExportImage(flat.toDataURL('image/jpeg', 0.95)); // JPEG has no transparency at all
+};
+// Builds a minimal, valid single-image PDF directly from JPEG bytes — this
+// avoids window.print() entirely, since Safari's print-rendering pipeline
+// was failing to include canvas content even after fixing the CSS and the
+// "blocked from automatic printing" issue. This generates a real .pdf file
+// ourselves and lets iOS's own PDF viewer handle it, which is far more
+// reliable than relying on the browser's print engine for canvas content.
+function buildSimplePDF(jpegBytes, widthPx, heightPx, dpi) {
+  const pageWPt = (widthPx / dpi) * 72;
+  const pageHPt = (heightPx / dpi) * 72;
+  const chunks = [];
+  let length = 0;
+  function strToBytes(str) {
+    const arr = new Uint8Array(str.length);
+    for (let i = 0; i < str.length; i++) arr[i] = str.charCodeAt(i) & 0xff;
+    return arr;
+  }
+  const push = (data) => {
+    const bytes = typeof data === 'string' ? strToBytes(data) : data;
+    chunks.push(bytes);
+    length += bytes.length;
+  };
+
+  const offsets = [0];
+  push('%PDF-1.4\n');
+  offsets.push(length);
+  push('1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n');
+  offsets.push(length);
+  push('2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n');
+  offsets.push(length);
+  push(`3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWPt.toFixed(2)} ${pageHPt.toFixed(2)}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>\nendobj\n`);
+  offsets.push(length);
+  push(`4 0 obj\n<< /Type /XObject /Subtype /Image /Width ${widthPx} /Height ${heightPx} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpegBytes.length} >>\nstream\n`);
+  push(jpegBytes);
+  push('\nendstream\nendobj\n');
+  const contentStream = `q ${pageWPt.toFixed(2)} 0 0 ${pageHPt.toFixed(2)} 0 0 cm /Im0 Do Q`;
+  offsets.push(length);
+  push(`5 0 obj\n<< /Length ${contentStream.length} >>\nstream\n${contentStream}\nendstream\nendobj\n`);
+
+  const xrefStart = length;
+  let xref = 'xref\n0 6\n0000000000 65535 f \n';
+  for (let i = 1; i < offsets.length; i++) {
+    xref += String(offsets[i]).padStart(10, '0') + ' 00000 n \n';
+  }
+  xref += `trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
+  push(xref);
+
+  const total = new Uint8Array(length);
+  let pos = 0;
+  for (const c of chunks) { total.set(c, pos); pos += c.length; }
+  return total;
+}
+
+document.getElementById('exportPdfBtn').onclick = () => {
+  const bg = paperColorPicker.value || '#ffffff';
+  const flat = flattenOntoBackground(bg);
+  const jpegDataUrl = flat.toDataURL('image/jpeg', 0.92);
+  const base64 = jpegDataUrl.split(',')[1];
+  const binaryStr = atob(base64);
+  const jpegBytes = new Uint8Array(binaryStr.length);
+  for (let i = 0; i < binaryStr.length; i++) jpegBytes[i] = binaryStr.charCodeAt(i);
+
+  const pdfBytes = buildSimplePDF(jpegBytes, flat.width, flat.height, 300);
+  const pdfBlob = new Blob([pdfBytes], { type: 'application/pdf' });
+  const pdfUrl = URL.createObjectURL(pdfBlob);
+
+  document.getElementById('exportOverlay').classList.remove('show');
+  window.open(pdfUrl, '_blank'); // opens in Safari's own PDF viewer, from
+                                   // which the Share button reliably saves —
+                                   // no print engine involved at all
+};
+document.getElementById('closeExportBtn').onclick = () => {
+  document.getElementById('exportOverlay').classList.remove('show');
+};
+
+// --- Save / load, using the browser's own localStorage (this device only, but
+// actually works — window.storage only exists inside Claude.ai's own preview,
+// not on a real deployed site, which is why it failed there) ---
+saveBtn.onclick = () => {
+  try {
+    const dataUrl = drawCanvas.toDataURL('image/png');
+    const id = 'drawing_' + Date.now();
+    const entry = { id, dataUrl, savedAt: new Date().toISOString() };
+    localStorage.setItem(id, JSON.stringify(entry));
+    let index = [];
+    try { index = JSON.parse(localStorage.getItem('drawings_index')) || []; }
+    catch (e) { index = []; }
+    index.unshift(id);
+    localStorage.setItem('drawings_index', JSON.stringify(index));
+    hintText.textContent = t('savedMsg');
+  } catch (err) {
+    // most likely localStorage quota exceeded — drawings as PNGs can be large
+    hintText.textContent = t('saveFailedPrefix') + (err && err.message ? err.message : String(err)) + t('saveFailedSuffix');
+  }
+};
+
+function renderDrawingsList() {
+  const listEl = document.getElementById('drawingsList');
+  const noneEl = document.getElementById('noDrawings');
+  listEl.innerHTML = '';
+  let index = [];
+  try { index = JSON.parse(localStorage.getItem('drawings_index')) || []; }
+  catch (err) { index = []; }
+  if (index.length === 0) {
+    noneEl.style.display = 'block';
+    return;
+  }
+  noneEl.style.display = 'none';
+  for (const id of index) {
+    const raw = localStorage.getItem(id);
+    if (!raw) continue; // skip missing/corrupt entries
+    const entry = JSON.parse(raw);
+    const thumb = document.createElement('div');
+    thumb.className = 'drawing-thumb';
+    const img = document.createElement('img');
+    img.src = entry.dataUrl;
+    thumb.appendChild(img);
+    thumb.onclick = () => {
+      const loadImg = new Image();
+      loadImg.onload = () => {
+        ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+        ctx.drawImage(loadImg, 0, 0, drawCanvas.width, drawCanvas.height);
+        saveHistory();
+        document.getElementById('loadOverlay').classList.remove('show');
+        hintText.textContent = t('drawingLoadedMsg');
+      };
+      loadImg.src = entry.dataUrl;
+    };
+    const del = document.createElement('div');
+    del.className = 'del';
+    del.textContent = '×';
+    del.onclick = (ev) => {
+      ev.stopPropagation();
+      localStorage.removeItem(id);
+      const idx = (JSON.parse(localStorage.getItem('drawings_index')) || []).filter(x => x !== id);
+      localStorage.setItem('drawings_index', JSON.stringify(idx));
+      renderDrawingsList();
+    };
+    thumb.appendChild(del);
+    listEl.appendChild(thumb);
+  }
+}
+
+const HELP_CONTENT = {
+  en: [
+    ["Draw", "The ink pen. Draw freehand, or trace over a reference image."],
+    ["Eraser", "Erases parts of your drawing."],
+    ["Eraser size", "Sets a fixed eraser size — doesn't vary with pressure or speed, for predictable erasing."],
+    ["Reference", "Upload one of your own images to trace over."],
+    ["Remove", "Deletes the reference photo completely — the eye icon only hides it, this removes it for good."],
+    ["Reference size", "Resize just the reference photo — separate from zooming your whole canvas."],
+    ["Fade", "How visible the reference image is while you trace."],
+    ["Wobble", "Adds a natural hand-tremor effect. Set to 0 for perfectly sharp lines."],
+    ["Thickness", "Scales your whole pen size up or down at once."],
+    ["Min / Max", "The thinnest and thickest your pen line can get, based on pressure or speed."],
+    ["Paper color", "Changes the background you see while drawing — never affects your exported artwork."],
+    ["Undo", "Also works with a two-finger tap anywhere on the canvas."],
+    ["Redo", "Restores what you just undid. Also works with a three-finger tap anywhere on the canvas."],
+    ["Clear", "Wipes the canvas completely. Cannot be undone."],
+    ["Reset View", "Resets zoom and pan back to normal."],
+    ["Zoom + / −", "Zoom in and out with buttons — useful if you're on a mouse or graphics tablet, since pinch needs a touchscreen."],
+    ["Save / My Drawings", "Stores drawings on this device only — not in the cloud."],
+    ["Export", "PNG keeps transparency (for digital use). JPEG and Print/PDF add a solid background, needed for printing."],
+  ],
+  es: [
+    ["Dibujar", "El pincel de tinta. Dibuja a mano alzada o calca una imagen de referencia."],
+    ["Borrador", "Borra partes de tu dibujo."],
+    ["Tamaño del borrador", "Define un tamaño fijo para el borrador — no varía con la presión ni la velocidad, para borrar de forma predecible."],
+    ["Referencia", "Sube una de tus propias imágenes para calcarla."],
+    ["Quitar", "Elimina la foto de referencia por completo — el icono del ojo solo la oculta, esto la borra definitivamente."],
+    ["Tamaño de referencia", "Cambia el tamaño solo de la foto de referencia, sin afectar al zoom de todo el lienzo."],
+    ["Opacidad", "Cuánto se ve la imagen de referencia mientras calcas."],
+    ["Temblor", "Añade un temblor natural de mano. Ponlo en 0 para líneas perfectamente nítidas."],
+    ["Grosor", "Escala todo el grosor del pincel a la vez."],
+    ["Mín / Máx", "El grosor más fino y más grueso que puede alcanzar tu línea, según presión o velocidad."],
+    ["Color del papel", "Cambia el fondo que ves mientras dibujas — nunca afecta a tu obra exportada."],
+    ["Deshacer", "También funciona tocando con dos dedos en cualquier parte del lienzo."],
+    ["Rehacer", "Restaura lo que acabas de deshacer. También funciona tocando con tres dedos en cualquier parte del lienzo."],
+    ["Borrar", "Borra todo el lienzo. No se puede deshacer."],
+    ["Restablecer vista", "Restablece el zoom y la posición a su estado normal."],
+    ["Zoom + / −", "Acerca y aleja con botones — útil si usas ratón o tableta gráfica, ya que pellizcar requiere pantalla táctil."],
+    ["Guardar / Mis dibujos", "Guarda los dibujos solo en este dispositivo, no en la nube."],
+    ["Exportar", "PNG conserva la transparencia (uso digital). JPEG e Imprimir/PDF añaden un fondo sólido, necesario para imprimir."],
+  ],
+  fr: [
+    ["Dessiner", "Le pinceau à encre. Dessinez à main levée ou calquez une image de référence."],
+    ["Gomme", "Efface des parties de votre dessin."],
+    ["Taille de la gomme", "Définit une taille fixe pour la gomme — ne varie pas avec la pression ou la vitesse, pour un effacement prévisible."],
+    ["Référence", "Importez une de vos images pour la calquer."],
+    ["Retirer", "Supprime complètement la photo de référence — l'icône œil ne fait que la masquer, ceci la supprime pour de bon."],
+    ["Taille de la référence", "Redimensionne uniquement la photo de référence — indépendamment du zoom global du canevas."],
+    ["Opacité", "À quel point l'image de référence est visible pendant que vous calquez."],
+    ["Tremblement", "Ajoute un tremblement naturel de la main. Réglez sur 0 pour des lignes parfaitement nettes."],
+    ["Épaisseur", "Ajuste toute l'épaisseur du pinceau en une fois."],
+    ["Min / Max", "L'épaisseur la plus fine et la plus épaisse possible, selon la pression ou la vitesse."],
+    ["Couleur du papier", "Change le fond que vous voyez en dessinant — n'affecte jamais votre œuvre exportée."],
+    ["Annuler", "Fonctionne aussi en tapant avec deux doigts n'importe où sur le canevas."],
+    ["Rétablir", "Restaure ce que vous venez d'annuler. Fonctionne aussi en tapant avec trois doigts n'importe où sur le canevas."],
+    ["Effacer", "Efface complètement le canevas. Irréversible."],
+    ["Réinitialiser la vue", "Réinitialise le zoom et la position."],
+    ["Zoom + / −", "Zoomez avant et arrière avec des boutons — utile avec une souris ou une tablette graphique, car pincer nécessite un écran tactile."],
+    ["Enregistrer / Mes dessins", "Enregistre les dessins uniquement sur cet appareil, pas dans le cloud."],
+    ["Exporter", "PNG conserve la transparence (usage numérique). JPEG et Imprimer/PDF ajoutent un fond opaque, nécessaire pour l'impression."],
+  ],
+  de: [
+    ["Zeichnen", "Der Tuschestift. Zeichne freihand oder zeichne über ein Referenzbild nach."],
+    ["Radierer", "Löscht Teile deiner Zeichnung."],
+    ["Radierergröße", "Legt eine feste Radierergröße fest — unabhängig von Druck oder Geschwindigkeit, für vorhersehbares Radieren."],
+    ["Referenz", "Lade eines deiner eigenen Bilder hoch, um es nachzuzeichnen."],
+    ["Entfernen", "Löscht das Referenzfoto vollständig — das Augen-Symbol blendet es nur aus, das entfernt es endgültig."],
+    ["Referenzgröße", "Ändert nur die Größe des Referenzfotos — unabhängig vom Zoom der ganzen Zeichenfläche."],
+    ["Deckkraft", "Wie sichtbar das Referenzbild beim Nachzeichnen ist."],
+    ["Zittern", "Fügt ein natürliches Handzittern hinzu. Auf 0 stellen für perfekt scharfe Linien."],
+    ["Dicke", "Skaliert die gesamte Stiftdicke auf einmal."],
+    ["Min / Max", "Die dünnste und dickste Linie, je nach Druck oder Geschwindigkeit."],
+    ["Papierfarbe", "Ändert nur den sichtbaren Hintergrund beim Zeichnen — hat keinen Einfluss auf die exportierte Zeichnung."],
+    ["Rückgängig", "Funktioniert auch mit einem Zwei-Finger-Tipp irgendwo auf der Zeichenfläche."],
+    ["Wiederholen", "Stellt wieder her, was du gerade rückgängig gemacht hast. Funktioniert auch mit einem Drei-Finger-Tipp irgendwo auf der Zeichenfläche."],
+    ["Leeren", "Löscht die gesamte Zeichenfläche. Kann nicht rückgängig gemacht werden."],
+    ["Ansicht zurücksetzen", "Setzt Zoom und Position zurück."],
+    ["Zoom + / −", "Vergrößert und verkleinert per Knopf — nützlich bei Maus oder Grafiktablett, da Zusammenziehen einen Touchscreen braucht."],
+    ["Speichern / Meine Zeichnungen", "Speichert Zeichnungen nur auf diesem Gerät, nicht in der Cloud."],
+    ["Exportieren", "PNG behält Transparenz (für digitale Nutzung). JPEG und Drucken/PDF fügen einen festen Hintergrund hinzu, nötig zum Drucken."],
+  ],
+  it: [
+    ["Disegna", "Il pennino a inchiostro. Disegna a mano libera o ricalca un'immagine di riferimento."],
+    ["Gomma", "Cancella parti del disegno."],
+    ["Dimensione gomma", "Imposta una dimensione fissa per la gomma — non varia con pressione o velocità, per una cancellazione prevedibile."],
+    ["Riferimento", "Carica una tua immagine da ricalcare."],
+    ["Rimuovi", "Elimina completamente la foto di riferimento — l'icona dell'occhio la nasconde soltanto, questo la rimuove definitivamente."],
+    ["Dimensione riferimento", "Ridimensiona solo la foto di riferimento, separatamente dallo zoom di tutta la tela."],
+    ["Opacità", "Quanto è visibile l'immagine di riferimento mentre ricalchi."],
+    ["Tremolio", "Aggiunge un naturale tremolio della mano. Imposta a 0 per linee perfettamente nitide."],
+    ["Spessore", "Scala tutto lo spessore del pennino in una volta."],
+    ["Min / Max", "Lo spessore più sottile e più spesso possibile, in base a pressione o velocità."],
+    ["Colore carta", "Cambia solo lo sfondo visibile mentre disegni — non influisce mai sull'opera esportata."],
+    ["Annulla", "Funziona anche toccando con due dita in qualsiasi punto della tela."],
+    ["Ripristina", "Ripristina ciò che hai appena annullato. Funziona anche toccando con tre dita in qualsiasi punto della tela."],
+    ["Cancella", "Cancella completamente la tela. Non reversibile."],
+    ["Reimposta vista", "Reimposta zoom e posizione."],
+    ["Zoom + / −", "Ingrandisce e riduce con i pulsanti — utile con mouse o tavoletta grafica, poiché pizzicare richiede un touchscreen."],
+    ["Salva / I miei disegni", "Salva i disegni solo su questo dispositivo, non nel cloud."],
+    ["Esporta", "PNG mantiene la trasparenza (uso digitale). JPEG e Stampa/PDF aggiungono uno sfondo pieno, necessario per la stampa."],
+  ],
+  pt: [
+    ["Desenhar", "A caneta de tinta. Desenhe à mão livre ou decalque uma imagem de referência."],
+    ["Borracha", "Apaga partes do seu desenho."],
+    ["Tamanho da borracha", "Define um tamanho fixo para a borracha — não varia com pressão ou velocidade, para apagar de forma previsível."],
+    ["Referência", "Carregue uma das suas imagens para decalcar."],
+    ["Remover", "Apaga completamente a foto de referência — o ícone do olho só a oculta, isto remove-a definitivamente."],
+    ["Tamanho da referência", "Redimensiona apenas a foto de referência — separado do zoom de toda a tela."],
+    ["Opacidade", "Quão visível está a imagem de referência enquanto decalca."],
+    ["Tremor", "Adiciona um tremor natural da mão. Defina como 0 para linhas perfeitamente nítidas."],
+    ["Espessura", "Ajusta toda a espessura da caneta de uma vez."],
+    ["Mín / Máx", "A espessura mais fina e mais grossa possível, consoante a pressão ou velocidade."],
+    ["Cor do papel", "Muda apenas o fundo que vê enquanto desenha — nunca afeta a obra exportada."],
+    ["Desfazer", "Também funciona tocando com dois dedos em qualquer parte da tela."],
+    ["Refazer", "Restaura o que acabou de desfazer. Também funciona tocando com três dedos em qualquer parte da tela."],
+    ["Limpar", "Limpa completamente a tela. Não pode ser desfeito."],
+    ["Repor vista", "Repõe o zoom e a posição."],
+    ["Zoom + / −", "Amplia e reduz com botões — útil com rato ou tablet gráfico, já que belisca precisa de ecrã tátil."],
+    ["Guardar / Os meus desenhos", "Guarda os desenhos apenas neste dispositivo, não na nuvem."],
+    ["Exportar", "PNG mantém a transparência (uso digital). JPEG e Imprimir/PDF adicionam um fundo sólido, necessário para imprimir."],
+  ],
+  nl: [
+    ["Tekenen", "De inktpen. Teken freehand of trek een referentiebeeld over."],
+    ["Gum", "Wist delen van je tekening."],
+    ["Gumgrootte", "Stelt een vaste gumgrootte in — verandert niet met druk of snelheid, voor voorspelbaar wissen."],
+    ["Referentie", "Upload een van je eigen afbeeldingen om over te trekken."],
+    ["Verwijderen", "Verwijdert de referentiefoto volledig — het oog-icoon verbergt hem alleen, dit verwijdert hem definitief."],
+    ["Referentiegrootte", "Verandert alleen de grootte van de referentiefoto — los van het zoomen op het hele canvas."],
+    ["Vervaging", "Hoe zichtbaar de referentieafbeelding is terwijl je overtrekt."],
+    ["Trilling", "Voegt een natuurlijke handtrilling toe. Zet op 0 voor perfect scherpe lijnen."],
+    ["Dikte", "Schaalt de hele pendikte in één keer."],
+    ["Min / Max", "De dunste en dikste lijn die je pen kan maken, afhankelijk van druk of snelheid."],
+    ["Papierkleur", "Verandert alleen de achtergrond die je ziet tijdens het tekenen — heeft geen invloed op je geëxporteerde werk."],
+    ["Ongedaan maken", "Werkt ook met een tik met twee vingers op het canvas."],
+    ["Opnieuw doen", "Herstelt wat je net ongedaan maakte. Werkt ook met een tik met drie vingers op het canvas."],
+    ["Wissen", "Wist het hele canvas. Kan niet ongedaan worden gemaakt."],
+    ["Weergave resetten", "Zet zoom en positie terug naar normaal."],
+    ["Zoom + / −", "In- en uitzoomen met knoppen — handig bij een muis of grafisch tablet, aangezien knijpen een touchscreen vereist."],
+    ["Opslaan / Mijn tekeningen", "Slaat tekeningen alleen op dit apparaat op, niet in de cloud."],
+    ["Exporteren", "PNG behoudt transparantie (digitaal gebruik). JPEG en Afdrukken/PDF voegen een ondoorzichtige achtergrond toe, nodig om af te drukken."],
+  ],
+  ja: [
+    ["描く", "インクペンです。フリーハンドで描くか、下絵をなぞって描けます。"],
+    ["消しゴム", "描いた線を消します。"],
+    ["消しゴムのサイズ", "消しゴムのサイズを固定します。筆圧や速度で変化しないため、狙った通りに消せます。"],
+    ["下絵", "自分の画像をアップロードしてなぞることができます。"],
+    ["削除", "下絵を完全に削除します。目のアイコンは非表示にするだけですが、これは完全に削除します。"],
+    ["下絵のサイズ", "下絵の写真だけを拡大・縮小します。キャンバス全体のズームとは別に調整できます。"],
+    ["不透明度", "なぞっている間、下絵がどれくらい見えるかを調整します。"],
+    ["手ブレ", "自然な手ブレ効果を加えます。0にすると完全にシャープな線になります。"],
+    ["太さ", "ペンの太さ全体を一括で調整します。"],
+    ["最小 / 最大", "筆圧や速度に応じた、線の最も細い太さと最も太い太さです。"],
+    ["紙の色", "描画中に見える背景色を変えるだけで、書き出した作品には影響しません。"],
+    ["元に戻す", "キャンバスのどこでも二本指タップでも操作できます。"],
+    ["やり直す", "元に戻した操作を復元します。キャンバスのどこでも三本指タップでも操作できます。"],
+    ["消去", "キャンバス全体を消去します。元に戻せません。"],
+    ["表示をリセット", "ズームと位置を通常の状態に戻します。"],
+    ["ズーム + / −", "ボタンで拡大・縮小できます。マウスやペンタブレットを使用している場合に便利です（ピンチ操作にはタッチスクリーンが必要です）。"],
+    ["保存 / 作品一覧", "作品はこの端末にのみ保存され、クラウドには保存されません。"],
+    ["書き出し", "PNGは透明度を保持します（デジタル用）。JPEGと印刷/PDFは印刷に必要な不透明な背景を追加します。"],
+  ],
+  zh: [
+    ["画笔", "墨水笔。可以自由手绘，也可以在参考图上描线。"],
+    ["橡皮擦", "擦除已绘制的线条。"],
+    ["橡皮擦大小", "设置固定的橡皮擦大小，不随压感或速度变化，方便精确擦除。"],
+    ["参考图", "上传你自己的图片用于描摹。"],
+    ["移除", "彻底删除参考图。眼睛图标只是隐藏，而这个操作会永久移除。"],
+    ["参考图大小", "仅调整参考图片的大小，与整个画布的缩放无关。"],
+    ["透明度", "描摹时参考图的可见程度。"],
+    ["手抖效果", "增加自然的手抖效果。设为 0 可获得完全清晰的线条。"],
+    ["粗细", "一次性调整整体笔画粗细。"],
+    ["最小 / 最大", "根据压力或速度，笔画能达到的最细和最粗程度。"],
+    ["纸张颜色", "仅更改绘画时看到的背景颜色，不会影响导出的作品。"],
+    ["撤销", "也可以在画布任意位置用双指点按操作。"],
+    ["重做", "恢复刚刚撤销的操作。也可以在画布任意位置用三指点按操作。"],
+    ["清除", "清空整个画布，无法撤销。"],
+    ["重置视图", "将缩放和位置恢复正常。"],
+    ["缩放 + / −", "通过按钮放大缩小——如果你使用鼠标或数位板会很方便，因为双指缩放需要触摸屏。"],
+    ["保存 / 我的作品", "作品仅保存在本设备上，不会上传到云端。"],
+    ["导出", "PNG 保留透明度（适合数字用途）。JPEG 和 打印/PDF 会添加不透明背景，打印时需要。"],
+  ],
+};
+
+function renderHelp() {
+  const lang = langSelect.value;
+  const items = HELP_CONTENT[lang] || HELP_CONTENT.en;
+  const listEl = document.getElementById('helpList');
+  listEl.innerHTML = '';
+  items.forEach(([name, desc]) => {
+    const row = document.createElement('div');
+    row.className = 'help-item';
+    row.innerHTML = `<div class="help-name">${name}</div><div class="help-desc">${desc}</div>`;
+    listEl.appendChild(row);
+  });
+}
+
+const sidePanel = document.getElementById('sidePanel');
+const panelToggleBtn = document.getElementById('panelToggleBtn');
+let panelOpen = false;
+sidePanel.classList.add('collapsed'); // closed by default — canvas gets full width until needed
+function updatePanelToggleLabel() {
+  panelToggleBtn.textContent = panelOpen ? t('lessSettingsBtn') : t('moreSettingsBtn');
+}
+panelToggleBtn.onclick = () => {
+  panelOpen = !panelOpen;
+  sidePanel.classList.toggle('collapsed', !panelOpen);
+  updatePanelToggleLabel();
+  // the canvas's available width just changed, so its pixel dimensions and
+  // coordinate mapping need to be recalculated — same resize() already used
+  // for window resizing and rotation changes
+  resize();
+};
+
+document.getElementById('helpBtn').onclick = () => {
+  renderHelp();
+  document.getElementById('helpOverlay').classList.add('show');
+};
+document.getElementById('closeHelpBtn').onclick = () => {
+  document.getElementById('helpOverlay').classList.remove('show');
+};
+
+loadBtn.onclick = () => {
+  document.getElementById('loadOverlay').classList.add('show');
+  renderDrawingsList();
+};
+document.getElementById('closeLoadBtn').onclick = () => {
+  document.getElementById('loadOverlay').classList.remove('show');
+};
+</script>
+</body>
+</html>
