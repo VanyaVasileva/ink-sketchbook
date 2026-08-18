@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Ink Sketchbook Hand Selector v4</title></head><body><p style="font-family:sans-serif;padding:20px">Loading hand selector test…</p><script>
+(async function(){
+  const baseUrl='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/feature/new-button/ink-sketchbook-with-hand.html';
+  const skeletonUrl='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/feature/new-button/Skeleton-hand.png';
+  try {
+    let html=await fetch(baseUrl,{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('Could not load Ink Sketchbook');return r.text();});
+
+    const recordMarkup='<button id="recordBtn">⏺ <span data-i18n="recordBtn">Record</span></button>';
+    const selectorMarkup=recordMarkup+'<button id="humanHandBtn" type="button" onclick="window.setRecordingHand && window.setRecordingHand(\'human\')" class="active">Human Hand</button><button id="skeletonHandBtn" type="button" onclick="window.setRecordingHand && window.setRecordingHand(\'skeleton\')">Skeleton Hand</button>';
+    if(!html.includes(recordMarkup)) throw new Error('Record button not found');
+    html=html.replace(recordMarkup,selectorMarkup);
+
+    const marker='let lastPenPos = null;      // {x, y} in drawCanvas pixel space, live';
+    if(!html.includes(marker)) throw new Error('Recording marker not found');
+    const setup=`const skeletonHandIcon = new Image();\nlet skeletonHandReady = false;\nskeletonHandIcon.onload = () => { skeletonHandReady = true; };\nskeletonHandIcon.src = '${skeletonUrl}';\nlet selectedRecordingHand = 'human';\nwindow.setRecordingHand = function(mode) {\n  selectedRecordingHand = mode === 'skeleton' ? 'skeleton' : 'human';\n  const humanBtn = document.getElementById('humanHandBtn');\n  const skeletonBtn = document.getElementById('skeletonHandBtn');\n  if (humanBtn) humanBtn.classList.toggle('active', selectedRecordingHand === 'human');\n  if (skeletonBtn) skeletonBtn.classList.toggle('active', selectedRecordingHand === 'skeleton');\n};\n\n${marker}`;
+    html=html.replace(marker,setup);
+
+    const frameRegex=/function compositeRecordFrame\(\) \{[\s\S]*?recordRAF = requestAnimationFrame\(compositeRecordFrame\);\n\}/;
+    if(!frameRegex.test(html)) throw new Error('Recording frame function not found');
+    const frameReplacement=`function compositeRecordFrame() {\n  recordCtx.fillStyle = paperColorPicker.value || '#ffffff';\n  recordCtx.fillRect(0, 0, recordCanvas.width, recordCanvas.height);\n  recordCtx.drawImage(drawCanvas, 0, 0);\n\n  if (lastPenPos) {\n    if (selectedRecordingHand === 'skeleton' && skeletonHandReady) {\n      const srcW = 1254, srcH = 1254;\n      const tipX = 198, tipY = 552;\n      const displayW = 950;\n      const scale = displayW / srcW;\n      const drawX = lastPenPos.x - tipX * scale;\n      const drawY = lastPenPos.y - tipY * scale;\n      recordCtx.drawImage(skeletonHandIcon, drawX, drawY, srcW * scale, srcH * scale);\n    } else if (handIconReady) {\n      const scale = HAND_DISPLAY_WIDTH / HAND_SRC_SIZE;\n      const drawW = HAND_SRC_SIZE * scale;\n      const drawH = HAND_SRC_SIZE * scale;\n      const drawX = lastPenPos.x - HAND_TIP_X * scale;\n      const drawY = lastPenPos.y - HAND_TIP_Y * scale;\n      recordCtx.drawImage(handIcon, drawX, drawY, drawW, drawH);\n    }\n  }\n\n  recordRAF = requestAnimationFrame(compositeRecordFrame);\n}`;
+    html=html.replace(frameRegex,frameReplacement);
+
+    document.open(); document.write(html); document.close();
+  } catch(err) {
+    document.body.innerHTML='<div style="font-family:sans-serif;padding:24px"><h2>Could not load test</h2><pre>'+String(err)+'</pre></div>';
+  }
+})();
+</script></body></html>
