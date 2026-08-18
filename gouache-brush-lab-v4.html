@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Gouache Brush Lab v4</title>
+  <style>
+    :root{
+      --bg:#eee9df;
+      --panel:rgba(255,255,255,.95);
+      --ink:#25231f;
+      --line:#d7d1c7;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink);overflow:hidden}
+    .app{height:100%;display:grid;grid-template-rows:auto 1fr;gap:8px;padding:8px}
+    .toolbar{background:var(--panel);border:1px solid rgba(0,0,0,.08);box-shadow:0 5px 20px rgba(0,0,0,.05);border-radius:14px;padding:9px 11px;display:flex;align-items:center;flex-wrap:wrap;gap:9px 14px}
+    .title{font-weight:750;letter-spacing:.01em;white-space:nowrap;margin-right:4px}
+    .subtitle{font-size:12px;color:rgba(0,0,0,.48);margin-right:6px}
+    .control{display:inline-flex;align-items:center;gap:7px;font-size:13px;white-space:nowrap}
+    input[type="range"]{width:130px}
+    input[type="color"]{width:38px;height:34px;padding:2px;border:1px solid var(--line);border-radius:9px;background:white}
+    button{appearance:none;border:1px solid var(--line);background:white;color:var(--ink);border-radius:9px;padding:8px 11px;font:inherit;cursor:pointer}
+    button:active{transform:translateY(1px)}
+    .stage{min-height:0;border-radius:15px;overflow:hidden;background:white;border:1px solid rgba(0,0,0,.07);box-shadow:0 7px 24px rgba(0,0,0,.05);position:relative;touch-action:none}
+    canvas{display:block;width:100%;height:100%;background:#fff;touch-action:none;cursor:crosshair}
+    .hint{position:absolute;right:12px;bottom:10px;font-size:12px;color:rgba(0,0,0,.32);pointer-events:none;user-select:none}
+    @media(max-width:760px){.app{padding:6px;gap:6px}.toolbar{border-radius:11px;padding:8px;gap:8px 10px}.title{width:100%}.subtitle{display:none}input[type="range"]{width:110px}.stage{border-radius:11px}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="toolbar">
+      <div class="title">Gouache Brush Lab v4</div>
+      <div class="subtitle">visual-reference brush</div>
+      <label class="control"><span>Color</span><input id="color" type="color" value="#d84a75" /></label>
+      <label class="control"><span>Size</span><input id="size" type="range" min="8" max="150" value="54" /><span id="sizeValue">54</span></label>
+      <button id="undo" type="button">Undo</button>
+      <button id="clear" type="button">Clear</button>
+    </div>
+    <div class="stage" id="stage">
+      <canvas id="canvas"></canvas>
+      <div class="hint">Solid matte gouache. No touch-down dot. Texture follows the stroke direction.</div>
+    </div>
+  </div>
+
+<script>
+(()=>{
+  const canvas=document.getElementById('canvas');
+  const ctx=canvas.getContext('2d',{alpha:false,desynchronized:true});
+  const stage=document.getElementById('stage');
+  const colorInput=document.getElementById('color');
+  const sizeInput=document.getElementById('size');
+  const sizeValue=document.getElementById('sizeValue');
+  const undoBtn=document.getElementById('undo');
+  const clearBtn=document.getElementById('clear');
+
+  let dpr=1;
+  let drawing=false;
+  let last=null;
+  let lastPressure=.5;
+  let lastWidth=0;
+  let strokeSeed=1;
+  let segmentIndex=0;
+  let history=[];
+  const maxHistory=18;
+
+  function resizeCanvas(preserve=true){
+    const r=stage.getBoundingClientRect();
+    let snap=null;
+    if(preserve&&canvas.width&&canvas.height){
+      snap=document.createElement('canvas');
+      snap.width=canvas.width;snap.height=canvas.height;
+      snap.getContext('2d').drawImage(canvas,0,0);
+    }
+    dpr=Math.max(1,Math.min(2.5,window.devicePixelRatio||1));
+    canvas.width=Math.max(1,Math.floor(r.width*dpr));
+    canvas.height=Math.max(1,Math.floor(r.height*dpr));
+    canvas.style.width=r.width+'px';canvas.style.height=r.height+'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.fillStyle='#fff';ctx.fillRect(0,0,r.width,r.height);
+    if(snap){
+      ctx.save();ctx.setTransform(1,0,0,1,0,0);
+      ctx.drawImage(snap,0,0,snap.width,snap.height,0,0,canvas.width,canvas.height);ctx.restore();
+    }
+  }
+
+  function saveHistory(){
+    try{history.push(canvas.toDataURL('image/png'));if(history.length>maxHistory)history.shift()}catch(_){}
+  }
+
+  function restoreDataURL(data){
+    const img=new Image();
+    img.onload=()=>{
+      const r=stage.getBoundingClientRect();
+      ctx.save();ctx.setTransform(dpr,0,0,dpr,0,0);
+      ctx.fillStyle='#fff';ctx.fillRect(0,0,r.width,r.height);
+      ctx.drawImage(img,0,0,r.width,r.height);ctx.restore();
+    };
+    img.src=data;
+  }
+
+  function pointFromEvent(e){
+    const r=canvas.getBoundingClientRect();
+    return{x:e.clientX-r.left,y:e.clientY-r.top};
+  }
+
+  function pressureFromEvent(e){
+    if(e.pointerType==='pen'&&e.pressure>0)return e.pressure;
+    return .58;
+  }
+
+  function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
+
+  function hash(n){
+    const x=Math.sin(n*12.9898+strokeSeed*78.233)*43758.5453;
+    return x-Math.floor(x);
+  }
+
+  function parseHex(hex){
+    const v=hex.replace('#','');
+    return{r:parseInt(v.slice(0,2),16),g:parseInt(v.slice(2,4),16),b:parseInt(v.slice(4,6),16)};
+  }
+
+  function rgbString(c,a=1){return`rgba(${c.r},${c.g},${c.b},${a})`}
+
+  function mixWithWhite(c,amount){
+    return{
+      r:Math.round(c.r+(255-c.r)*amount),
+      g:Math.round(c.g+(255-c.g)*amount),
+      b:Math.round(c.b+(255-c.b)*amount)
+    };
+  }
+
+  function mixWithBlack(c,amount){
+    return{
+      r:Math.round(c.r*(1-amount)),
+      g:Math.round(c.g*(1-amount)),
+      b:Math.round(c.b*(1-amount))
+    };
+  }
+
+  function widthForPressure(p){
+    const base=Number(sizeInput.value);
+    // Gentle pressure response only: visually stable broad gouache stroke.
+    return base*(.82+.30*clamp(p,0,1));
+  }
+
+  function buildRibbonPath(a,b,wA,wB,idx){
+    const dx=b.x-a.x,dy=b.y-a.y;
+    const dist=Math.hypot(dx,dy)||1;
+    const tx=dx/dist,ty=dy/dist;
+    const nx=-ty,ny=tx;
+
+    // Small irregularities create painted edges, not fuzzy edges.
+    const aTop=(hash(idx*11+1)-.5)*wA*.055;
+    const aBot=(hash(idx*11+2)-.5)*wA*.055;
+    const bTop=(hash(idx*11+3)-.5)*wB*.055;
+    const bBot=(hash(idx*11+4)-.5)*wB*.055;
+    const lean=(hash(idx*11+5)-.5)*Math.min(dist,wA)*.10;
+
+    const p1={x:a.x+nx*(wA*.5+aTop)-tx*lean,y:a.y+ny*(wA*.5+aTop)-ty*lean};
+    const p2={x:b.x+nx*(wB*.5+bTop),y:b.y+ny*(wB*.5+bTop)};
+    const p3={x:b.x-nx*(wB*.5+bBot),y:b.y-ny*(wB*.5+bBot)};
+    const p4={x:a.x-nx*(wA*.5+aBot)-tx*lean,y:a.y-ny*(wA*.5+aBot)-ty*lean};
+
+    ctx.beginPath();
+    ctx.moveTo(p1.x,p1.y);
+    ctx.lineTo(p2.x,p2.y);
+    ctx.lineTo(p3.x,p3.y);
+    ctx.lineTo(p4.x,p4.y);
+    ctx.closePath();
+
+    return{tx,ty,nx,ny,dist,p1,p2,p3,p4};
+  }
+
+  function paintSegment(a,b,wA,wB,idx){
+    const color=parseHex(colorInput.value);
+    const geo=buildRibbonPath(a,b,wA,wB,idx);
+
+    // Main body: strong matte coverage, close to painted paper rather than digital transparency.
+    ctx.save();
+    ctx.fillStyle=rgbString(color,.965);
+    ctx.fill();
+
+    // Clip all internal marks to the painted body, so edges remain clean.
+    ctx.clip();
+
+    const light=mixWithWhite(color,.16);
+    const dark=mixWithBlack(color,.12);
+    const avgW=(wA+wB)*.5;
+
+    // Broad, subtle directional brush passes. These are intentionally sparse.
+    const passCount=3;
+    for(let i=0;i<passCount;i++){
+      const band=(i-(passCount-1)/2)/(passCount+1);
+      const localJitter=(hash(idx*31+i*7+9)-.5)*avgW*.08;
+      const offset=band*avgW*.55+localJitter;
+      const startInset=geo.dist*(.03+hash(idx*41+i)*.05);
+      const endInset=geo.dist*(.03+hash(idx*43+i)*.05);
+      const x1=a.x+geo.tx*startInset+geo.nx*offset;
+      const y1=a.y+geo.ty*startInset+geo.ny*offset;
+      const x2=b.x-geo.tx*endInset+geo.nx*(offset+(hash(idx*47+i)-.5)*avgW*.04);
+      const y2=b.y-geo.ty*endInset+geo.ny*(offset+(hash(idx*47+i)-.5)*avgW*.04);
+
+      ctx.lineCap='butt';
+      ctx.lineWidth=Math.max(.7,avgW*(.018+.012*hash(idx*53+i)));
+      ctx.strokeStyle=i===1?rgbString(dark,.055):rgbString(light,.10);
+      ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+    }
+
+    // Occasional short dry-brush drag, very low contrast.
+    if(hash(idx*97+3)>.62){
+      const offset=(hash(idx*101+4)-.5)*avgW*.48;
+      const len=geo.dist*(.28+.32*hash(idx*103+5));
+      const start=geo.dist*(.15+.35*hash(idx*107+6));
+      const x1=a.x+geo.tx*start+geo.nx*offset;
+      const y1=a.y+geo.ty*start+geo.ny*offset;
+      const x2=x1+geo.tx*len;
+      const y2=y1+geo.ty*len;
+      ctx.lineWidth=Math.max(.6,avgW*.012);
+      ctx.strokeStyle=rgbString(light,.075);
+      ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  function strokeTo(a,b,pA,pB){
+    const dx=b.x-a.x,dy=b.y-a.y;
+    const dist=Math.hypot(dx,dy);
+    if(dist<.5)return;
+
+    const targetWB=widthForPressure(pB);
+    const wA=lastWidth||widthForPressure(pA);
+    const wB=wA+(targetWB-wA)*.35;
+    const base=Number(sizeInput.value);
+
+    // Short segments keep curves continuous without visible stamp repetition.
+    const step=Math.max(2.2,base*.12);
+    const pieces=Math.max(1,Math.ceil(dist/step));
+    let prev=a;
+    let prevW=wA;
+
+    for(let i=1;i<=pieces;i++){
+      const t=i/pieces;
+      const q={x:a.x+dx*t,y:a.y+dy*t};
+      const qW=wA+(wB-wA)*t;
+      segmentIndex++;
+      paintSegment(prev,q,prevW,qW,segmentIndex);
+      prev=q;prevW=qW;
+    }
+
+    lastWidth=wB;
+  }
+
+  function onPointerDown(e){
+    if(e.button!==undefined&&e.button!==0&&e.pointerType!=='pen')return;
+    e.preventDefault();
+    canvas.setPointerCapture?.(e.pointerId);
+    saveHistory();
+    drawing=true;
+    last=pointFromEvent(e);
+    lastPressure=pressureFromEvent(e);
+    lastWidth=widthForPressure(lastPressure);
+    strokeSeed=(Date.now()%100000)+Math.floor(Math.random()*1000);
+    segmentIndex=0;
+    // Deliberately no paint on touch-down: no circles / dots / blobs.
+  }
+
+  function onPointerMove(e){
+    if(!drawing)return;
+    e.preventDefault();
+    const q=pointFromEvent(e);
+    const p=pressureFromEvent(e);
+    strokeTo(last,q,lastPressure,p);
+    last=q;lastPressure=p;
+  }
+
+  function onPointerUp(e){
+    if(!drawing)return;
+    drawing=false;last=null;lastWidth=0;
+    try{canvas.releasePointerCapture?.(e.pointerId)}catch(_){}
+  }
+
+  canvas.addEventListener('pointerdown',onPointerDown);
+  canvas.addEventListener('pointermove',onPointerMove);
+  canvas.addEventListener('pointerup',onPointerUp);
+  canvas.addEventListener('pointercancel',onPointerUp);
+  canvas.addEventListener('contextmenu',e=>e.preventDefault());
+
+  sizeInput.addEventListener('input',()=>sizeValue.textContent=sizeInput.value);
+  undoBtn.addEventListener('click',()=>{const prev=history.pop();if(prev)restoreDataURL(prev)});
+  clearBtn.addEventListener('click',()=>{
+    saveHistory();
+    const r=stage.getBoundingClientRect();
+    ctx.save();ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#fff';ctx.fillRect(0,0,r.width,r.height);ctx.restore();
+  });
+
+  let resizeTimer;
+  window.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>resizeCanvas(true),120)});
+  resizeCanvas(false);
+})();
+</script>
+</body>
+</html>
