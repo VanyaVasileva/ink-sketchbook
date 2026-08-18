@@ -723,30 +723,24 @@ const HAND_SRC_SIZE = 500;
 const HAND_DISPLAY_WIDTH = 1150;
 
 let lastPenPos = null;      // {x, y} in drawCanvas pixel space, live
-let lastPenMoveTime = 0;    // performance.now() of the last stroke movement
-const HAND_FADE_MS = 450;   // how long the hand lingers after the pen lifts
 
 function compositeRecordFrame() {
   recordCtx.fillStyle = paperColorPicker.value || '#ffffff';
   recordCtx.fillRect(0, 0, recordCanvas.width, recordCanvas.height);
   recordCtx.drawImage(drawCanvas, 0, 0);
 
+  // The hand stays resting at its last position during a pause, rather
+  // than fading out — a real hand pausing to think just sits there, it
+  // doesn't vanish. It only moves again once a new stroke starts.
   if (handIconReady && lastPenPos) {
-    const age = performance.now() - lastPenMoveTime;
-    if (age < HAND_FADE_MS) {
-      const opacity = 1 - (age / HAND_FADE_MS);
-      const scale = HAND_DISPLAY_WIDTH / HAND_SRC_SIZE;
-      const drawW = HAND_SRC_SIZE * scale;
-      const drawH = HAND_SRC_SIZE * scale;
-      // position so the TIP pixel (not the image's top-left corner) lands
-      // exactly on the live pen coordinates
-      const drawX = lastPenPos.x - HAND_TIP_X * scale;
-      const drawY = lastPenPos.y - HAND_TIP_Y * scale;
-      recordCtx.save();
-      recordCtx.globalAlpha = opacity;
-      recordCtx.drawImage(handIcon, drawX, drawY, drawW, drawH);
-      recordCtx.restore();
-    }
+    const scale = HAND_DISPLAY_WIDTH / HAND_SRC_SIZE;
+    const drawW = HAND_SRC_SIZE * scale;
+    const drawH = HAND_SRC_SIZE * scale;
+    // position so the TIP pixel (not the image's top-left corner) lands
+    // exactly on the live pen coordinates
+    const drawX = lastPenPos.x - HAND_TIP_X * scale;
+    const drawY = lastPenPos.y - HAND_TIP_Y * scale;
+    recordCtx.drawImage(handIcon, drawX, drawY, drawW, drawH);
   }
 
   recordRAF = requestAnimationFrame(compositeRecordFrame);
@@ -874,7 +868,6 @@ function startStroke(e) {
   usingPressure = e.pointerType === 'pen';
   inputModeEl.textContent = usingPressure ? '(Pencil pressure detected)' : '(no pressure — using speed)';
   lastPenPos = { x: points[0].x, y: points[0].y };
-  lastPenMoveTime = performance.now();
 }
 
 function continueStroke(e) {
@@ -946,7 +939,6 @@ function continueStroke(e) {
 
   points.push({ x: p.x, y: p.y, t: p.t });
   lastPenPos = { x, y };
-  lastPenMoveTime = performance.now();
 }
 
 function endStroke() {
