@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Ink Sketchbook Hand Selector v2</title></head><body><p style="font-family:sans-serif;padding:20px">Loading hand selector test…</p><script>
+(async function(){
+  const baseUrl='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/feature/new-button/ink-sketchbook-with-hand.html';
+  const oldTestUrl='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/feature/new-button/ink-sketchbook-hand-selector.html';
+  try {
+    const oldText=await fetch(oldTestUrl,{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('Could not load skeleton asset');return r.text();});
+    const match=oldText.match(/const skeletonSrc='([^']+)'/);
+    if(!match) throw new Error('Skeleton asset not found');
+    const skeletonSrc=match[1];
+    let html=await fetch(baseUrl,{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('Could not load Ink Sketchbook');return r.text();});
+
+    const recordMarkup='<button id="recordBtn">⏺ <span data-i18n="recordBtn">Record</span></button>';
+    const selectorMarkup=recordMarkup+'<button id="humanHandBtn" type="button" class="active">Human Hand</button><button id="skeletonHandBtn" type="button">Skeleton Hand</button>';
+    if(!html.includes(recordMarkup)) throw new Error('Record button not found');
+    html=html.replace(recordMarkup,selectorMarkup);
+
+    const setup=`(function(){
+      try {
+        const originalHandSrc = handIcon.src;
+        const humanBtn=document.getElementById('humanHandBtn');
+        const skeletonBtn=document.getElementById('skeletonHandBtn');
+        function choose(mode){
+          if(mode==='skeleton'){
+            handIconReady=false;
+            handIcon.src=${JSON.stringify(skeletonSrc)};
+            humanBtn.classList.remove('active');
+            skeletonBtn.classList.add('active');
+          }else{
+            handIconReady=false;
+            handIcon.src=originalHandSrc;
+            skeletonBtn.classList.remove('active');
+            humanBtn.classList.add('active');
+          }
+        }
+        humanBtn.addEventListener('click',()=>choose('human'));
+        skeletonBtn.addEventListener('click',()=>choose('skeleton'));
+      } catch(e) {
+        console.error('Hand selector setup failed',e);
+        const b=document.getElementById('skeletonHandBtn');
+        if(b) b.textContent='Hand selector error';
+      }
+    })();`;
+    const injected='<scr'+'ipt>'+setup+'</scr'+'ipt>';
+    html=html.replace('</body>',injected+'</body>');
+    document.open(); document.write(html); document.close();
+  } catch(err) {
+    document.body.innerHTML='<div style="font-family:sans-serif;padding:24px"><h2>Could not load test</h2><pre>'+String(err)+'</pre></div>';
+  }
+})();
+</script></body></html>
