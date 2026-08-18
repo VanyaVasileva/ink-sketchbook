@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Ink Sketchbook Hand Selector v3</title></head><body><p style="font-family:sans-serif;padding:20px">Loading hand selector test…</p><script>
+(async function(){
+  const baseUrl='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/feature/new-button/ink-sketchbook-with-hand.html';
+  const skeletonUrl='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/feature/new-button/Skeleton-hand.png';
+  try {
+    let html=await fetch(baseUrl,{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('Could not load Ink Sketchbook');return r.text();});
+    const recordMarkup='<button id="recordBtn">⏺ <span data-i18n="recordBtn">Record</span></button>';
+    const selectorMarkup=recordMarkup+'<button id="humanHandBtn" type="button" class="active">Human Hand</button><button id="skeletonHandBtn" type="button">Skeleton Hand</button>';
+    if(!html.includes(recordMarkup)) throw new Error('Record button not found');
+    html=html.replace(recordMarkup,selectorMarkup);
+
+    const patch=`<script>
+    (function(){
+      const skeletonImg=new Image();
+      let skeletonReady=false;
+      skeletonImg.onload=()=>{skeletonReady=true;};
+      skeletonImg.src='${skeletonUrl}';
+      let selectedRecordingHand='human';
+      const humanBtn=document.getElementById('humanHandBtn');
+      const skeletonBtn=document.getElementById('skeletonHandBtn');
+      function setHand(mode){
+        selectedRecordingHand=mode;
+        humanBtn.classList.toggle('active',mode==='human');
+        skeletonBtn.classList.toggle('active',mode==='skeleton');
+      }
+      humanBtn.addEventListener('click',()=>setHand('human'));
+      skeletonBtn.addEventListener('click',()=>setHand('skeleton'));
+
+      compositeRecordFrame=function(){
+        recordCtx.fillStyle=paperColorPicker.value||'#ffffff';
+        recordCtx.fillRect(0,0,recordCanvas.width,recordCanvas.height);
+        recordCtx.drawImage(drawCanvas,0,0);
+        if(lastPenPos){
+          if(selectedRecordingHand==='skeleton'&&skeletonReady){
+            const srcW=1254,srcH=1254;
+            const tipX=198,tipY=552;
+            const displayW=950;
+            const scale=displayW/srcW;
+            const drawX=lastPenPos.x-tipX*scale;
+            const drawY=lastPenPos.y-tipY*scale;
+            recordCtx.drawImage(skeletonImg,drawX,drawY,srcW*scale,srcH*scale);
+          }else if(handIconReady){
+            const scale=HAND_DISPLAY_WIDTH/HAND_SRC_SIZE;
+            const drawX=lastPenPos.x-HAND_TIP_X*scale;
+            const drawY=lastPenPos.y-HAND_TIP_Y*scale;
+            recordCtx.drawImage(handIcon,drawX,drawY,HAND_SRC_SIZE*scale,HAND_SRC_SIZE*scale);
+          }
+        }
+        recordRAF=requestAnimationFrame(compositeRecordFrame);
+      };
+    })();
+    <\/script>`;
+    html=html.replace('</body>',patch+'</body>');
+    document.open();document.write(html);document.close();
+  }catch(err){
+    document.body.innerHTML='<div style="font-family:sans-serif;padding:24px"><h2>Could not load test</h2><pre>'+String(err)+'</pre></div>';
+  }
+})();
+</script></body></html>
