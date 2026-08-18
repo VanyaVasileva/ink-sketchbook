@@ -25,6 +25,9 @@
     if(!html.includes(recordMarkup)) throw new Error('Record button not found');
     html=html.replace(recordMarkup,selectorMarkup);
 
+    const recordingNote='<div id="recordingInfoNote" style="width:100%;padding:7px 14px;background:#fffaf0;border-bottom:1px solid #e5e1d8;color:#6b6558;font-size:12px;line-height:1.4;text-align:center;">ⓘ The selected hand is not shown while you draw — it appears in the recorded video. Reference images are never recorded. You can switch hands anytime while recording. Human Hand is selected by default.</div>';
+    html=html.replace('</header>','</header>'+recordingNote);
+
     const marker='let lastPenPos = null;      // {x, y} in drawCanvas pixel space, live';
     if(!html.includes(marker)) throw new Error('Recording marker not found');
 
