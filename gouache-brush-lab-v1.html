@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Gouache Brush Lab v1</title>
+  <style>
+    :root {
+      --bg: #f2efe8;
+      --panel: rgba(255,255,255,.9);
+      --ink: #222;
+      --line: #d8d3ca;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      overflow: hidden;
+    }
+    .app {
+      height: 100%;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      gap: 10px;
+      padding: 10px;
+    }
+    .toolbar {
+      background: var(--panel);
+      border: 1px solid rgba(0,0,0,.08);
+      box-shadow: 0 6px 24px rgba(0,0,0,.06);
+      border-radius: 16px;
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px 14px;
+      backdrop-filter: blur(10px);
+    }
+    .title {
+      font-weight: 700;
+      letter-spacing: .01em;
+      margin-right: 4px;
+      white-space: nowrap;
+    }
+    .control {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    input[type="range"] { width: 130px; }
+    input[type="color"] {
+      width: 38px;
+      height: 34px;
+      padding: 2px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: white;
+    }
+    button {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: white;
+      color: var(--ink);
+      border-radius: 10px;
+      padding: 8px 11px;
+      font: inherit;
+      cursor: pointer;
+    }
+    button:active { transform: translateY(1px); }
+    .stage {
+      min-height: 0;
+      border-radius: 18px;
+      overflow: hidden;
+      background: white;
+      border: 1px solid rgba(0,0,0,.08);
+      box-shadow: 0 8px 28px rgba(0,0,0,.06);
+      position: relative;
+      touch-action: none;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      background: #fff;
+      touch-action: none;
+      cursor: crosshair;
+    }
+    .hint {
+      position: absolute;
+      right: 12px;
+      bottom: 10px;
+      font-size: 12px;
+      color: rgba(0,0,0,.35);
+      pointer-events: none;
+      user-select: none;
+    }
+    .dot {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #b84f45;
+      border: 1px solid rgba(0,0,0,.14);
+      display: inline-block;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.25);
+    }
+    @media (max-width: 700px) {
+      .app { padding: 6px; gap: 6px; }
+      .toolbar { border-radius: 12px; padding: 8px; gap: 8px 10px; }
+      .title { width: 100%; }
+      input[type="range"] { width: 110px; }
+      .stage { border-radius: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="toolbar">
+      <div class="title">Gouache Brush Lab v1</div>
+
+      <label class="control">
+        <span>Color</span>
+        <input id="color" type="color" value="#b84f45" />
+      </label>
+
+      <label class="control">
+        <span>Size</span>
+        <input id="size" type="range" min="4" max="120" value="34" />
+        <span id="sizeValue">34</span>
+      </label>
+
+      <label class="control" title="Controls how much paint is laid down by each dab.">
+        <span>Paint</span>
+        <input id="paint" type="range" min="45" max="100" value="82" />
+        <span id="paintValue">82%</span>
+      </label>
+
+      <button id="undo" type="button">Undo</button>
+      <button id="clear" type="button">Clear</button>
+    </div>
+
+    <div class="stage" id="stage">
+      <canvas id="canvas"></canvas>
+      <div class="hint">Try slow strokes, fast strokes, overlaps, and light/heavy stylus pressure.</div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const canvas = document.getElementById('canvas');
+      const ctx = canvas.getContext('2d', { alpha: false });
+      const stage = document.getElementById('stage');
+      const colorInput = document.getElementById('color');
+      const sizeInput = document.getElementById('size');
+      const paintInput = document.getElementById('paint');
+      const sizeValue = document.getElementById('sizeValue');
+      const paintValue = document.getElementById('paintValue');
+      const undoBtn = document.getElementById('undo');
+      const clearBtn = document.getElementById('clear');
+
+      let dpr = Math.max(1, Math.min(2.5, window.devicePixelRatio || 1));
+      let drawing = false;
+      let last = null;
+      let lastPressure = 0.5;
+      let history = [];
+      const maxHistory = 20;
+
+      // Deterministic tiny irregularity pattern. Enough to break the digital edge
+      // without adding obvious grain/noise.
+      const edgeOffsets = [
+        [ 0.00,  0.00, 1.00],
+        [ 0.10, -0.04, 0.72],
+        [-0.08,  0.06, 0.68],
+        [ 0.04,  0.10, 0.62],
+        [-0.05, -0.09, 0.58]
+      ];
+
+      function resizeCanvas(preserve = true) {
+        const rect = stage.getBoundingClientRect();
+        let snapshot = null;
+        if (preserve && canvas.width && canvas.height) {
+          snapshot = document.createElement('canvas');
+          snapshot.width = canvas.width;
+          snapshot.height = canvas.height;
+          snapshot.getContext('2d').drawImage(canvas, 0, 0);
+        }
+
+        dpr = Math.max(1, Math.min(2.5, window.devicePixelRatio || 1));
+        canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+        canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+        canvas.style.width = rect.width + 'px';
+        canvas.style.height = rect.height + 'px';
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, rect.width, rect.height);
+
+        if (snapshot) {
+          ctx.save();
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          ctx.drawImage(snapshot, 0, 0, snapshot.width, snapshot.height, 0, 0, canvas.width, canvas.height);
+          ctx.restore();
+        }
+      }
+
+      function saveHistory() {
+        try {
+          const data = canvas.toDataURL('image/png');
+          history.push(data);
+          if (history.length > maxHistory) history.shift();
+        } catch (_) {}
+      }
+
+      function restoreDataURL(data) {
+        const img = new Image();
+        img.onload = () => {
+          const rect = stage.getBoundingClientRect();
+          ctx.save();
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(0, 0, rect.width, rect.height);
+          ctx.drawImage(img, 0, 0, rect.width, rect.height);
+          ctx.restore();
+        };
+        img.src = data;
+      }
+
+      function parseHex(hex) {
+        const v = hex.replace('#','');
+        return {
+          r: parseInt(v.slice(0,2), 16),
+          g: parseInt(v.slice(2,4), 16),
+          b: parseInt(v.slice(4,6), 16)
+        };
+      }
+
+      function pressureFromEvent(e) {
+        // PointerEvent pressure is 0..1. Mouse is commonly 0.5 while pressed.
+        if (e.pointerType === 'pen' && e.pressure > 0) return e.pressure;
+        return 0.58;
+      }
+
+      function pointFromEvent(e) {
+        const r = canvas.getBoundingClientRect();
+        return { x: e.clientX - r.left, y: e.clientY - r.top };
+      }
+
+      function dab(x, y, pressure, velocityFactor = 1) {
+        const baseSize = Number(sizeInput.value);
+        const paint = Number(paintInput.value) / 100;
+        const rgb = parseHex(colorInput.value);
+
+        // Pressure affects width, but never collapses the brush to a hairline.
+        const pressureScale = 0.58 + pressure * 0.62;
+        const radius = (baseSize * pressureScale) / 2;
+
+        // Fast movement lays slightly less paint, like a loaded brush moving quickly.
+        const speedLoss = 0.80 + 0.20 * velocityFactor;
+        const alpha = Math.min(0.97, paint * speedLoss * (0.84 + pressure * 0.16));
+
+        // Main matte body of the paint.
+        ctx.save();
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.fillStyle = `rgba(${rgb.r},${rgb.g},${rgb.b},${alpha})`;
+        ctx.beginPath();
+        ctx.ellipse(x, y, radius, radius * 0.92, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Subtle edge irregularity. Same color, lower opacity, no noisy texture.
+        for (let i = 1; i < edgeOffsets.length; i++) {
+          const [ox, oy, scale] = edgeOffsets[i];
+          ctx.fillStyle = `rgba(${rgb.r},${rgb.g},${rgb.b},${alpha * 0.12})`;
+          ctx.beginPath();
+          ctx.ellipse(
+            x + ox * radius,
+            y + oy * radius,
+            radius * scale,
+            radius * scale * 0.86,
+            0,
+            0,
+            Math.PI * 2
+          );
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      function strokeTo(a, b, pressureA, pressureB) {
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const dist = Math.hypot(dx, dy);
+        const baseSize = Number(sizeInput.value);
+
+        // Tight spacing gives gouache-like continuous coverage.
+        const spacing = Math.max(1.2, baseSize * 0.10);
+        const steps = Math.max(1, Math.ceil(dist / spacing));
+        const velocityFactor = Math.max(0.55, Math.min(1, 14 / Math.max(14, dist)));
+
+        for (let i = 1; i <= steps; i++) {
+          const t = i / steps;
+          const x = a.x + dx * t;
+          const y = a.y + dy * t;
+          const p = pressureA + (pressureB - pressureA) * t;
+          dab(x, y, p, velocityFactor);
+        }
+      }
+
+      function onPointerDown(e) {
+        if (e.button !== undefined && e.button !== 0 && e.pointerType !== 'pen') return;
+        e.preventDefault();
+        canvas.setPointerCapture?.(e.pointerId);
+        saveHistory();
+        drawing = true;
+        last = pointFromEvent(e);
+        lastPressure = pressureFromEvent(e);
+        dab(last.x, last.y, lastPressure, 1);
+      }
+
+      function onPointerMove(e) {
+        if (!drawing) return;
+        e.preventDefault();
+        const p = pointFromEvent(e);
+        const pressure = pressureFromEvent(e);
+        strokeTo(last, p, lastPressure, pressure);
+        last = p;
+        lastPressure = pressure;
+      }
+
+      function endStroke(e) {
+        if (!drawing) return;
+        drawing = false;
+        last = null;
+        try { canvas.releasePointerCapture?.(e.pointerId); } catch (_) {}
+      }
+
+      canvas.addEventListener('pointerdown', onPointerDown);
+      canvas.addEventListener('pointermove', onPointerMove);
+      canvas.addEventListener('pointerup', endStroke);
+      canvas.addEventListener('pointercancel', endStroke);
+      canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+      sizeInput.addEventListener('input', () => sizeValue.textContent = sizeInput.value);
+      paintInput.addEventListener('input', () => paintValue.textContent = paintInput.value + '%');
+
+      undoBtn.addEventListener('click', () => {
+        const previous = history.pop();
+        if (previous) restoreDataURL(previous);
+      });
+
+      clearBtn.addEventListener('click', () => {
+        saveHistory();
+        const r = stage.getBoundingClientRect();
+        ctx.save();
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, r.width, r.height);
+        ctx.restore();
+      });
+
+      let resizeTimer;
+      window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => resizeCanvas(true), 120);
+      });
+
+      resizeCanvas(false);
+    })();
+  </script>
+</body>
+</html>
