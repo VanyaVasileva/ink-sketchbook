@@ -8,20 +8,20 @@
 :root{--bg:#f3efe8;--panel:#fffdf8;--ink:#2f2a27;--muted:#8d8176;--line:#d9d1c8}
 *{box-sizing:border-box}html,body{height:100%}body{margin:0;background:var(--bg);color:var(--ink);font-family:ui-rounded,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;overflow:hidden}
 .wrap{height:100%;padding:5px;display:grid;grid-template-rows:auto 1fr;gap:5px}.top,.bar,.stage{background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:0 6px 18px rgba(50,40,30,.05)}
-.top{padding:7px 9px}.top b{font-size:17px}.top span{display:block;font-size:11px;color:var(--muted);margin-top:2px}.app{min-height:0;display:grid;grid-template-rows:auto 1fr;gap:5px}.bar{padding:6px;display:flex;gap:8px;align-items:center;overflow-x:auto}.control{min-width:132px;font-size:10px}.control label{display:flex;justify-content:space-between;margin-bottom:2px}.control input{width:100%}.locked{min-width:110px;font-size:11px;font-weight:700;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:#fff}.swatches{display:flex;gap:6px;min-width:170px}.sw{width:28px;height:28px;border-radius:50%;border:2px solid #fff;outline:1px solid var(--line);padding:0}.sw.active{outline:2px solid #332b27}button{appearance:none;border:1px solid var(--line);background:white;border-radius:9px;padding:8px 10px;font:inherit;font-weight:650;color:var(--ink)}.stage{min-height:0;padding:3px;position:relative}.canvasWrap{position:relative;width:100%;height:100%}canvas{position:absolute;inset:0;width:100%;height:100%;border-radius:9px;touch-action:none}#paper{background:#fff}.hint{display:none}
+.top{padding:7px 9px}.top b{font-size:17px}.top span{display:block;font-size:11px;color:var(--muted);margin-top:2px}.app{min-height:0;display:grid;grid-template-rows:auto 1fr;gap:5px}.bar{padding:6px;display:flex;gap:8px;align-items:center;overflow-x:auto}.control{min-width:132px;font-size:10px}.control label{display:flex;justify-content:space-between;margin-bottom:2px}.control input{width:100%}.locked{min-width:112px;font-size:11px;font-weight:750;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:#fff}.swatches{display:flex;gap:6px;min-width:170px}.sw{width:28px;height:28px;border-radius:50%;border:2px solid #fff;outline:1px solid var(--line);padding:0}.sw.active{outline:2px solid #332b27}button{appearance:none;border:1px solid var(--line);background:white;border-radius:9px;padding:8px 10px;font:inherit;font-weight:650;color:var(--ink)}.stage{min-height:0;padding:3px;position:relative}.canvasWrap{position:relative;width:100%;height:100%}canvas{position:absolute;inset:0;width:100%;height:100%;border-radius:9px;touch-action:none}#paper{background:#fff}.hint{display:none}
 @media(min-width:800px){.wrap{max-width:1180px;margin:auto;padding:8px;gap:8px}.app{grid-template-columns:245px 1fr;grid-template-rows:1fr;gap:8px}.bar{display:block;padding:10px}.control,.locked{margin-bottom:12px}.stage{padding:5px}.hint{display:block;position:absolute;right:10px;bottom:8px;font-size:10px;color:var(--muted);pointer-events:none}}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="top"><b>Opaque Crayon Gouache — v2</b><span>Solid matte paint first. Sparse irregular mini-patches, mixed dots and short dry marks sit inside the stroke.</span></div>
+  <div class="top"><b>Opaque Crayon Gouache — v3</b><span>100% solid colour. The crayon texture is real opaque WHITE marks — irregular mini-patches, a few dots and short dry scars.</span></div>
   <div class="app">
     <div class="bar">
       <div class="control"><label>Size <span id="sv">34</span></label><input id="size" type="range" min="4" max="90" value="34"></div>
-      <div class="locked">Opacity 100%</div>
-      <div class="control"><label>Texture amount <span id="tv">28%</span></label><input id="texture" type="range" min="0" max="70" value="28"></div>
-      <div class="control"><label>Patch mix <span id="pv">58%</span></label><input id="patch" type="range" min="0" max="100" value="58"></div>
-      <div class="control"><label>Edge break <span id="ev">14%</span></label><input id="edge" type="range" min="0" max="50" value="14"></div>
+      <div class="locked">Fill 100% opaque</div>
+      <div class="control"><label>White texture <span id="tv">30%</span></label><input id="texture" type="range" min="0" max="75" value="30"></div>
+      <div class="control"><label>Patch variety <span id="pv">64%</span></label><input id="patch" type="range" min="0" max="100" value="64"></div>
+      <div class="control"><label>White edge chips <span id="ev">10%</span></label><input id="edge" type="range" min="0" max="45" value="10"></div>
       <div class="swatches">
         <button class="sw active" data-c="#a98b5e" style="background:#a98b5e"></button>
         <button class="sw" data-c="#c38b68" style="background:#c38b68"></button>
@@ -31,7 +31,7 @@
       </div>
       <button id="undo">Undo</button><button id="clear">Clear</button>
     </div>
-    <div class="stage"><div class="canvasWrap"><canvas id="paper"></canvas><canvas id="live"></canvas></div><div class="hint">The body is fully opaque. Texture is sparse and irregular: tiny flecks, mini patches, a few dots and short broken marks.</div></div>
+    <div class="stage"><div class="canvasWrap"><canvas id="paper"></canvas><canvas id="live"></canvas></div><div class="hint">Solid colour underneath. White crayon marks are painted on top, so overlap never turns transparent.</div></div>
   </div>
 </div>
 <script>
@@ -40,94 +40,121 @@ const paper=document.getElementById('paper'), live=document.getElementById('live
 const pctx=paper.getContext('2d',{alpha:false,desynchronized:true});
 const lctx=live.getContext('2d',{desynchronized:true});
 const mask=document.createElement('canvas'), mctx=mask.getContext('2d');
+const textureLayer=document.createElement('canvas'), tctx=textureLayer.getContext('2d');
 const sizeEl=document.getElementById('size'), textureEl=document.getElementById('texture'), patchEl=document.getElementById('patch'), edgeEl=document.getElementById('edge');
 const sv=document.getElementById('sv'), tv=document.getElementById('tv'), pv=document.getElementById('pv'), ev=document.getElementById('ev');
-let size=34, texture=.28, patchMix=.58, edge=.14, color='#a98b5e', dpr=1, drawing=false, points=[], history=[], strokeSeed=1;
-let pigmentPattern=null;
+let size=34, texture=.30, patchMix=.64, edge=.10, color='#a98b5e', dpr=1, drawing=false, points=[], history=[], strokeSeed=1;
+let whitePattern=null;
 function seeded(seed){let s=seed>>>0;return()=>{s=(s*1664525+1013904223)>>>0;return s/4294967296}}
-function blob(ctx,x,y,scale,rand){
-  const lobes=3+Math.floor(rand()*3),pts=[];
-  for(let i=0;i<lobes;i++){
-    const a=(Math.PI*2*i/lobes)+rand()*.6,rr=scale*(.28+rand()*.34);
-    pts.push([x+Math.cos(a)*rr,y+Math.sin(a)*rr,scale*(.28+rand()*.28)]);
+function irregularPatch(ctx,cx,cy,r,rand){
+  const n=6+Math.floor(rand()*5),pts=[];
+  for(let i=0;i<n;i++){
+    const a=(Math.PI*2*i/n)+(rand()-.5)*.22;
+    const rr=r*(.55+rand()*.55);
+    pts.push({x:cx+Math.cos(a)*rr,y:cy+Math.sin(a)*rr});
   }
-  for(const p of pts){ctx.beginPath();ctx.arc(p[0],p[1],p[2],0,Math.PI*2);ctx.fill()}
+  ctx.beginPath();ctx.moveTo(pts[0].x,pts[0].y);
+  for(let i=1;i<pts.length;i++){const p=pts[i],q=pts[(i+1)%pts.length];ctx.quadraticCurveTo(p.x,p.y,(p.x+q.x)/2,(p.y+q.y)/2)}
+  ctx.closePath();ctx.fill();
 }
-function buildPigment(){
-  const W=720,H=720,hex=color.slice(1),r=parseInt(hex.slice(0,2),16),g=parseInt(hex.slice(2,4),16),b=parseInt(hex.slice(4,6),16),rand=seeded(71933);
-  const c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d');
-  x.fillStyle=`rgb(${r},${g},${b})`;x.fillRect(0,0,W,H);
-  x.globalCompositeOperation='destination-out';
-  const amount=texture;
-  const patch=patchMix;
-  x.globalAlpha=.42+.30*amount;
-  const tiny=Math.floor(65+amount*220);
-  for(let i=0;i<tiny;i++){
-    const px=rand()*W,py=rand()*H,rx=.25+rand()*(.8+amount*.8),ry=.25+rand()*(.7+amount*1.0);
+function buildWhitePattern(){
+  const W=720,H=720,rand=seeded(873421),c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d');
+  x.clearRect(0,0,W,H);x.fillStyle='#fff';x.globalAlpha=1;
+  const amount=texture, mix=patchMix;
+
+  // Tiny irregular flecks: present, but deliberately sparse.
+  const flecks=Math.floor(70+amount*180);
+  for(let i=0;i<flecks;i++){
+    const px=rand()*W,py=rand()*H,rx=.25+rand()*(.75+amount*.65),ry=.22+rand()*(.65+amount*.9);
     x.save();x.translate(px,py);x.rotate(rand()*Math.PI);x.beginPath();x.ellipse(0,0,rx,ry,0,0,Math.PI*2);x.fill();x.restore();
   }
-  x.globalAlpha=.28+.34*amount;
-  const patches=Math.floor(18+amount*52);
+
+  // Main crayon gaps: mixed little natural patches, with a few bigger ones.
+  const patches=Math.floor(30+amount*70);
   for(let i=0;i<patches;i++){
     const px=rand()*W,py=rand()*H;
-    const bigChance=rand()<(.18+.34*patch);
-    const s=bigChance?(2.2+rand()*(4.0+patch*4.2)):(1.0+rand()*(2.0+patch*1.8));
-    x.save();x.translate(px,py);x.rotate(rand()*Math.PI);x.translate(-px,-py);blob(x,px,py,s,rand);x.restore();
+    const bigger=rand()<(.10+.22*mix);
+    const r=bigger?(2.2+rand()*(3.8+mix*4.2)):(.85+rand()*(1.9+mix*2.0));
+    irregularPatch(x,px,py,r,rand);
   }
-  x.globalAlpha=.38+.28*amount;
+
+  // A handful of dots, with visibly different sizes.
   const dots=Math.floor(8+amount*18);
   for(let i=0;i<dots;i++){
-    const px=rand()*W,py=rand()*H,rr=.45+rand()*(1.4+patch*1.8);
+    const px=rand()*W,py=rand()*H,rr=.5+rand()*(1.2+mix*1.8);
     x.beginPath();x.arc(px,py,rr,0,Math.PI*2);x.fill();
   }
-  x.globalAlpha=.22+.24*amount;
-  const marks=Math.floor(10+amount*28);
-  for(let i=0;i<marks;i++){
-    const px=rand()*W,py=rand()*H,len=2.5+rand()*(5+patch*7),w=.35+rand()*(.8+patch*.8);
+
+  // Short broken crayon scars — not too many.
+  const scars=Math.floor(10+amount*24);
+  for(let i=0;i<scars;i++){
+    const px=rand()*W,py=rand()*H,len=2.4+rand()*(4.5+mix*7.5),w=.45+rand()*(.6+mix*.9);
     x.save();x.translate(px,py);x.rotate(rand()*Math.PI);x.beginPath();x.roundRect(-len/2,-w/2,len,w,w/2);x.fill();x.restore();
   }
-  x.globalCompositeOperation='source-over';x.globalAlpha=1;
-  pigmentPattern=lctx.createPattern(c,'repeat');
+
+  // A few clustered micro-patches so the distribution is not evenly sprinkled.
+  const clusters=Math.floor(5+amount*10);
+  for(let i=0;i<clusters;i++){
+    const cx=rand()*W,cy=rand()*H,count=2+Math.floor(rand()*4);
+    for(let j=0;j<count;j++){
+      const a=rand()*Math.PI*2,dist=2+rand()*9,rr=.55+rand()*(1.2+mix*1.6);
+      irregularPatch(x,cx+Math.cos(a)*dist,cy+Math.sin(a)*dist,rr,rand);
+    }
+  }
+  whitePattern=lctx.createPattern(c,'repeat');
 }
 function resize(preserve=true){
   const r=wrap.getBoundingClientRect();let snap=null;
   if(preserve&&paper.width){snap=document.createElement('canvas');snap.width=paper.width;snap.height=paper.height;snap.getContext('2d').drawImage(paper,0,0)}
   dpr=Math.max(1,Math.min(2,window.devicePixelRatio||1));
-  [paper,live,mask].forEach(c=>{c.width=Math.max(1,Math.floor(r.width*dpr));c.height=Math.max(1,Math.floor(r.height*dpr));c.style.width=r.width+'px';c.style.height=r.height+'px'});
-  pctx.setTransform(dpr,0,0,dpr,0,0);lctx.setTransform(dpr,0,0,dpr,0,0);mctx.setTransform(dpr,0,0,dpr,0,0);
+  [paper,live,mask,textureLayer].forEach(c=>{c.width=Math.max(1,Math.floor(r.width*dpr));c.height=Math.max(1,Math.floor(r.height*dpr));c.style.width=r.width+'px';c.style.height=r.height+'px'});
+  pctx.setTransform(dpr,0,0,dpr,0,0);lctx.setTransform(dpr,0,0,dpr,0,0);mctx.setTransform(dpr,0,0,dpr,0,0);tctx.setTransform(dpr,0,0,dpr,0,0);
   pctx.fillStyle='#fff';pctx.fillRect(0,0,r.width,r.height);
   if(snap){pctx.save();pctx.setTransform(1,0,0,1,0,0);pctx.drawImage(snap,0,0,snap.width,snap.height,0,0,paper.width,paper.height);pctx.restore()}
-  buildPigment();
+  buildWhitePattern();
 }
 function save(){try{history.push(paper.toDataURL('image/png'));if(history.length>20)history.shift()}catch(_){}}
 function restore(data){const img=new Image();img.onload=()=>{const r=wrap.getBoundingClientRect();pctx.setTransform(dpr,0,0,dpr,0,0);pctx.fillStyle='#fff';pctx.fillRect(0,0,r.width,r.height);pctx.drawImage(img,0,0,r.width,r.height)};img.src=data}
 function pos(e){const r=live.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top,p:(e.pointerType==='pen'&&e.pressure>0)?Math.max(.18,Math.min(1,e.pressure)):.62}}
 function path(ctx,pts,w){if(pts.length<2)return;ctx.beginPath();ctx.moveTo(pts[0].x,pts[0].y);for(let i=1;i<pts.length-1;i++){const mx=(pts[i].x+pts[i+1].x)/2,my=(pts[i].y+pts[i+1].y)/2;ctx.quadraticCurveTo(pts[i].x,pts[i].y,mx,my)}const n=pts.length-1;ctx.quadraticCurveTo(pts[n-1].x,pts[n-1].y,pts[n].x,pts[n].y);ctx.lineWidth=w;ctx.lineCap='round';ctx.lineJoin='round';ctx.stroke()}
-function chipEdges(w){
-  if(edge<=0||points.length<3)return;
-  const rand=seeded(strokeSeed);mctx.save();mctx.globalCompositeOperation='destination-out';mctx.fillStyle='#000';mctx.globalAlpha=.68;
-  const every=Math.max(5,Math.floor(13-edge*10));
-  for(let i=2;i<points.length-2;i+=every){
-    if(rand()>.42+edge*.7)continue;
+function drawWhiteEdgeChips(ctx,w){
+  if(edge<=0||points.length<4)return;
+  const rand=seeded(strokeSeed);ctx.save();ctx.fillStyle='#fff';ctx.globalAlpha=1;
+  const step=Math.max(7,Math.floor(16-edge*14));
+  for(let i=2;i<points.length-2;i+=step){
+    if(rand()>.25+edge*.9)continue;
     const a=points[i-1],b=points[i+1],dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy)||1,nx=-dy/len,ny=dx/len,side=rand()<.5?-1:1;
-    const cx=points[i].x+nx*side*w*(.48+rand()*.08),cy=points[i].y+ny*side*w*(.48+rand()*.08);
-    const rx=.35+rand()*(.8+edge*2.2),ry=.45+rand()*(1.4+edge*2.5);
-    mctx.save();mctx.translate(cx,cy);mctx.rotate(rand()*Math.PI);mctx.beginPath();mctx.ellipse(0,0,rx,ry,0,0,Math.PI*2);mctx.fill();mctx.restore();
+    const cx=points[i].x+nx*side*w*(.47+rand()*.035),cy=points[i].y+ny*side*w*(.47+rand()*.035);
+    const rx=.45+rand()*(.8+edge*1.8),ry=.55+rand()*(1.0+edge*2.2);
+    ctx.save();ctx.translate(cx,cy);ctx.rotate(rand()*Math.PI);ctx.beginPath();ctx.ellipse(0,0,rx,ry,0,0,Math.PI*2);ctx.fill();ctx.restore();
   }
-  mctx.restore();
+  ctx.restore();
 }
 function render(){
-  const r=wrap.getBoundingClientRect();lctx.clearRect(0,0,r.width,r.height);mctx.clearRect(0,0,r.width,r.height);if(points.length<2)return;
+  const r=wrap.getBoundingClientRect();
+  lctx.clearRect(0,0,r.width,r.height);mctx.clearRect(0,0,r.width,r.height);tctx.clearRect(0,0,r.width,r.height);
+  if(points.length<2)return;
   let p=0;for(const q of points)p+=q.p;p/=points.length;
-  const w=size*(.96+.07*p);
-  mctx.strokeStyle='#000';mctx.globalAlpha=1;path(mctx,points,w);chipEdges(w);
-  lctx.save();lctx.fillStyle=pigmentPattern;lctx.globalAlpha=1;lctx.fillRect(0,0,r.width,r.height);lctx.globalCompositeOperation='destination-in';lctx.globalAlpha=1;lctx.drawImage(mask,0,0,r.width,r.height);lctx.restore();
+  const w=size*(.97+.05*p);
+
+  // One solid mask for the whole stroke.
+  mctx.strokeStyle='#000';mctx.globalAlpha=1;path(mctx,points,w);
+
+  // Base colour: absolutely opaque. No pressure opacity. No holes.
+  lctx.save();lctx.globalAlpha=1;lctx.fillStyle=color;lctx.fillRect(0,0,r.width,r.height);lctx.globalCompositeOperation='destination-in';lctx.drawImage(mask,0,0,r.width,r.height);lctx.restore();
+
+  // White texture is a SECOND opaque paint layer, not transparency.
+  tctx.save();tctx.globalAlpha=1;tctx.fillStyle=whitePattern;tctx.fillRect(0,0,r.width,r.height);tctx.globalCompositeOperation='destination-in';tctx.drawImage(mask,0,0,r.width,r.height);tctx.restore();
+  lctx.save();lctx.globalCompositeOperation='source-over';lctx.globalAlpha=1;lctx.drawImage(textureLayer,0,0,r.width,r.height);lctx.restore();
+
+  // Any edge breakup is also painted white, never erased to transparency.
+  drawWhiteEdgeChips(lctx,w);
 }
 function down(e){if(e.pointerType!=='pen'&&e.button!==undefined&&e.button!==0)return;e.preventDefault();save();drawing=true;points=[pos(e)];strokeSeed=((points[0].x*73856093)^(points[0].y*19349663)^(Date.now()&0xffff))>>>0;try{live.setPointerCapture(e.pointerId)}catch(_){}}
 function move(e){if(!drawing)return;e.preventDefault();const evs=e.getCoalescedEvents?e.getCoalescedEvents():[e];for(const ee of evs){const q=pos(ee),last=points[points.length-1];if(!last||Math.hypot(q.x-last.x,q.y-last.y)>.5)points.push(q)}render()}
-function up(e){if(!drawing)return;e.preventDefault();const q=pos(e),last=points[points.length-1];if(!last||Math.hypot(q.x-last.x,q.y-last.y)>.3)points.push(q);render();const r=wrap.getBoundingClientRect();pctx.drawImage(live,0,0,r.width,r.height);lctx.clearRect(0,0,r.width,r.height);mctx.clearRect(0,0,r.width,r.height);drawing=false;points=[];try{live.releasePointerCapture(e.pointerId)}catch(_){}}
-sizeEl.oninput=e=>{size=+e.target.value;sv.textContent=size};textureEl.oninput=e=>{texture=+e.target.value/100;tv.textContent=e.target.value+'%';buildPigment()};patchEl.oninput=e=>{patchMix=+e.target.value/100;pv.textContent=e.target.value+'%';buildPigment()};edgeEl.oninput=e=>{edge=+e.target.value/100;ev.textContent=e.target.value+'%'};
-document.querySelectorAll('.sw').forEach(b=>b.onclick=()=>{document.querySelectorAll('.sw').forEach(x=>x.classList.remove('active'));b.classList.add('active');color=b.dataset.c;buildPigment()});
+function up(e){if(!drawing)return;e.preventDefault();const q=pos(e),last=points[points.length-1];if(!last||Math.hypot(q.x-last.x,q.y-last.y)>.3)points.push(q);render();const r=wrap.getBoundingClientRect();pctx.drawImage(live,0,0,r.width,r.height);lctx.clearRect(0,0,r.width,r.height);mctx.clearRect(0,0,r.width,r.height);tctx.clearRect(0,0,r.width,r.height);drawing=false;points=[];try{live.releasePointerCapture(e.pointerId)}catch(_){}}
+sizeEl.oninput=e=>{size=+e.target.value;sv.textContent=size};textureEl.oninput=e=>{texture=+e.target.value/100;tv.textContent=e.target.value+'%';buildWhitePattern()};patchEl.oninput=e=>{patchMix=+e.target.value/100;pv.textContent=e.target.value+'%';buildWhitePattern()};edgeEl.oninput=e=>{edge=+e.target.value/100;ev.textContent=e.target.value+'%'};
+document.querySelectorAll('.sw').forEach(b=>b.onclick=()=>{document.querySelectorAll('.sw').forEach(x=>x.classList.remove('active'));b.classList.add('active');color=b.dataset.c});
 document.getElementById('undo').onclick=()=>{const prev=history.pop();if(prev)restore(prev)};document.getElementById('clear').onclick=()=>{save();const r=wrap.getBoundingClientRect();pctx.fillStyle='#fff';pctx.fillRect(0,0,r.width,r.height)};
 live.addEventListener('pointerdown',down,{passive:false});live.addEventListener('pointermove',move,{passive:false});live.addEventListener('pointerup',up,{passive:false});live.addEventListener('pointercancel',up,{passive:false});live.addEventListener('contextmenu',e=>e.preventDefault());
 let rt;window.addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(()=>resize(true),120)});resize(false);
