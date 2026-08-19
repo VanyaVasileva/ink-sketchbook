@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>Ink Sketchbook Fill Test v3</title></head>
+<body><p style="font-family:sans-serif;padding:20px">Loading Ink Sketchbook fill test…</p>
+<script>
+(async function(){
+  try {
+    const sourceUrl='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/feature/new-button/ink-sketchbook-fill-test-v1.html';
+    const r=await fetch(sourceUrl,{cache:'no-store'});
+    if(!r.ok) throw new Error('Could not load Fill test source');
+    let src=await r.text();
+
+    // Fix the v1 wrapper token before writing it into the page.
+    const closeTag='</scr'+'ipt>';
+    const bad="const scriptEnd=html.lastIndexOf('"+closeTag+"');";
+    const good="const scriptEnd=html.lastIndexOf('</scr'+'ipt>');";
+    if(!src.includes(bad)) throw new Error('Fill test wrapper marker not found');
+    src=src.replace(bad,good);
+
+    // Replace only the bucket algorithm. Everything else in the Ink Sketchbook
+    // and its recording/hand controls stays unchanged.
+    const start=src.indexOf('function bucketFill(clientX,clientY){');
+    const end=src.indexOf('\n}\n\n// Track a simple tap for Fill',start);
+    if(start<0||end<0) throw new Error('Fill algorithm marker not found');
+
+    const improved=String.raw`function bucketFill(clientX,clientY){
+  const p=getPos({clientX,clientY});
+  const w=drawCanvas.width,h=drawCanvas.height;
+  const sx=Math.max(0,Math.min(w-1,Math.round(p.x))),sy=Math.max(0,Math.min(h-1,Math.round(p.y)));
+  lastPenPos={x:sx,y:sy};
+
+  let image;
+  try{image=ctx.getImageData(0,0,w,h)}catch(e){hintText.textContent='Fill could not read the canvas.';return}
+  const d=image.data;
+  const original=new Uint8ClampedArray(d);
+  const si=(sy*w+sx)*4;
+  const target=[d[si],d[si+1],d[si+2],d[si+3]];
+  const rgb=fillColorRgb(currentColor),replacement=[rgb[0],rgb[1],rgb[2],255];
+
+  if(Math.abs(target[0]-replacement[0])<4&&Math.abs(target[1]-replacement[1])<4&&Math.abs(target[2]-replacement[2])<4&&Math.abs(target[3]-255)<4){
+    hintText.textContent='That area already has this color.';return;
+  }
+
+  const transparent=target[3]===0;
+  function matches(x,y){
+    const i=(y*w+x)*4;
+    if(transparent) return d[i+3]===0;
+    return Math.abs(d[i]-target[0])<=10&&Math.abs(d[i+1]-target[1])<=10&&Math.abs(d[i+2]-target[2])<=10&&Math.abs(d[i+3]-target[3])<=10;
+  }
+  if(!matches(sx,sy))return;
+
+  // Scanline flood fill plus a mask so we know exactly which closed region was filled.
+  const mask=transparent?new Uint8Array(w*h):null;
+  const stack=[sx,sy];
+  let painted=0,minX=sx,maxX=sx,minY=sy,maxY=sy;
+  while(stack.length){
+    const y=stack.pop(),seedX=stack.pop();
+    let x=seedX;
+    while(x>=0&&matches(x,y))x--;
+    x++;
+    let up=false,down=false;
+    for(;x<w&&matches(x,y);x++){
+      const pi=y*w+x,i=pi*4;
+      d[i]=replacement[0];d[i+1]=replacement[1];d[i+2]=replacement[2];d[i+3]=255;
+      if(mask)mask[pi]=1;
+      if(x<minX)minX=x;if(x>maxX)maxX=x;if(y<minY)minY=y;if(y>maxY)maxY=y;
+      painted++;
+      if(y>0){if(matches(x,y-1)){if(!up){stack.push(x,y-1);up=true}}else up=false}
+      if(y<h-1){if(matches(x,y+1)){if(!down){stack.push(x,y+1);down=true}}else down=false}
+    }
+  }
+  if(!painted){hintText.textContent='Nothing to fill here.';return}
+
+  if(transparent&&mask){
+    // Paint underneath the anti-aliased fringe of the ink line. We only step
+    // through partly-transparent edge pixels; solid line pixels remain a hard boundary.
+    // Two tiny passes are enough to remove the white halo without crossing the outline.
+    for(let pass=0;pass<2;pass++){
+      const add=[];
+      const x0=Math.max(1,minX-2),x1=Math.min(w-2,maxX+2),y0=Math.max(1,minY-2),y1=Math.min(h-2,maxY+2);
+      for(let y=y0;y<=y1;y++){
+        for(let x=x0;x<=x1;x++){
+          const pi=y*w+x;
+          if(mask[pi])continue;
+          const oi=pi*4,alpha=original[oi+3];
+          if(alpha>=250)continue;
+          const touching=mask[pi-1]||mask[pi+1]||mask[pi-w]||mask[pi+w]||mask[pi-w-1]||mask[pi-w+1]||mask[pi+w-1]||mask[pi+w+1];
+          if(touching)add.push(pi);
+        }
+      }
+      if(!add.length)break;
+      for(const pi of add){
+        const i=pi*4,x=pi%w,y=(pi/w)|0;
+        d[i]=replacement[0];d[i+1]=replacement[1];d[i+2]=replacement[2];d[i+3]=255;
+        mask[pi]=1;
+        if(x<minX)minX=x;if(x>maxX)maxX=x;if(y<minY)minY=y;if(y>maxY)maxY=y;
+      }
+    }
+
+    // Put the expanded color down first, then composite the original ink pixels
+    // back over it. Fully opaque line pixels stay identical; translucent edge
+    // pixels now blend against the fill color instead of white.
+    ctx.putImageData(image,0,0);
+    const ink=document.createElement('canvas');ink.width=w;ink.height=h;
+    const ic=ink.getContext('2d');const originalImage=ic.createImageData(w,h);originalImage.data.set(original);ic.putImageData(originalImage,0,0);
+    ctx.save();ctx.globalCompositeOperation='source-over';ctx.globalAlpha=1;ctx.drawImage(ink,0,0);ctx.restore();
+  }else{
+    ctx.putImageData(image,0,0);
+  }
+
+  saveHistory();
+  hintText.textContent='Filled cleanly to the ink edge. Two-finger tap to undo.';
+}`;
+
+    src=src.slice(0,start)+improved+src.slice(end+2);
+    document.open();document.write(src);document.close();
+  } catch(err) {
+    document.body.innerHTML='<div style="font-family:sans-serif;padding:24px"><h2>Could not load Fill test</h2><pre>'+String(err)+'</pre></div>';
+  }
+})();
+</script>
+</body></html>
