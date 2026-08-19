@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>Ink Sketchbook — Fill test</title>
+<style>html,body{margin:0;height:100%;background:#f6f4f0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#2a2620}#loading{height:100%;display:grid;place-items:center;text-align:center;padding:24px}#loading strong{display:block;font-size:17px;margin-bottom:7px}#loading span{font-size:12px;color:#8a8373}</style></head>
+<body><div id="loading"><div><strong>Loading Ink Sketchbook…</strong><span>Fill-tool test. Your existing sketchbook file is untouched.</span></div></div>
+<script>
+(async()=>{'use strict';
+const BASE='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/feature/new-button/index-test-mp4-visible.html';
+try{
+  const r=await fetch(BASE,{cache:'no-store'});if(!r.ok)throw new Error('Could not load the Ink Sketchbook base.');
+  let html=await r.text();
+  const runtime=String.raw`
+// --- Fill / paint bucket test -------------------------------------------------
+const fillModeBtn=document.createElement('button');
+fillModeBtn.id='fillModeBtn';
+fillModeBtn.innerHTML='🪣 <span>Fill</span>';
+fillModeBtn.title='Fill a closed area with the selected color';
+eraseModeBtn.after(fillModeBtn);
+
+function setFillMode(){
+  mode='fill';
+  fillModeBtn.classList.add('active');
+  drawModeBtn.classList.remove('active');
+  eraseModeBtn.classList.remove('active');
+  hintText.textContent='Fill: choose a color, then tap inside a closed area.';
+}
+fillModeBtn.addEventListener('click',setFillMode);
+drawModeBtn.addEventListener('click',()=>fillModeBtn.classList.remove('active'));
+eraseModeBtn.addEventListener('click',()=>fillModeBtn.classList.remove('active'));
+
+function fillHexRgb(hex){
+  const h=(hex||'#000000').replace('#','');
+  return [parseInt(h.slice(0,2),16)||0,parseInt(h.slice(2,4),16)||0,parseInt(h.slice(4,6),16)||0];
+}
+function fillSame(a,b,tol=10){return Math.abs(a[0]-b[0])<=tol&&Math.abs(a[1]-b[1])<=tol&&Math.abs(a[2]-b[2])<=tol&&Math.abs(a[3]-b[3])<=tol}
+function bucketFillAt(clientX,clientY){
+  const p=getPos({clientX,clientY});
+  const w=drawCanvas.width,h=drawCanvas.height;
+  const sx=Math.max(0,Math.min(w-1,Math.round(p.x))),sy=Math.max(0,Math.min(h-1,Math.round(p.y)));
+  let image;
+  try{image=ctx.getImageData(0,0,w,h)}catch(err){hintText.textContent='Fill could not read the canvas.';return}
+  const d=image.data,si=(sy*w+sx)*4;
+  const target=[d[si],d[si+1],d[si+2],d[si+3]],rgb=fillHexRgb(currentColor),fill=[rgb[0],rgb[1],rgb[2],255];
+  if(fillSame(target,fill,4)){hintText.textContent='That area already has this color.';return}
+  const transparentTarget=target[3]===0;
+  // A tap directly on an ink stroke should not recolor the line by accident.
+  if(!transparentTarget&&target[3]>0){
+    const lum=(target[0]*.299+target[1]*.587+target[2]*.114);
+    if(lum<185&&Math.abs(target[0]-target[1])<55&&Math.abs(target[1]-target[2])<55){
+      hintText.textContent='Tap inside the outlined area, not on the ink line.';return;
+    }
+  }
+  function matchPixel(x,y){
+    const i=(y*w+x)*4;
+    if(transparentTarget) return d[i+3]===0; // any anti-aliased ink pixel becomes a solid boundary
+    return Math.abs(d[i]-target[0])<=12&&Math.abs(d[i+1]-target[1])<=12&&Math.abs(d[i+2]-target[2])<=12&&Math.abs(d[i+3]-target[3])<=12;
+  }
+  if(!matchPixel(sx,sy))return;
+  // Scanline flood fill: faster and lighter than allocating one queue item per pixel.
+  const stack=[sx,sy];let painted=0;
+  while(stack.length){
+    const y=stack.pop(),x0=stack.pop();
+    let x=x0;
+    while(x>=0&&matchPixel(x,y))x--;x++;
+    let spanUp=false,spanDown=false;
+    for(;x<w&&matchPixel(x,y);x++){
+      const i=(y*w+x)*4;d[i]=fill[0];d[i+1]=fill[1];d[i+2]=fill[2];d[i+3]=255;painted++;
+      if(y>0){if(matchPixel(x,y-1)){if(!spanUp){stack.push(x,y-1);spanUp=true}}else spanUp=false}
+      if(y<h-1){if(matchPixel(x,y+1)){if(!spanDown){stack.push(x,y+1);spanDown=true}}else spanDown=false}
+    }
+  }
+  if(!painted){hintText.textContent='Nothing to fill here.';return}
+  ctx.putImageData(image,0,0);
+  saveHistory();
+  hintText.textContent='Filled. Two-finger tap to undo.';
+}
+
+// Fill mode gets its own pointer handling so it never creates an accidental ink stroke.
+const fillTouches=new Map();let fillHadMultiTouch=false;
+function fillCaptureDown(e){
+  if(mode!=='fill')return;
+  e.preventDefault();e.stopImmediatePropagation();
+  if(e.pointerType==='touch'){
+    fillTouches.set(e.pointerId,{x:e.clientX,y:e.clientY,sx:e.clientX,sy:e.clientY,t:performance.now(),moved:false});
+    if(fillTouches.size>1)fillHadMultiTouch=true;
+  }else bucketFillAt(e.clientX,e.clientY);
+}
+function fillCaptureMove(e){
+  if(mode!=='fill'||!fillTouches.has(e.pointerId))return;
+  e.preventDefault();e.stopImmediatePropagation();const q=fillTouches.get(e.pointerId);q.x=e.clientX;q.y=e.clientY;if(Math.hypot(q.x-q.sx,q.y-q.sy)>8)q.moved=true;
+}
+function fillCaptureEnd(e){
+  if(mode!=='fill'||!fillTouches.has(e.pointerId))return;
+  e.preventDefault();e.stopImmediatePropagation();const q=fillTouches.get(e.pointerId);fillTouches.delete(e.pointerId);
+  if(fillTouches.size===0){if(!fillHadMultiTouch&&!q.moved&&performance.now()-q.t<420)bucketFillAt(q.x,q.y);fillHadMultiTouch=false}
+}
+drawCanvas.addEventListener('pointerdown',fillCaptureDown,true);
+drawCanvas.addEventListener('pointermove',fillCaptureMove,true);
+drawCanvas.addEventListener('pointerup',fillCaptureEnd,true);
+drawCanvas.addEventListener('pointercancel',fillCaptureEnd,true);
+
+// Make the help text aware of the test feature without changing the finished base file.
+const fillStyle=document.createElement('style');fillStyle.textContent='#fillModeBtn.active{background:#2a2620;color:#fff;border-color:#2a2620}';document.head.appendChild(fillStyle);
+`;
+  const cut=html.lastIndexOf('</script>');if(cut<0)throw new Error('Could not patch the Ink Sketchbook script.');
+  html=html.slice(0,cut)+runtime+html.slice(cut);
+  document.open();document.write(html);document.close();
+}catch(e){console.error(e);document.body.innerHTML='<div style="padding:28px;font-family:sans-serif"><h2>Could not load Fill test</h2><p>'+String(e.message||e)+'</p></div>'}
+})();
+</script></body></html>
