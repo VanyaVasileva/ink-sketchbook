@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>Ink Sketchbook Fill Test v11</title></head>
+<body><p style="font-family:sans-serif;padding:20px">Loading Ink Sketchbook fill test…</p>
+<script>
+(async function(){
+  try{
+    const sourceUrl='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/feature/new-button/ink-sketchbook-fill-test-v10.html';
+    const r=await fetch(sourceUrl,{cache:'no-store'});
+    if(!r.ok)throw new Error('Could not load Fill test v10');
+    let src=await r.text();
+
+    const needle="page=page.replace(marker,runtime+'\\n'+marker);";
+    if(!src.includes(needle))throw new Error('v10 injection marker not found');
+
+    const isolationRuntime=String.raw`
+// --- v11: reference is completely independent from Fill ---------------------
+// The reference canvas can never receive drawing/fill pointer events.
+refCanvas.style.pointerEvents='none';
+
+// Keep a dedicated ink-boundary snapshot that is sourced ONLY from drawCanvas.
+// Reference visibility, fade, size, loading, and removal never touch it.
+const fillBoundaryCanvas=document.createElement('canvas');
+fillBoundaryCanvas.width=drawCanvas.width;fillBoundaryCanvas.height=drawCanvas.height;
+const fillBoundaryCtx=fillBoundaryCanvas.getContext('2d',{willReadFrequently:true});
+fillBoundaryCtx.drawImage(drawCanvas,0,0);
+
+function useIndependentInkBoundary(){
+  if(fillBoundaryCanvas.width!==drawCanvas.width||fillBoundaryCanvas.height!==drawCanvas.height){
+    const old=document.createElement('canvas');old.width=fillBoundaryCanvas.width;old.height=fillBoundaryCanvas.height;old.getContext('2d').drawImage(fillBoundaryCanvas,0,0);
+    fillBoundaryCanvas.width=drawCanvas.width;fillBoundaryCanvas.height=drawCanvas.height;
+    fillBoundaryCtx.clearRect(0,0,fillBoundaryCanvas.width,fillBoundaryCanvas.height);
+    if(old.width&&old.height)fillBoundaryCtx.drawImage(old,0,0,old.width,old.height,0,0,fillBoundaryCanvas.width,fillBoundaryCanvas.height);
+  }
+  const boundary=fillBoundaryCtx.getImageData(0,0,fillBoundaryCanvas.width,fillBoundaryCanvas.height).data;
+  fillInkBase=new Uint8ClampedArray(boundary);
+  fillInkBaseW=fillBoundaryCanvas.width;fillInkBaseH=fillBoundaryCanvas.height;
+}
+
+const v10BucketFill=bucketFill;
+bucketFill=function(clientX,clientY){
+  useIndependentInkBoundary();
+  return v10BucketFill(clientX,clientY);
+};
+
+// Track changes made by Draw/Eraser so the boundary stays current even after
+// previous fills. The reference is never sampled or copied here.
+let boundaryBeforeCanvas=null,boundaryTrackMode=null,boundaryBox=null;
+function boundaryPoint(e){try{return getPos(e)}catch(_){return null}}
+function boundaryExpand(p){if(!p)return;const pad=50;if(!boundaryBox)boundaryBox={x0:p.x-pad,y0:p.y-pad,x1:p.x+pad,y1:p.y+pad};else{boundaryBox.x0=Math.min(boundaryBox.x0,p.x-pad);boundaryBox.y0=Math.min(boundaryBox.y0,p.y-pad);boundaryBox.x1=Math.max(boundaryBox.x1,p.x+pad);boundaryBox.y1=Math.max(boundaryBox.y1,p.y+pad)}}
+
+drawCanvas.addEventListener('pointerdown',(e)=>{
+  if(e.pointerType==='touch'||mode==='fill')return;
+  boundaryTrackMode=mode;boundaryBox=null;boundaryExpand(boundaryPoint(e));
+  boundaryBeforeCanvas=document.createElement('canvas');boundaryBeforeCanvas.width=drawCanvas.width;boundaryBeforeCanvas.height=drawCanvas.height;boundaryBeforeCanvas.getContext('2d').drawImage(drawCanvas,0,0);
+});
+drawCanvas.addEventListener('pointermove',(e)=>{if(boundaryBeforeCanvas&&mode!=='fill')boundaryExpand(boundaryPoint(e))});
+function syncInkBoundaryAfterStroke(){
+  if(!boundaryBeforeCanvas||!boundaryTrackMode){boundaryBeforeCanvas=null;boundaryTrackMode=null;boundaryBox=null;return}
+  const b=boundaryBox||{x0:0,y0:0,x1:drawCanvas.width,y1:drawCanvas.height};
+  const x=Math.max(0,Math.floor(b.x0)),y=Math.max(0,Math.floor(b.y0)),x1=Math.min(drawCanvas.width,Math.ceil(b.x1)),y1=Math.min(drawCanvas.height,Math.ceil(b.y1)),w=x1-x,h=y1-y;
+  if(w>0&&h>0){
+    const before=boundaryBeforeCanvas.getContext('2d').getImageData(x,y,w,h),after=ctx.getImageData(x,y,w,h),bd=fillBoundaryCtx.getImageData(x,y,w,h);
+    const a=after.data,bb=before.data,d=bd.data;
+    for(let i=0;i<a.length;i+=4){
+      if(a[i]===bb[i]&&a[i+1]===bb[i+1]&&a[i+2]===bb[i+2]&&a[i+3]===bb[i+3])continue;
+      if(boundaryTrackMode==='erase'){d[i]=0;d[i+1]=0;d[i+2]=0;d[i+3]=0}
+      else{d[i]=a[i];d[i+1]=a[i+1];d[i+2]=a[i+2];d[i+3]=a[i+3]}
+    }
+    fillBoundaryCtx.putImageData(bd,x,y);
+  }
+  boundaryBeforeCanvas=null;boundaryTrackMode=null;boundaryBox=null;fillInkBase=null;fillInkBaseW=0;fillInkBaseH=0;
+}
+drawCanvas.addEventListener('pointerup',syncInkBoundaryAfterStroke);
+drawCanvas.addEventListener('pointercancel',syncInkBoundaryAfterStroke);
+
+// Clear must clear the independent ink boundary too.
+const v11Clear=clearBtn.onclick;
+clearBtn.onclick=function(e){fillBoundaryCtx.clearRect(0,0,fillBoundaryCanvas.width,fillBoundaryCanvas.height);fillInkBase=null;fillInkBaseW=0;fillInkBaseH=0;return v11Clear&&v11Clear.call(this,e)};
+`;
+
+    const replacement="const isolationRuntime="+JSON.stringify(isolationRuntime)+";page=page.replace(marker,runtime+'\\n'+isolationRuntime+'\\n'+marker);";
+    src=src.replace(needle,replacement);
+    document.open();document.write(src);document.close();
+  }catch(err){
+    document.body.innerHTML='<div style="font-family:sans-serif;padding:24px"><h2>Could not load Fill test</h2><pre>'+String(err)+'</pre></div>';
+  }
+})();
+</script></body></html>
