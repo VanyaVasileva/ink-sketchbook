@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Storybook Pencil Demo</title>
+<style>
+  :root{--bg:#f4f1eb;--panel:#fffdf8;--ink:#2f2a27;--muted:#8b8178;--line:#d9d1c8}
+  *{box-sizing:border-box}html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:ui-rounded,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;overscroll-behavior:none}
+  .wrap{height:100%;max-width:1180px;margin:0 auto;padding:10px;display:grid;grid-template-rows:auto 1fr;gap:10px}
+  .top{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:10px 12px;box-shadow:0 8px 24px rgba(50,40,30,.06)}
+  h1{font-size:18px;margin:0 0 3px}.sub{font-size:12px;color:var(--muted)}
+  .app{min-height:0;display:grid;grid-template-columns:270px 1fr;gap:10px}
+  .panel,.stage{background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:0 8px 24px rgba(50,40,30,.06)}
+  .panel{padding:13px;overflow:auto;-webkit-overflow-scrolling:touch}.stage{padding:8px;min-height:0;display:flex;flex-direction:column}
+  .group{margin-bottom:13px}.group label{display:flex;justify-content:space-between;gap:10px;font-size:13px;margin-bottom:6px}
+  .val{color:var(--muted);font-variant-numeric:tabular-nums}input[type=range]{width:100%;accent-color:#5d5148}
+  .brushes{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+  button{appearance:none;border:1px solid var(--line);background:#fff;border-radius:11px;padding:9px 10px;font-weight:650;color:var(--ink);cursor:pointer}
+  button.active{background:#332b27;color:white;border-color:#332b27}.actions{display:grid;grid-template-columns:1fr 1fr;gap:7px}.actions button{font-weight:600}
+  canvas{width:100%;height:100%;display:block;background:#fff;border-radius:11px;touch-action:none;cursor:crosshair;box-shadow:inset 0 0 0 1px #eee8e1}
+  .canvasWrap{min-height:0;flex:1}.hint{font-size:11px;color:var(--muted);margin-top:7px;line-height:1.35}
+  .swatches{display:flex;gap:8px;flex-wrap:wrap}.swatch{width:31px;height:31px;border-radius:50%;border:2px solid #fff;outline:1px solid var(--line);padding:0}.swatch.active{outline:2px solid #332b27}
+  @media(max-width:760px){body{overflow:hidden}.wrap{padding:6px;gap:6px}.top{padding:8px 10px;border-radius:12px}.sub{display:none}.app{grid-template-columns:1fr;grid-template-rows:auto 1fr}.panel{order:1;padding:8px;border-radius:12px;display:flex;gap:8px;align-items:center;overflow-x:auto;overflow-y:hidden}.group{margin:0;min-width:120px}.group.range{min-width:150px}.group label{font-size:11px;margin-bottom:3px}.brushes{min-width:190px}.actions{min-width:130px}.stage{order:2;border-radius:12px;padding:5px}.hint{display:none}.swatches{flex-wrap:nowrap;min-width:150px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><h1>Storybook Pencil — first demo</h1><div class="sub">Dry pencil / wax-crayon hybrid. Layer strokes to build the broken grain from your reference.</div></div>
+  <div class="app">
+    <aside class="panel">
+      <div class="group"><label>Brush</label><div class="brushes"><button id="lineBtn" class="active">Line Pencil</button><button id="fillBtn">Fill Pencil</button></div></div>
+      <div class="group range"><label>Size <span id="sizeVal" class="val">11</span></label><input id="size" type="range" min="2" max="52" value="11" /></div>
+      <div class="group range"><label>Density <span id="densityVal" class="val">55%</span></label><input id="density" type="range" min="15" max="100" value="55" /></div>
+      <div class="group range"><label>Grain <span id="grainVal" class="val">68%</span></label><input id="grain" type="range" min="0" max="100" value="68" /></div>
+      <div class="group range"><label>Edge <span id="roughVal" class="val">48%</span></label><input id="rough" type="range" min="0" max="100" value="48" /></div>
+      <div class="group"><label>Colour</label><div class="swatches"><button class="swatch active" data-c="#302925" style="background:#302925" title="Soft black"></button><button class="swatch" data-c="#5b4038" style="background:#5b4038" title="Brown"></button><button class="swatch" data-c="#c66d57" style="background:#c66d57" title="Warm blush"></button><button class="swatch" data-c="#92b8bc" style="background:#92b8bc" title="Dusty blue"></button></div></div>
+      <div class="group actions"><button id="undoBtn">Undo</button><button id="clearBtn">Clear</button></div>
+    </aside>
+    <section class="stage"><div class="canvasWrap"><canvas id="canvas"></canvas></div><div class="hint">Apple Pencil pressure is used when Safari provides it. Try light sketch lines, then Fill Pencil for layered hair/shading.</div></section>
+  </div>
+</div>
+<script>
+(()=>{
+const c=document.getElementById('canvas'),wrap=document.querySelector('.canvasWrap'),ctx=c.getContext('2d',{alpha:false,desynchronized:true});
+const sizeEl=document.getElementById('size'),densityEl=document.getElementById('density'),grainEl=document.getElementById('grain'),roughEl=document.getElementById('rough');
+const lineBtn=document.getElementById('lineBtn'),fillBtn=document.getElementById('fillBtn'),undoBtn=document.getElementById('undoBtn'),clearBtn=document.getElementById('clearBtn');
+let dpr=1,mode='line',size=11,density=.55,grain=.68,rough=.48,color='#302925',drawing=false,last=null,lastT=0,history=[];
+function resize(preserve=true){const r=wrap.getBoundingClientRect();let snap=null;if(preserve&&c.width&&c.height){snap=document.createElement('canvas');snap.width=c.width;snap.height=c.height;snap.getContext('2d').drawImage(c,0,0)}dpr=Math.max(1,Math.min(2.5,window.devicePixelRatio||1));c.width=Math.max(1,Math.floor(r.width*dpr));c.height=Math.max(1,Math.floor(r.height*dpr));c.style.width=r.width+'px';c.style.height=r.height+'px';ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#fff';ctx.fillRect(0,0,r.width,r.height);if(snap){ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.drawImage(snap,0,0,snap.width,snap.height,0,0,c.width,c.height);ctx.restore()}}
+function save(){try{history.push(c.toDataURL('image/png'));if(history.length>18)history.shift()}catch(_){}}
+function restore(data){const img=new Image();img.onload=()=>{const r=wrap.getBoundingClientRect();ctx.save();ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#fff';ctx.fillRect(0,0,r.width,r.height);ctx.drawImage(img,0,0,r.width,r.height);ctx.restore()};img.src=data}
+function setVal(id,v){document.getElementById(id).textContent=v}
+sizeEl.oninput=e=>{size=+e.target.value;setVal('sizeVal',size)};densityEl.oninput=e=>{density=+e.target.value/100;setVal('densityVal',e.target.value+'%')};grainEl.oninput=e=>{grain=+e.target.value/100;setVal('grainVal',e.target.value+'%')};roughEl.oninput=e=>{rough=+e.target.value/100;setVal('roughVal',e.target.value+'%')};
+lineBtn.onclick=()=>{mode='line';lineBtn.classList.add('active');fillBtn.classList.remove('active');if(size>22){sizeEl.value=size=16;setVal('sizeVal',size)}};fillBtn.onclick=()=>{mode='fill';fillBtn.classList.add('active');lineBtn.classList.remove('active');if(size<18){sizeEl.value=size=28;setVal('sizeVal',size)}};
+document.querySelectorAll('.swatch').forEach(b=>b.onclick=()=>{document.querySelectorAll('.swatch').forEach(x=>x.classList.remove('active'));b.classList.add('active');color=b.dataset.c});
+clearBtn.onclick=()=>{save();const r=wrap.getBoundingClientRect();ctx.save();ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#fff';ctx.fillRect(0,0,r.width,r.height);ctx.restore()};undoBtn.onclick=()=>{const prev=history.pop();if(prev)restore(prev)};
+function pos(e){const r=c.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top}}
+function rgba(hex,a){const n=parseInt(hex.slice(1),16);return`rgba(${n>>16},${(n>>8)&255},${n&255},${a})`}
+function pressure(e,speed){if(e.pointerType==='pen'&&e.pressure>0)return Math.max(.06,Math.min(1,e.pressure));return Math.max(.22,Math.min(1,1.08-speed*.55))}
+function stamp(x,y,p,angle){const base=size*(mode==='fill'?1.35:1),rad=base*(.68+.45*p),particles=Math.max(5,Math.floor(rad*(mode==='fill'?1.85:1.05)*(1.05+grain*1.35)));ctx.save();ctx.translate(x,y);ctx.rotate(angle);for(let i=0;i<particles;i++){const side=(Math.random()*2-1)*rad*(.50+.38*rough),along=(Math.random()*2-1)*rad*.55;if(Math.random()<grain*.30)continue;const rr=Math.max(.45,rad*(mode==='fill'?.115:.072)*(.30+Math.random()));const a=density*p*(mode==='fill'?.105:.15)*(.35+Math.random()*.9);ctx.fillStyle=rgba(color,a);ctx.beginPath();ctx.ellipse(along,side,rr*(1.6+rough),rr*(.50+Math.random()*.65),0,0,Math.PI*2);ctx.fill()}if(Math.random()>grain*.48){ctx.strokeStyle=rgba(color,density*p*(mode==='fill'?.14:.24));ctx.lineWidth=Math.max(.7,rad*(mode==='fill'?.22:.13));ctx.lineCap='round';ctx.beginPath();ctx.moveTo(-rad*.35,(Math.random()-.5)*rad*.25);ctx.lineTo(rad*.35,(Math.random()-.5)*rad*.25);ctx.stroke()}ctx.restore()}
+function segment(a,b,e){const dx=b.x-a.x,dy=b.y-a.y,dist=Math.hypot(dx,dy),angle=Math.atan2(dy,dx),now=performance.now(),dt=Math.max(1,now-lastT),speed=dist/dt,p=pressure(e,speed),step=Math.max(1.2,size*.12),n=Math.max(1,Math.ceil(dist/step));for(let i=1;i<=n;i++){const t=i/n;stamp(a.x+dx*t,a.y+dy*t,p,angle)}lastT=now}
+function down(e){if(e.pointerType!=='pen'&&e.button!==undefined&&e.button!==0)return;e.preventDefault();save();drawing=true;last=pos(e);lastT=performance.now();try{c.setPointerCapture(e.pointerId)}catch(_){}stamp(last.x,last.y,pressure(e,0),0)}
+function move(e){if(!drawing)return;e.preventDefault();const p=pos(e);segment(last,p,e);last=p}
+function end(e){drawing=false;last=null;try{c.releasePointerCapture(e.pointerId)}catch(_){}}
+c.addEventListener('pointerdown',down,{passive:false});c.addEventListener('pointermove',move,{passive:false});c.addEventListener('pointerup',end,{passive:false});c.addEventListener('pointercancel',end,{passive:false});c.addEventListener('contextmenu',e=>e.preventDefault());
+let rt;window.addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(()=>resize(true),120)});resize(false);
+})();
+</script>
+</body>
+</html>
