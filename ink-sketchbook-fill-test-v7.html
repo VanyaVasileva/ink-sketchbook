@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>Ink Sketchbook Fill Test v7</title></head>
+<body><p style="font-family:sans-serif;padding:20px">Loading Ink Sketchbook fill test…</p>
+<script>
+(async function(){
+  try{
+    const url='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/feature/new-button/ink-sketchbook-fill-test-v5.html';
+    const r=await fetch(url,{cache:'no-store'});
+    if(!r.ok)throw new Error('Could not load Fill test v5');
+    let page=await r.text();
+
+    const marker="const floatingCanvasWrap=document.querySelector('.canvas-wrap');";
+    if(!page.includes(marker))throw new Error('v5 runtime marker not found');
+
+    const fixRuntime=String.raw`
+// --- Fill edge v7: bridge only from inside toward ink; never grow past ink ---
+bucketFill=function(clientX,clientY){
+  const p=getPos({clientX,clientY});
+  const w=drawCanvas.width,h=drawCanvas.height;
+  const sx=Math.max(0,Math.min(w-1,Math.round(p.x))),sy=Math.max(0,Math.min(h-1,Math.round(p.y)));
+  lastPenPos={x:sx,y:sy};
+
+  let image;
+  try{image=ctx.getImageData(0,0,w,h)}catch(e){hintText.textContent='Fill could not read the canvas.';return}
+  const d=image.data;
+  ensureFillInkBase(w,h,d);
+  const ink=fillInkBase;
+  const si=(sy*w+sx)*4;
+  const target=[d[si],d[si+1],d[si+2],d[si+3]];
+  const rgb=fillColorRgb(currentColor),replacement=[rgb[0],rgb[1],rgb[2],255];
+
+  if(Math.abs(target[0]-replacement[0])<4&&Math.abs(target[1]-replacement[1])<4&&Math.abs(target[2]-replacement[2])<4&&Math.abs(target[3]-255)<4){hintText.textContent='That area already has this color.';return}
+
+  const transparent=target[3]===0;
+  function matches(x,y){
+    const i=(y*w+x)*4;
+    if(transparent)return d[i+3]===0;
+    return Math.abs(d[i]-target[0])<=12&&Math.abs(d[i+1]-target[1])<=12&&Math.abs(d[i+2]-target[2])<=12&&Math.abs(d[i+3]-target[3])<=12;
+  }
+  if(!matches(sx,sy))return;
+
+  // 1) normal region fill
+  const mask=new Uint8Array(w*h),stack=[sx,sy];
+  let painted=0,minX=sx,maxX=sx,minY=sy,maxY=sy;
+  while(stack.length){
+    const y=stack.pop(),seedX=stack.pop();let x=seedX;
+    while(x>=0&&matches(x,y))x--;x++;
+    let up=false,down=false;
+    for(;x<w&&matches(x,y);x++){
+      const pi=y*w+x,i=pi*4;
+      d[i]=replacement[0];d[i+1]=replacement[1];d[i+2]=replacement[2];d[i+3]=255;mask[pi]=1;
+      if(x<minX)minX=x;if(x>maxX)maxX=x;if(y<minY)minY=y;if(y>maxY)maxY=y;painted++;
+      if(y>0){if(matches(x,y-1)){if(!up){stack.push(x,y-1);up=true}}else up=false}
+      if(y<h-1){if(matches(x,y+1)){if(!down){stack.push(x,y+1);down=true}}else down=false}
+    }
+  }
+  if(!painted){hintText.textContent='Nothing to fill here.';return}
+
+  const x0=Math.max(2,minX-4),x1=Math.min(w-3,maxX+4),y0=Math.max(2,minY-4),y1=Math.min(h-3,maxY+4);
+  const neighborMask=(pi)=>mask[pi-1]||mask[pi+1]||mask[pi-w]||mask[pi+w]||mask[pi-w-1]||mask[pi-w+1]||mask[pi+w-1]||mask[pi+w+1];
+  const nearInk=(x,y)=>{
+    for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){
+      if(!dx&&!dy)continue;
+      const ii=((y+dy)*w+(x+dx))*4;
+      if(ink[ii+3]>0)return true;
+    }
+    return false;
+  };
+
+  // 2) bridge ONLY tiny transparent gaps that sit between the filled interior
+  //    and the ink. These pixels cannot cross the line because propagation
+  //    stops as soon as original ink alpha is encountered.
+  for(let pass=0;pass<2;pass++){
+    const add=[];
+    for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
+      const pi=y*w+x,ii=pi*4;
+      if(mask[pi]||ink[ii+3]>0||d[ii+3]>12)continue;
+      if(neighborMask(pi)&&nearInk(x,y))add.push(pi);
+    }
+    if(!add.length)break;
+    for(const pi of add){
+      const i=pi*4;d[i]=replacement[0];d[i+1]=replacement[1];d[i+2]=replacement[2];d[i+3]=255;mask[pi]=1;
+    }
+  }
+
+  // 3) rebuild ONLY the INNER anti-aliased ink edge over the new fill color.
+  //    We never propagate through opaque ink, so the outer edge stays exactly
+  //    as the original transparent black anti-aliasing and no color can appear outside.
+  const processed=new Uint8Array(w*h),frontier=[];
+  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
+    const pi=y*w+x,ii=pi*4;
+    if(mask[pi]||ink[ii+3]===0)continue;
+    if(neighborMask(pi))frontier.push(pi);
+  }
+  let wave=frontier;
+  for(let pass=0;pass<2&&wave.length;pass++){
+    const next=[];
+    for(const pi of wave){
+      if(processed[pi])continue;processed[pi]=1;
+      const i=pi*4,a8=ink[i+3];if(a8===0)continue;
+      const a=a8/255,inv=1-a;
+      d[i]=Math.round(ink[i]*a+replacement[0]*inv);
+      d[i+1]=Math.round(ink[i+1]*a+replacement[1]*inv);
+      d[i+2]=Math.round(ink[i+2]*a+replacement[2]*inv);
+      d[i+3]=255;
+      // Only continue through partially transparent inner-edge ink. Stop at
+      // the opaque core so we can never reach the outside anti-aliased edge.
+      if(a8<210){
+        for(const q of [pi-1,pi+1,pi-w,pi+w]){
+          if(q<0||q>=w*h||processed[q]||mask[q])continue;
+          const qi=q*4;if(ink[qi+3]>0&&ink[qi+3]<230)next.push(q);
+        }
+      }
+    }
+    wave=next;
+  }
+
+  ctx.putImageData(image,0,0);
+  saveHistory();
+  hintText.textContent='Filled to the ink edge. Two-finger tap to undo.';
+};
+`;
+
+    page=page.replace(marker,fixRuntime+'\n'+marker);
+    document.open();document.write(page);document.close();
+  }catch(err){
+    document.body.innerHTML='<div style="font-family:sans-serif;padding:24px"><h2>Could not load Fill test</h2><pre>'+String(err)+'</pre></div>';
+  }
+})();
+</script></body></html>
