@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Opaque Sandy Crayon Brush</title>
+<title>Dry Broken Crayon Brush</title>
 <style>
 :root{--bg:#f3efe8;--panel:#fffdf8;--ink:#2f2a27;--muted:#8d8176;--line:#d9d1c8}
 *{box-sizing:border-box}html,body{height:100%}body{margin:0;background:var(--bg);color:var(--ink);font-family:ui-rounded,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;overflow:hidden}
@@ -14,15 +14,15 @@
 </head>
 <body>
 <div class="wrap">
-  <div class="top"><b>Opaque Sandy Crayon — v4</b><span>100% opaque colour with rough white sandy stains: irregular clusters, isolated grains, uneven gaps and a little dust.</span></div>
+  <div class="top"><b>Dry Broken Crayon — v5</b><span>100% opaque colour. White tooth now comes from rough broken stains made of sand, crumbs and dust — no clean geometric patches.</span></div>
   <div class="app">
     <div class="bar">
       <div class="control"><label>Size <span id="sv">34</span></label><input id="size" type="range" min="4" max="90" value="34"></div>
       <div class="locked">Fill 100% opaque</div>
-      <div class="control"><label>Sand texture <span id="tv">24%</span></label><input id="texture" type="range" min="0" max="70" value="24"></div>
-      <div class="control"><label>Cluster chaos <span id="cv">72%</span></label><input id="cluster" type="range" min="0" max="100" value="72"></div>
-      <div class="control"><label>Dust <span id="dv">18%</span></label><input id="dust" type="range" min="0" max="60" value="18"></div>
-      <div class="control"><label>Edge dust <span id="ev">8%</span></label><input id="edge" type="range" min="0" max="40" value="8"></div>
+      <div class="control"><label>Dry texture <span id="tv">26%</span></label><input id="texture" type="range" min="0" max="70" value="26"></div>
+      <div class="control"><label>Roughness <span id="rv">76%</span></label><input id="rough" type="range" min="0" max="100" value="76"></div>
+      <div class="control"><label>Dust <span id="dv">17%</span></label><input id="dust" type="range" min="0" max="60" value="17"></div>
+      <div class="control"><label>Edge wear <span id="ev">9%</span></label><input id="edge" type="range" min="0" max="40" value="9"></div>
       <div class="swatches">
         <button class="sw active" data-c="#a98b5e" style="background:#a98b5e"></button>
         <button class="sw" data-c="#c38b68" style="background:#c38b68"></button>
@@ -32,7 +32,7 @@
       </div>
       <button id="undo">Undo</button><button id="clear">Clear</button>
     </div>
-    <div class="stage"><div class="canvasWrap"><canvas id="paper"></canvas><canvas id="live"></canvas></div><div class="hint">No transparency. White marks are painted on top: some isolated, some crowded together, with very irregular spacing and a dusty halo.</div></div>
+    <div class="stage"><div class="canvasWrap"><canvas id="paper"></canvas><canvas id="live"></canvas></div><div class="hint">Broad strokes should look solid, with sparse rough dry breaks rather than neat white shapes.</div></div>
   </div>
 </div>
 <script>
@@ -41,105 +41,97 @@ const paper=document.getElementById('paper'),live=document.getElementById('live'
 const pctx=paper.getContext('2d',{alpha:false,desynchronized:true});
 const lctx=live.getContext('2d',{desynchronized:true});
 const mask=document.createElement('canvas'),mctx=mask.getContext('2d');
-const textureLayer=document.createElement('canvas'),tctx=textureLayer.getContext('2d');
-const sizeEl=document.getElementById('size'),textureEl=document.getElementById('texture'),clusterEl=document.getElementById('cluster'),dustEl=document.getElementById('dust'),edgeEl=document.getElementById('edge');
-const sv=document.getElementById('sv'),tv=document.getElementById('tv'),cv=document.getElementById('cv'),dv=document.getElementById('dv'),ev=document.getElementById('ev');
-let size=34,texture=.24,clusterChaos=.72,dust=.18,edge=.08,color='#a98b5e',dpr=1,drawing=false,points=[],history=[],strokeSeed=1;
+const texLayer=document.createElement('canvas'),tctx=texLayer.getContext('2d');
+const sizeEl=document.getElementById('size'),textureEl=document.getElementById('texture'),roughEl=document.getElementById('rough'),dustEl=document.getElementById('dust'),edgeEl=document.getElementById('edge');
+const sv=document.getElementById('sv'),tv=document.getElementById('tv'),rv=document.getElementById('rv'),dv=document.getElementById('dv'),ev=document.getElementById('ev');
+let size=34,texture=.26,rough=.76,dust=.17,edge=.09,color='#a98b5e',dpr=1,drawing=false,points=[],history=[],strokeSeed=1;
 let whitePattern=null;
 function seeded(seed){let s=seed>>>0;return()=>{s=(s*1664525+1013904223)>>>0;return s/4294967296}}
-function roughSpeck(ctx,cx,cy,r,rand,stretch=1){
-  const n=5+Math.floor(rand()*6),pts=[];
+function fleck(ctx,x,y,r,rand,stretch=1){
+  const n=4+Math.floor(rand()*5);ctx.beginPath();
   for(let i=0;i<n;i++){
-    const a=Math.PI*2*i/n+(rand()-.5)*.42;
-    const rr=r*(.48+rand()*.72);
-    pts.push({x:cx+Math.cos(a)*rr*stretch,y:cy+Math.sin(a)*rr});
+    const a=Math.PI*2*i/n+(rand()-.5)*.55,rr=r*(.35+rand()*.95);
+    const px=x+Math.cos(a)*rr*stretch,py=y+Math.sin(a)*rr;
+    if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
   }
-  ctx.beginPath();ctx.moveTo(pts[0].x,pts[0].y);
-  for(let i=1;i<pts.length;i++)ctx.lineTo(pts[i].x,pts[i].y);
   ctx.closePath();ctx.fill();
 }
-function grain(ctx,x,y,r,rand){
-  if(r<.55){
-    ctx.save();ctx.translate(x,y);ctx.rotate(rand()*Math.PI);ctx.beginPath();ctx.ellipse(0,0,r*(.55+rand()*.75),r*(.35+rand()*.7),0,0,Math.PI*2);ctx.fill();ctx.restore();
-  }else{
-    roughSpeck(ctx,x,y,r,rand,.65+rand()*.8);
-  }
+function crumb(ctx,x,y,r,rand){
+  if(r<.38){
+    ctx.save();ctx.translate(x,y);ctx.rotate(rand()*Math.PI);ctx.beginPath();ctx.ellipse(0,0,r*(.45+rand()*.8),r*(.22+rand()*.85),0,0,Math.PI*2);ctx.fill();ctx.restore();
+  }else fleck(ctx,x,y,r,rand,.55+rand()*1.15);
 }
-function sandyCluster(ctx,cx,cy,spread,count,rand,mix){
-  // Some clusters become almost a stain; others stay as separated sand grains.
-  const packed=rand()<(.24+.28*mix);
-  if(packed&&count>3){
-    const base=1.1+rand()*(1.8+mix*2.4);
-    roughSpeck(ctx,cx,cy,base,rand,.7+rand()*.8);
-  }
-  for(let j=0;j<count;j++){
-    const a=rand()*Math.PI*2;
-    const radial=Math.pow(rand(),1.55)*spread;
-    const x=cx+Math.cos(a)*radial;
-    const y=cy+Math.sin(a)*radial;
-    const u=rand();
+function dryStain(ctx,cx,cy,rx,ry,angle,rand,intensity){
+  const cos=Math.cos(angle),sin=Math.sin(angle);
+  const grains=Math.floor(10+intensity*48+rand()*28);
+  for(let i=0;i<grains;i++){
+    const u=Math.pow(rand(),.72),a=rand()*Math.PI*2;
+    const localX=Math.cos(a)*rx*u,localY=Math.sin(a)*ry*u;
+    const x=cx+localX*cos-localY*sin,y=cy+localX*sin+localY*cos;
+    const edgeFactor=1-u;
+    const chance=.36+edgeFactor*.64;
+    if(rand()>chance)continue;
+    const q=rand();
     let r;
-    if(u<.055)r=2.2+rand()*(2.6+mix*2.8);       // rare big chunk
-    else if(u<.28)r=.9+rand()*(1.4+mix*1.5);    // medium grain
-    else r=.18+rand()*(.65+mix*.45);            // sand grain
-    grain(ctx,x,y,r,rand);
-    // Tiny companion grains appear sometimes, at arbitrary distances.
-    if(rand()<.22+mix*.18){
+    if(q<.05)r=1.3+rand()*(1.4+intensity*2.2);
+    else if(q<.28)r=.48+rand()*(.75+intensity*.8);
+    else r=.09+rand()*(.24+intensity*.25);
+    crumb(ctx,x,y,r,rand);
+    if(rand()<.13+intensity*.22){
       const companions=Math.floor(rand()*4);
       for(let k=0;k<companions;k++){
-        const aa=rand()*Math.PI*2,dd=.5+Math.pow(rand(),.75)*(2.5+spread*.28);
-        grain(ctx,x+Math.cos(aa)*dd,y+Math.sin(aa)*dd,.12+rand()*.42,rand);
+        const aa=rand()*Math.PI*2,dd=.3+rand()*(1.1+r*2.6);
+        crumb(ctx,x+Math.cos(aa)*dd,y+Math.sin(aa)*dd,.07+rand()*.24,rand);
       }
     }
+  }
+  const fibres=Math.floor(rand()*(2+intensity*4));
+  for(let i=0;i<fibres;i++){
+    if(rand()<.45)continue;
+    const a=angle+(rand()-.5)*1.1;
+    const len=1.4+rand()*(3.5+intensity*5.5),wid=.12+rand()*.38;
+    const ox=(rand()-.5)*rx*1.35,oy=(rand()-.5)*ry*1.35;
+    const x=cx+ox*cos-oy*sin,y=cy+ox*sin+oy*cos;
+    ctx.save();ctx.translate(x,y);ctx.rotate(a);ctx.beginPath();ctx.ellipse(0,0,len,wid,0,0,Math.PI*2);ctx.fill();ctx.restore();
   }
 }
 function buildWhitePattern(){
-  const W=1080,H=1080,rand=seeded(873421),c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d');
+  const W=1160,H=1160,rand=seeded(873421),c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d');
   x.clearRect(0,0,W,H);x.fillStyle='#fff';x.globalAlpha=1;
-  const amount=texture,mix=clusterChaos;
-
-  // Irregular cluster centres. Their size, population and spacing all vary strongly.
-  const zones=Math.floor(8+amount*24);
-  for(let i=0;i<zones;i++){
+  const amount=texture,intensity=rough;
+  const stains=Math.floor(7+amount*21);
+  for(let i=0;i<stains;i++){
     const cx=rand()*W,cy=rand()*H;
-    const spread=1.8+Math.pow(rand(),.58)*(5+mix*23);
-    const maxMembers=5+Math.floor(mix*17);
-    const count=1+Math.floor(Math.pow(rand(),2.15)*maxMembers);
-    sandyCluster(x,cx,cy,spread,count,rand,mix);
-
-    // Dust halo: some clusters have none, some have a cloud.
-    if(rand()<.30+dust*.65){
-      const halo=Math.floor(Math.pow(rand(),1.45)*(3+dust*28));
-      for(let h=0;h<halo;h++){
-        const a=rand()*Math.PI*2;
-        const dd=spread*(.65+Math.pow(rand(),.7)*2.4);
-        grain(x,cx+Math.cos(a)*dd,cy+Math.sin(a)*dd,.08+rand()*(.22+dust*.42),rand);
-      }
+    const big=rand()<.18+intensity*.13;
+    const rx=big?(4+rand()*(7+intensity*9)):(1.8+rand()*(3.8+intensity*4.4));
+    const ry=big?(2.5+rand()*(5+intensity*7)):(1.2+rand()*(2.8+intensity*3.3));
+    dryStain(x,cx,cy,rx,ry,rand()*Math.PI,rand,intensity);
+    if(rand()<.35+intensity*.25){
+      const a=rand()*Math.PI*2,dist=2+Math.pow(rand(),.65)*(6+intensity*17);
+      dryStain(x,cx+Math.cos(a)*dist,cy+Math.sin(a)*dist,rx*(.28+rand()*.55),ry*(.28+rand()*.6),rand()*Math.PI,rand,intensity*.82);
     }
   }
-
-  // Truly scattered singles between clusters. Most are tiny, but a few are coarse.
-  const singles=Math.floor(14+amount*48);
+  const singles=Math.floor(18+amount*54);
   for(let i=0;i<singles;i++){
-    const u=rand();
-    const r=u<.05?(1.8+rand()*3.0):u<.24?(.7+rand()*1.5):(.12+rand()*.6);
-    grain(x,rand()*W,rand()*H,r,rand);
+    const q=rand(),r=q<.05?(1.0+rand()*1.8):q<.22?(.38+rand()*.75):(.06+rand()*.27);
+    crumb(x,rand()*W,rand()*H,r,rand);
   }
-
-  // Very sparse free dust. Intentionally uneven: random empty regions remain.
-  const freeDust=Math.floor(dust*105);
-  for(let i=0;i<freeDust;i++){
-    if(rand()<.22)continue;
-    grain(x,rand()*W,rand()*H,.06+Math.pow(rand(),2)*.42,rand);
+  const clouds=Math.floor(2+dust*8);
+  for(let cidx=0;cidx<clouds;cidx++){
+    const cx=rand()*W,cy=rand()*H,spread=5+rand()*(9+dust*18),count=Math.floor(5+rand()*(8+dust*38));
+    for(let j=0;j<count;j++){
+      if(rand()<.24)continue;
+      const a=rand()*Math.PI*2,dd=Math.pow(rand(),.65)*spread;
+      crumb(x,cx+Math.cos(a)*dd,cy+Math.sin(a)*dd,.045+rand()*(.10+dust*.15),rand);
+    }
   }
-
   whitePattern=tctx.createPattern(c,'repeat');
 }
 function resize(preserve=true){
   const r=wrap.getBoundingClientRect();let snap=null;
   if(preserve&&paper.width){snap=document.createElement('canvas');snap.width=paper.width;snap.height=paper.height;snap.getContext('2d').drawImage(paper,0,0)}
   dpr=Math.max(1,Math.min(2,window.devicePixelRatio||1));
-  [paper,live,mask,textureLayer].forEach(c=>{c.width=Math.max(1,Math.floor(r.width*dpr));c.height=Math.max(1,Math.floor(r.height*dpr));c.style.width=r.width+'px';c.style.height=r.height+'px'});
+  [paper,live,mask,texLayer].forEach(c=>{c.width=Math.max(1,Math.floor(r.width*dpr));c.height=Math.max(1,Math.floor(r.height*dpr));c.style.width=r.width+'px';c.style.height=r.height+'px'});
   pctx.setTransform(dpr,0,0,dpr,0,0);lctx.setTransform(dpr,0,0,dpr,0,0);mctx.setTransform(dpr,0,0,dpr,0,0);tctx.setTransform(dpr,0,0,dpr,0,0);
   pctx.fillStyle='#fff';pctx.fillRect(0,0,r.width,r.height);
   if(snap){pctx.save();pctx.setTransform(1,0,0,1,0,0);pctx.drawImage(snap,0,0,snap.width,snap.height,0,0,paper.width,paper.height);pctx.restore()}
@@ -149,48 +141,35 @@ function save(){try{history.push(paper.toDataURL('image/png'));if(history.length
 function restore(data){const img=new Image();img.onload=()=>{const r=wrap.getBoundingClientRect();pctx.setTransform(dpr,0,0,dpr,0,0);pctx.fillStyle='#fff';pctx.fillRect(0,0,r.width,r.height);pctx.drawImage(img,0,0,r.width,r.height)};img.src=data}
 function pos(e){const r=live.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top,p:(e.pointerType==='pen'&&e.pressure>0)?Math.max(.18,Math.min(1,e.pressure)):.62}}
 function path(ctx,pts,w){if(pts.length<2)return;ctx.beginPath();ctx.moveTo(pts[0].x,pts[0].y);for(let i=1;i<pts.length-1;i++){const mx=(pts[i].x+pts[i+1].x)/2,my=(pts[i].y+pts[i+1].y)/2;ctx.quadraticCurveTo(pts[i].x,pts[i].y,mx,my)}const n=pts.length-1;ctx.quadraticCurveTo(pts[n-1].x,pts[n-1].y,pts[n].x,pts[n].y);ctx.lineWidth=w;ctx.lineCap='round';ctx.lineJoin='round';ctx.stroke()}
-function edgeSand(ctx,w){
-  if(edge<=0||points.length<5)return;
+function edgeWear(ctx,w){
+  if(edge<=0||points.length<6)return;
   const rand=seeded(strokeSeed);ctx.save();ctx.fillStyle='#fff';ctx.globalAlpha=1;
   let i=2;
   while(i<points.length-2){
-    // Deliberately irregular gaps along the edge — no cadence.
-    i+=2+Math.floor(Math.pow(rand(),.52)*(8+edge*26));
-    if(i>=points.length-2)break;
-    if(rand()>.18+edge*1.15)continue;
+    i+=2+Math.floor(Math.pow(rand(),.5)*(9+edge*25));if(i>=points.length-2)break;
+    if(rand()>.13+edge*1.05)continue;
     const a=points[i-1],b=points[i+1],dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy)||1,nx=-dy/len,ny=dx/len,side=rand()<.5?-1:1;
-    const cx=points[i].x+nx*side*w*(.475+rand()*.035),cy=points[i].y+ny*side*w*(.475+rand()*.035);
-    const count=1+Math.floor(Math.pow(rand(),1.7)*(2+edge*8));
-    sandyCluster(ctx,cx,cy,.8+rand()*(1.5+edge*5),count,rand,.45+clusterChaos*.4);
+    const cx=points[i].x+nx*side*w*(.48+rand()*.025),cy=points[i].y+ny*side*w*(.48+rand()*.025);
+    dryStain(ctx,cx,cy,.8+rand()*(1.4+edge*4),.5+rand()*(1.1+edge*3),rand()*Math.PI,rand,.45+rough*.35);
   }
   ctx.restore();
 }
 function render(){
-  const r=wrap.getBoundingClientRect();
-  lctx.clearRect(0,0,r.width,r.height);mctx.clearRect(0,0,r.width,r.height);tctx.clearRect(0,0,r.width,r.height);
-  if(points.length<2)return;
+  const r=wrap.getBoundingClientRect();lctx.clearRect(0,0,r.width,r.height);mctx.clearRect(0,0,r.width,r.height);tctx.clearRect(0,0,r.width,r.height);if(points.length<2)return;
   let p=0;for(const q of points)p+=q.p;p/=points.length;
-  const w=size*(.985+.03*p);
-
-  // Whole stroke mask. Width changes only a tiny amount with pressure.
+  const w=size*(.985+.025*p);
   mctx.strokeStyle='#000';mctx.globalAlpha=1;path(mctx,points,w);
-
-  // 100% opaque base colour. No alpha modulation, no transparent holes.
   lctx.save();lctx.globalAlpha=1;lctx.fillStyle=color;lctx.fillRect(0,0,r.width,r.height);lctx.globalCompositeOperation='destination-in';lctx.drawImage(mask,0,0,r.width,r.height);lctx.restore();
-
-  // Opaque white sand/crayon texture painted on top of the solid colour.
   tctx.save();tctx.globalAlpha=1;tctx.fillStyle=whitePattern;tctx.fillRect(0,0,r.width,r.height);tctx.globalCompositeOperation='destination-in';tctx.drawImage(mask,0,0,r.width,r.height);tctx.restore();
-  lctx.save();lctx.globalCompositeOperation='source-over';lctx.globalAlpha=1;lctx.drawImage(textureLayer,0,0,r.width,r.height);lctx.restore();
-
-  // Sparse rough white sand at the edge, also painted — never erased.
-  edgeSand(lctx,w);
+  lctx.save();lctx.globalCompositeOperation='source-over';lctx.globalAlpha=1;lctx.drawImage(texLayer,0,0,r.width,r.height);lctx.restore();
+  edgeWear(lctx,w);
 }
 function down(e){if(e.pointerType!=='pen'&&e.button!==undefined&&e.button!==0)return;e.preventDefault();save();drawing=true;points=[pos(e)];strokeSeed=((points[0].x*73856093)^(points[0].y*19349663)^(Date.now()&0xffff))>>>0;try{live.setPointerCapture(e.pointerId)}catch(_){}}
 function move(e){if(!drawing)return;e.preventDefault();const evs=e.getCoalescedEvents?e.getCoalescedEvents():[e];for(const ee of evs){const q=pos(ee),last=points[points.length-1];if(!last||Math.hypot(q.x-last.x,q.y-last.y)>.5)points.push(q)}render()}
 function up(e){if(!drawing)return;e.preventDefault();const q=pos(e),last=points[points.length-1];if(!last||Math.hypot(q.x-last.x,q.y-last.y)>.3)points.push(q);render();const r=wrap.getBoundingClientRect();pctx.drawImage(live,0,0,r.width,r.height);lctx.clearRect(0,0,r.width,r.height);mctx.clearRect(0,0,r.width,r.height);tctx.clearRect(0,0,r.width,r.height);drawing=false;points=[];try{live.releasePointerCapture(e.pointerId)}catch(_){}}
 sizeEl.oninput=e=>{size=+e.target.value;sv.textContent=size};
 textureEl.oninput=e=>{texture=+e.target.value/100;tv.textContent=e.target.value+'%';buildWhitePattern()};
-clusterEl.oninput=e=>{clusterChaos=+e.target.value/100;cv.textContent=e.target.value+'%';buildWhitePattern()};
+roughEl.oninput=e=>{rough=+e.target.value/100;rv.textContent=e.target.value+'%';buildWhitePattern()};
 dustEl.oninput=e=>{dust=+e.target.value/100;dv.textContent=e.target.value+'%';buildWhitePattern()};
 edgeEl.oninput=e=>{edge=+e.target.value/100;ev.textContent=e.target.value+'%'};
 document.querySelectorAll('.sw').forEach(b=>b.onclick=()=>{document.querySelectorAll('.sw').forEach(x=>x.classList.remove('active'));b.classList.add('active');color=b.dataset.c});
