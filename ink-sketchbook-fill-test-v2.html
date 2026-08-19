@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>Ink Sketchbook Fill Test v2</title></head>
+<body><p style="font-family:sans-serif;padding:20px">Loading Ink Sketchbook fill test…</p>
+<script>
+(async function(){
+  try {
+    const sourceUrl='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/feature/new-button/ink-sketchbook-fill-test-v1.html';
+    const r=await fetch(sourceUrl,{cache:'no-store'});
+    if(!r.ok) throw new Error('Could not load Fill test source');
+    let src=await r.text();
+
+    // v1 accidentally included a literal closing-script token inside its own
+    // JavaScript. HTML parsers terminate the outer script at that token before
+    // JavaScript can run. Build both strings in pieces so this v2 file itself
+    // never contains that unsafe token inside the running script.
+    const closeTag='</scr'+'ipt>';
+    const bad="const scriptEnd=html.lastIndexOf('"+closeTag+"');";
+    const good="const scriptEnd=html.lastIndexOf('</scr'+'ipt>');";
+    if(!src.includes(bad)) throw new Error('Fill test patch marker not found');
+    src=src.replace(bad,good);
+
+    document.open();
+    document.write(src);
+    document.close();
+  } catch(err) {
+    document.body.innerHTML='<div style="font-family:sans-serif;padding:24px"><h2>Could not load Fill test</h2><pre>'+String(err)+'</pre></div>';
+  }
+})();
+</script>
+</body></html>
