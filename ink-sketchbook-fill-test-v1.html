@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>Ink Sketchbook Fill Test</title></head><body><p style="font-family:sans-serif;padding:20px">Loading Ink Sketchbook fill test…</p><script>
+(async function(){
+  const baseUrl='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/feature/new-button/ink-sketchbook-with-hand.html';
+  const skeletonUrl='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/feature/new-button/Skeleton-hand.png';
+  const catPawUrl='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/feature/new-button/Fluffy-paw.png';
+  try {
+    const blobToDataUrl=(blob)=>new Promise((resolve,reject)=>{const fr=new FileReader();fr.onload=()=>resolve(fr.result);fr.onerror=reject;fr.readAsDataURL(blob);});
+    const [baseResponse,skeletonResponse,catResponse]=await Promise.all([
+      fetch(baseUrl,{cache:'no-store'}),
+      fetch(skeletonUrl,{cache:'no-store'}),
+      fetch(catPawUrl,{cache:'no-store'}).catch(()=>null)
+    ]);
+    if(!baseResponse.ok) throw new Error('Could not load Ink Sketchbook');
+    if(!skeletonResponse.ok) throw new Error('Could not load Skeleton-hand.png');
+    let html=await baseResponse.text();
+    const skeletonDataUrl=await blobToDataUrl(await skeletonResponse.blob());
+    let catPawDataUrl=null;
+    if(catResponse&&catResponse.ok) catPawDataUrl=await blobToDataUrl(await catResponse.blob());
+
+    const recordMarkup='<button id="recordBtn">⏺ <span data-i18n="recordBtn">Record</span></button>';
+    const selectorMarkup=recordMarkup+'<button id="humanHandBtn" type="button" class="active">Human Hand</button><button id="skeletonHandBtn" type="button">Skeleton Hand</button><button id="catPawBtn" type="button">Cat Paw</button>';
+    if(!html.includes(recordMarkup)) throw new Error('Record button not found');
+    html=html.replace(recordMarkup,selectorMarkup);
+
+    const recordingNote='<div id="recordingInfoNote" style="width:100%;padding:7px 14px;background:#fffaf0;border-bottom:1px solid #e5e1d8;color:#6b6558;font-size:12px;line-height:1.4;text-align:center;">ⓘ Hand/Paw selection is for recording only. Reference images are hidden from recordings — only your drawing process and selected hand/paw are recorded. You can switch anytime while recording.</div>';
+    html=html.replace('</header>','</header>'+recordingNote);
+
+    const marker='let lastPenPos = null;      // {x, y} in drawCanvas pixel space, live';
+    if(!html.includes(marker)) throw new Error('Recording marker not found');
+    const setup=[
+      "const skeletonHandIcon = new Image();",
+      "let skeletonHandReady = false;",
+      "skeletonHandIcon.onload = () => { skeletonHandReady = true; };",
+      "skeletonHandIcon.src = " + JSON.stringify(skeletonDataUrl) + ";",
+      "const catPawIcon = new Image();",
+      "let catPawReady = false;",
+      "catPawIcon.onload = () => { catPawReady = true; };",
+      "if (" + JSON.stringify(catPawDataUrl) + ") catPawIcon.src = " + JSON.stringify(catPawDataUrl) + ";",
+      "let selectedRecordingHand = 'human';",
+      "function setRecordingHand(handMode) {",
+      "  if (handMode === 'cat' && !catPawReady) return;",
+      "  selectedRecordingHand = (handMode === 'skeleton' || handMode === 'cat') ? handMode : 'human';",
+      "  const humanBtn = document.getElementById('humanHandBtn');",
+      "  const skeletonBtn = document.getElementById('skeletonHandBtn');",
+      "  const catBtn = document.getElementById('catPawBtn');",
+      "  if (humanBtn) humanBtn.classList.toggle('active', selectedRecordingHand === 'human');",
+      "  if (skeletonBtn) skeletonBtn.classList.toggle('active', selectedRecordingHand === 'skeleton');",
+      "  if (catBtn) catBtn.classList.toggle('active', selectedRecordingHand === 'cat');",
+      "}",
+      "document.getElementById('humanHandBtn').onclick = () => setRecordingHand('human');",
+      "document.getElementById('skeletonHandBtn').onclick = () => setRecordingHand('skeleton');",
+      "document.getElementById('catPawBtn').onclick = () => setRecordingHand('cat');",
+      "if (!" + JSON.stringify(Boolean(catPawDataUrl)) + ") { const b=document.getElementById('catPawBtn'); if(b){ b.disabled=true; b.title='Cat Paw image unavailable'; } }",
+      marker
+    ].join('\n');
+    html=html.replace(marker,setup);
+
+    const frameRegex=/function compositeRecordFrame\(\) \{[\s\S]*?recordRAF = requestAnimationFrame\(compositeRecordFrame\);\n\}/;
+    if(!frameRegex.test(html)) throw new Error('Recording frame function not found');
+    const frameReplacement=[
+      "function compositeRecordFrame() {",
+      "  recordCtx.fillStyle = paperColorPicker.value || '#ffffff';",
+      "  recordCtx.fillRect(0, 0, recordCanvas.width, recordCanvas.height);",
+      "  recordCtx.drawImage(drawCanvas, 0, 0);",
+      "  if (lastPenPos) {",
+      "    if (selectedRecordingHand === 'cat' && catPawReady) {",
+      "      const srcW=1024,srcH=1024,tipX=179,tipY=459,displayW=1024,scale=displayW/srcW;",
+      "      recordCtx.drawImage(catPawIcon,lastPenPos.x-tipX*scale,lastPenPos.y-tipY*scale,srcW*scale,srcH*scale);",
+      "    } else if (selectedRecordingHand === 'skeleton' && skeletonHandReady) {",
+      "      const srcW=1254,srcH=1254,tipX=198,tipY=552,displayW=950,scale=displayW/srcW;",
+      "      recordCtx.drawImage(skeletonHandIcon,lastPenPos.x-tipX*scale,lastPenPos.y-tipY*scale,srcW*scale,srcH*scale);",
+      "    } else if (selectedRecordingHand === 'human' && handIconReady) {",
+      "      const scale=HAND_DISPLAY_WIDTH/HAND_SRC_SIZE;",
+      "      recordCtx.drawImage(handIcon,lastPenPos.x-HAND_TIP_X*scale,lastPenPos.y-HAND_TIP_Y*scale,HAND_SRC_SIZE*scale,HAND_SRC_SIZE*scale);",
+      "    }",
+      "  }",
+      "  recordRAF = requestAnimationFrame(compositeRecordFrame);",
+      "}"
+    ].join('\n');
+    html=html.replace(frameRegex,frameReplacement);
+
+    // Fill mode must not start the normal ink stroke on the first pointer.
+    const startNeedle='function startStroke(e) {\n  drawing = true;';
+    if(!html.includes(startNeedle)) throw new Error('Drawing start marker not found');
+    html=html.replace(startNeedle,"function startStroke(e) {\n  if (mode === 'fill') return;\n  drawing = true;");
+
+    const fillRuntime=String.raw`
+// --- Paint bucket / Fill ------------------------------------------------------
+const fillModeBtn=document.createElement('button');
+fillModeBtn.id='fillModeBtn';
+fillModeBtn.innerHTML='🪣 <span>Fill</span>';
+fillModeBtn.title='Choose a color and tap inside a closed area';
+eraseModeBtn.after(fillModeBtn);
+function activateFillMode(){
+  mode='fill';
+  fillModeBtn.classList.add('active');
+  drawModeBtn.classList.remove('active');
+  eraseModeBtn.classList.remove('active');
+  hintText.textContent='Fill: choose a color, then tap inside a closed area.';
+}
+fillModeBtn.onclick=activateFillMode;
+drawModeBtn.addEventListener('click',()=>fillModeBtn.classList.remove('active'));
+eraseModeBtn.addEventListener('click',()=>fillModeBtn.classList.remove('active'));
+
+function fillColorRgb(hex){const h=(hex||'#000000').replace('#','');return[parseInt(h.slice(0,2),16)||0,parseInt(h.slice(2,4),16)||0,parseInt(h.slice(4,6),16)||0]}
+function bucketFill(clientX,clientY){
+  const p=getPos({clientX,clientY});
+  const w=drawCanvas.width,h=drawCanvas.height,sx=Math.max(0,Math.min(w-1,Math.round(p.x))),sy=Math.max(0,Math.min(h-1,Math.round(p.y)));
+  lastPenPos={x:sx,y:sy};
+  let image;try{image=ctx.getImageData(0,0,w,h)}catch(e){hintText.textContent='Fill could not read the canvas.';return}
+  const d=image.data,si=(sy*w+sx)*4,target=[d[si],d[si+1],d[si+2],d[si+3]],rgb=fillColorRgb(currentColor),replacement=[rgb[0],rgb[1],rgb[2],255];
+  if(Math.abs(target[0]-replacement[0])<4&&Math.abs(target[1]-replacement[1])<4&&Math.abs(target[2]-replacement[2])<4&&Math.abs(target[3]-255)<4){hintText.textContent='That area already has this color.';return}
+  const transparent=target[3]===0;
+  function matches(x,y){const i=(y*w+x)*4;if(transparent)return d[i+3]===0;return Math.abs(d[i]-target[0])<=10&&Math.abs(d[i+1]-target[1])<=10&&Math.abs(d[i+2]-target[2])<=10&&Math.abs(d[i+3]-target[3])<=10}
+  if(!matches(sx,sy))return;
+  const stack=[sx,sy];let painted=0;
+  while(stack.length){
+    const y=stack.pop(),seedX=stack.pop();let x=seedX;
+    while(x>=0&&matches(x,y))x--;x++;
+    let up=false,down=false;
+    for(;x<w&&matches(x,y);x++){
+      const i=(y*w+x)*4;d[i]=replacement[0];d[i+1]=replacement[1];d[i+2]=replacement[2];d[i+3]=255;painted++;
+      if(y>0){if(matches(x,y-1)){if(!up){stack.push(x,y-1);up=true}}else up=false}
+      if(y<h-1){if(matches(x,y+1)){if(!down){stack.push(x,y+1);down=true}}else down=false}
+    }
+  }
+  if(!painted){hintText.textContent='Nothing to fill here.';return}
+  ctx.putImageData(image,0,0);saveHistory();hintText.textContent='Filled. Two-finger tap to undo.';
+}
+
+// Track a simple tap for Fill, while leaving the sketchbook's existing
+// multi-finger zoom / undo / redo listeners untouched.
+const fillPointers=new Map();let fillMulti=false;
+function fillPointerDown(e){if(mode!=='fill')return;fillPointers.set(e.pointerId,{sx:e.clientX,sy:e.clientY,x:e.clientX,y:e.clientY,t:performance.now(),moved:false});if(fillPointers.size>1)fillMulti=true}
+function fillPointerMove(e){if(mode!=='fill'||!fillPointers.has(e.pointerId))return;const q=fillPointers.get(e.pointerId);q.x=e.clientX;q.y=e.clientY;if(Math.hypot(q.x-q.sx,q.y-q.sy)>8)q.moved=true}
+function fillPointerEnd(e){if(mode!=='fill'||!fillPointers.has(e.pointerId))return;const q=fillPointers.get(e.pointerId);fillPointers.delete(e.pointerId);if(fillPointers.size===0){if(!fillMulti&&!q.moved&&performance.now()-q.t<450)bucketFill(q.x,q.y);fillMulti=false}}
+drawCanvas.addEventListener('pointerdown',fillPointerDown);
+drawCanvas.addEventListener('pointermove',fillPointerMove);
+drawCanvas.addEventListener('pointerup',fillPointerEnd);
+drawCanvas.addEventListener('pointercancel',fillPointerEnd);
+`;
+    const scriptEnd=html.lastIndexOf('</script>');
+    if(scriptEnd<0) throw new Error('Script end not found');
+    html=html.slice(0,scriptEnd)+fillRuntime+html.slice(scriptEnd);
+
+    document.open();document.write(html);document.close();
+  } catch(err) {
+    document.body.innerHTML='<div style="font-family:sans-serif;padding:24px"><h2>Could not load Fill test</h2><pre>'+String(err)+'</pre></div>';
+  }
+})();
+</script></body></html>
