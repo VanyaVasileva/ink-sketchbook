@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>Ink Sketchbook Fill Test v5</title></head>
+<body><p style="font-family:sans-serif;padding:20px">Loading Ink Sketchbook fill test…</p>
+<script>
+(async function(){
+  try {
+    const url='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/feature/new-button/ink-sketchbook-fill-test-v4.html';
+    const r=await fetch(url,{cache:'no-store'});
+    if(!r.ok) throw new Error('Could not load Fill test v4');
+    let page=await r.text();
+
+    const writeMarker='document.open();document.write(src);document.close();';
+    if(!page.includes(writeMarker)) throw new Error('Fill v4 startup marker not found');
+
+    const overlayRuntime=String.raw`
+// --- Floating More settings -------------------------------------------------
+const floatingSettingsStyle=document.createElement('style');
+floatingSettingsStyle.textContent=
+  '.main-row{position:relative;overflow:hidden;}'+
+  '#sidePanel{position:absolute!important;right:0!important;top:0!important;bottom:0!important;z-index:20!important;width:min(300px,88vw)!important;flex:none!important;background:#fff!important;border-left:1px solid #e5e1d8!important;box-shadow:-10px 0 24px rgba(42,38,32,.16)!important;}'+
+  '#sidePanel.collapsed{display:none!important;}';
+document.head.appendChild(floatingSettingsStyle);
+
+function setFloatingSettings(open){
+  panelOpen=!!open;
+  sidePanel.classList.toggle('collapsed',!panelOpen);
+  updatePanelToggleLabel();
+  if(panelOpen) sidePanel.scrollTop=0;
+}
+
+panelToggleBtn.onclick=(e)=>{
+  e.preventDefault();
+  e.stopPropagation();
+  setFloatingSettings(!panelOpen);
+};
+
+const floatingCanvasWrap=document.querySelector('.canvas-wrap');
+floatingCanvasWrap.addEventListener('pointerdown',(e)=>{
+  if(!panelOpen) return;
+  setFloatingSettings(false);
+  e.preventDefault();
+  e.stopImmediatePropagation();
+},{capture:true});
+`;
+
+    const innerWrite='document.open();document.write(html);document.close();';
+    const patch="const floatingRuntime="+JSON.stringify(overlayRuntime)+";const closeTag='</scr'+'ipt>';html=html.replace(closeTag,floatingRuntime+closeTag);";
+    page=page.replace(writeMarker,"const inner='"+innerWrite+"';if(src.includes(inner))src=src.replace(inner,"+JSON.stringify(patch)+"+inner);"+writeMarker);
+
+    document.open();document.write(page);document.close();
+  }catch(err){
+    document.body.innerHTML='<div style="font-family:sans-serif;padding:24px"><h2>Could not load Fill test</h2><pre>'+String(err)+'</pre></div>';
+  }
+})();
+</script></body></html>
