@@ -75,31 +75,35 @@
       "function compositeRecordFrame() {",
       "  recordCtx.fillStyle = paperColorPicker.value || '#ffffff';",
       "  recordCtx.fillRect(0, 0, recordCanvas.width, recordCanvas.height);",
-      "  recordCtx.drawImage(drawCanvas, 0, 0);",
+      "  recordCtx.drawImage(drawCanvas, 0, 0, recordCanvas.width, recordCanvas.height);",
+      "  const recordScaleX = recordCanvas.width / drawCanvas.width;",
+      "  const recordScaleY = recordCanvas.height / drawCanvas.height;",
+      "  const recordPenX = lastPenPos ? lastPenPos.x * recordScaleX : 0;",
+      "  const recordPenY = lastPenPos ? lastPenPos.y * recordScaleY : 0;",
       "  if (lastPenPos) {",
       "    if (selectedRecordingHand === 'cat' && catPawReady) {",
       "      const srcW = 1024, srcH = 1024;",
       "      const tipX = 179, tipY = 459;",
       "      const displayW = 1024;",
       "      const scale = displayW / srcW;",
-      "      const drawX = lastPenPos.x - tipX * scale;",
-      "      const drawY = lastPenPos.y - tipY * scale;",
+      "      const drawX = recordPenX - tipX * scale;",
+      "      const drawY = recordPenY - tipY * scale;",
       "      recordCtx.drawImage(catPawIcon, drawX, drawY, srcW * scale, srcH * scale);",
       "    } else if (selectedRecordingHand === 'skeleton' && skeletonHandReady) {",
       "      const srcW = 1254, srcH = 1254;",
       "      const tipX = 198, tipY = 552;",
       "      const displayW = 950;",
       "      const scale = displayW / srcW;",
-      "      const drawX = lastPenPos.x - tipX * scale;",
-      "      const drawY = lastPenPos.y - tipY * scale;",
+      "      const drawX = recordPenX - tipX * scale;",
+      "      const drawY = recordPenY - tipY * scale;",
       "      recordCtx.drawImage(skeletonHandIcon, drawX, drawY, srcW * scale, srcH * scale);",
       "    } else if (selectedRecordingHand === 'human' && studioHumanHandReady) {",
       "      const srcW = 1254, srcH = 1254;",
       "      const tipX = 214, tipY = 555;",
       "      const displayW = Math.min(recordCanvas.width * 0.66, recordCanvas.height * 1.10);",
       "      const scale = displayW / srcW;",
-      "      const drawX = lastPenPos.x - tipX * scale;",
-      "      const drawY = lastPenPos.y - tipY * scale;",
+      "      const drawX = recordPenX - tipX * scale;",
+      "      const drawY = recordPenY - tipY * scale;",
       "      recordCtx.save();",
       "      recordCtx.globalAlpha = 1;",
       "      recordCtx.shadowColor = 'rgba(62,43,32,.26)';",
@@ -127,6 +131,21 @@
       "  recordCanvas.style.cssText = 'position:fixed;right:0;bottom:0;width:2px;height:2px;opacity:.001;pointer-events:none;z-index:-1;';",
       "  document.body.appendChild(recordCanvas);"
     ].join('\n'));
+
+    // Record at a device-safe video resolution. The artwork itself and exports
+    // remain at full print resolution; only the temporary video canvas is scaled.
+    const recordSizeNeedle = [
+      "  recordCanvas.width = drawCanvas.width;",
+      "  recordCanvas.height = drawCanvas.height;"
+    ].join('\n');
+    if(!html.includes(recordSizeNeedle)) throw new Error('Recording canvas size setup not found');
+    html=html.replace(recordSizeNeedle, [
+      "  const recordMaxLongSide = 1920;",
+      "  const recordVideoScale = Math.min(1, recordMaxLongSide / Math.max(drawCanvas.width, drawCanvas.height));",
+      "  recordCanvas.width = Math.max(2, Math.round(drawCanvas.width * recordVideoScale));",
+      "  recordCanvas.height = Math.max(2, Math.round(drawCanvas.height * recordVideoScale));"
+    ].join('\n'));
+    html=html.replace('recordCanvas.captureStream(30)', 'recordCanvas.captureStream(24)');
 
     const stopRegex=/mediaRecorder\.onstop = \(\) => \{[\s\S]*?hintText\.textContent = t\('recordingSavedMsg'\);\n  \};/;
     if(!stopRegex.test(html)) throw new Error('Recording finish function not found');
