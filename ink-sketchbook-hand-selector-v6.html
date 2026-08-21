@@ -177,12 +177,12 @@
       "    width: visibleWidth * drawCanvas.width / canvasRectForRecording.width,",
       "    height: visibleHeight * drawCanvas.height / canvasRectForRecording.height",
       "  };",
-      "  const recordMaxLongSide = 1920;",
+      "  const recordMaxLongSide = 1280;",
       "  const recordVideoScale = Math.min(1, recordMaxLongSide / Math.max(recordSourceRect.width, recordSourceRect.height));",
       "  recordCanvas.width = Math.max(2, Math.round(recordSourceRect.width * recordVideoScale));",
       "  recordCanvas.height = Math.max(2, Math.round(recordSourceRect.height * recordVideoScale));"
     ].join('\n'));
-    html=html.replace('recordCanvas.captureStream(30)', 'recordCanvas.captureStream(24)');
+    html=html.replace('recordCanvas.captureStream(30)', 'recordCanvas.captureStream(18)');
 
     // iPhone Safari changes viewport height when its browser bars move.
     // Do not resize the artwork canvas mid-recording, or coordinates jump.
@@ -202,10 +202,10 @@
     const recordClickNeedle = "recordBtn.onclick = () => {";
     if(!html.includes(recordClickNeedle)) throw new Error('Record click handler not found');
     html=html.replace(recordClickNeedle, "recordBtn.onclick = async () => {");
-    const recordingStreamNeedle = "  const stream = recordCanvas.captureStream(24);";
+    const recordingStreamNeedle = "  const stream = recordCanvas.captureStream(18);";
     if(!html.includes(recordingStreamNeedle)) throw new Error('Recording stream setup not found');
     html=html.replace(recordingStreamNeedle, [
-      "  const stream = recordCanvas.captureStream(24);",
+      "  const stream = recordCanvas.captureStream(18);",
       "  let recordingHasAudio = false;",
       "  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {",
       "    try {",
@@ -217,6 +217,8 @@
       "    }",
       "  }"
     ].join('\n'));
+
+    html=html.replace('  mediaRecorder.start();', '  mediaRecorder.start(1000);');
 
     const stopRegex=/mediaRecorder\.onstop = \(\) => \{[\s\S]*?hintText\.textContent = t\('recordingSavedMsg'\);\n  \};/;
     if(!stopRegex.test(html)) throw new Error('Recording finish function not found');
