@@ -2,14 +2,14 @@
 <html><head><meta charset="UTF-8"><title>Ink Sketchbook Hand Selector v6</title></head><body><p style="font-family:sans-serif;padding:20px">Loading hand selector test…</p><script>
 (async function(){
   const baseUrl='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/feature/new-button/ink-sketchbook-with-hand.html';
-  const humanHandUrl='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/feature/new-button/flat-vector-pencil-hand-opaque.png';
+  const humanHandUrl='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/feature/new-button/flat-vector-pencil-hand-opaque.webp.b64';
   const skeletonUrl='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/feature/new-button/Skeleton-hand.png';
   const catPawUrl='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/feature/new-button/Fluffy-paw.png';
   try {
     const blobToDataUrl=(blob)=>new Promise((resolve,reject)=>{const fr=new FileReader();fr.onload=()=>resolve(fr.result);fr.onerror=reject;fr.readAsDataURL(blob);});
 
-    const humanHandBlob=await fetch(humanHandUrl,{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('Could not load the illustrated human hand');return r.blob();});
-    const humanHandDataUrl=await blobToDataUrl(humanHandBlob);
+    const humanHandBase64=await fetch(humanHandUrl,{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('Could not load the illustrated human hand');return r.text();});
+    const humanHandDataUrl='data:image/webp;base64,'+humanHandBase64.trim();
 
     const skeletonBlob=await fetch(skeletonUrl,{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('Could not load Skeleton-hand.png');return r.blob();});
     const skeletonDataUrl=await blobToDataUrl(skeletonBlob);
