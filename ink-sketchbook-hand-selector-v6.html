@@ -177,7 +177,8 @@
       "    width: visibleWidth * drawCanvas.width / canvasRectForRecording.width,",
       "    height: visibleHeight * drawCanvas.height / canvasRectForRecording.height",
       "  };",
-      "  const isPhoneRecording = /iPhone|iPod/i.test(navigator.userAgent) || Math.min(screen.width, screen.height) < 600;\",\n      \"  const recordMaxLongSide = isPhoneRecording ? 1280 : 2160;",
+      "  const isPhoneRecording = /iPhone|iPod/i.test(navigator.userAgent) || Math.min(screen.width, screen.height) < 600;",
+      "  const recordMaxLongSide = isPhoneRecording ? 1280 : 2160;",
       "  const recordVideoScale = Math.min(1, recordMaxLongSide / Math.max(recordSourceRect.width, recordSourceRect.height));",
       "  recordCanvas.width = Math.max(2, Math.round(recordSourceRect.width * recordVideoScale));",
       "  recordCanvas.height = Math.max(2, Math.round(recordSourceRect.height * recordVideoScale));"
