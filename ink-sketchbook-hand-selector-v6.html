@@ -2,7 +2,7 @@
 <html><head><meta charset="UTF-8"><title>Ink Sketchbook Hand Selector v6</title></head><body><p style="font-family:sans-serif;padding:20px">Loading hand selector test…</p><script>
 (async function(){
   const baseUrl='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/feature/new-button/ink-sketchbook-with-hand.html';
-  const humanHandUrl='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/feature/new-button/flat-vector-pencil-hand-opaque.webp.b64';
+  const humanHandUrl='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/feature/new-button/clean-flat-vector-pencil-hand.webp.b64';
   const skeletonUrl='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/feature/new-button/Skeleton-hand.png';
   const catPawUrl='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/feature/new-button/Fluffy-paw.png';
   try {
@@ -62,22 +62,8 @@
     const setup=[
       "const studioHumanHandIcon = new Image();",
       "let studioHumanHandReady = false;",
-      "const studioHumanHandSource = new Image();",
-      "studioHumanHandSource.onload = () => {",
-      "  const clean = document.createElement('canvas');",
-      "  clean.width = studioHumanHandSource.naturalWidth; clean.height = studioHumanHandSource.naturalHeight;",
-      "  const cleanCtx = clean.getContext('2d', { willReadFrequently: true });",
-      "  cleanCtx.drawImage(studioHumanHandSource, 0, 0);",
-      "  const pixels = cleanCtx.getImageData(0, 0, clean.width, clean.height);",
-      "  for (let i = 3; i < pixels.data.length; i += 4) {",
-      "    const a = pixels.data[i];",
-      "    pixels.data[i] = a <= 28 ? 0 : (a >= 238 ? 255 : Math.round((a - 28) * 255 / 210));",
-      "  }",
-      "  cleanCtx.putImageData(pixels, 0, 0);",
-      "  studioHumanHandIcon.onload = () => { studioHumanHandReady = true; };",
-      "  studioHumanHandIcon.src = clean.toDataURL('image/png');",
-      "};",
-      "studioHumanHandSource.src = " + JSON.stringify(humanHandDataUrl) + ";",
+      "studioHumanHandIcon.onload = () => { studioHumanHandReady = true; };",
+      "studioHumanHandIcon.src = " + JSON.stringify(humanHandDataUrl) + ";",
       "const skeletonHandIcon = new Image();",
       "let skeletonHandReady = false;",
       "skeletonHandIcon.onload = () => { skeletonHandReady = true; };",
@@ -137,8 +123,8 @@
       "      const drawY = recordPenY - tipY * scale;",
       "      recordCtx.drawImage(skeletonHandIcon, drawX, drawY, srcW * scale, srcH * scale);",
       "    } else if (selectedRecordingHand === 'human' && studioHumanHandReady) {",
-      "      const srcW = 1254, srcH = 1254;",
-      "      const tipX = 214, tipY = 555;",
+      "      const srcW = 1536, srcH = 1024;",
+      "      const tipX = 224, tipY = 352;",
       "      const displayW = Math.min(recordCanvas.width * 0.66, recordCanvas.height * 1.10);",
       "      const scale = displayW / srcW;",
       "      const drawX = recordPenX - tipX * scale;",
