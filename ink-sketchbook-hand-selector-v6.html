@@ -216,7 +216,7 @@
       "        if (recordingAudioContext.state === 'suspended') await recordingAudioContext.resume();",
       "        const realMicrophoneSource = recordingAudioContext.createMediaStreamSource(recordingMicrophoneStream);",
       "        const realMicrophoneGain = recordingAudioContext.createGain();",
-      "        realMicrophoneGain.gain.value = 16.0;",
+      "        realMicrophoneGain.gain.value = 32.0;",
       "        const realMicrophoneOutput = recordingAudioContext.createMediaStreamDestination();",
       "        realMicrophoneSource.connect(realMicrophoneGain);",
       "        realMicrophoneGain.connect(realMicrophoneOutput);",
