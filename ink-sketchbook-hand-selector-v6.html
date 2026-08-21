@@ -25,12 +25,36 @@
     let html=await fetch(baseUrl,{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('Could not load Ink Sketchbook');return r.text();});
 
     const recordMarkup='<button id="recordBtn">⏺ <span data-i18n="recordBtn">Record</span></button>';
-    const selectorMarkup=recordMarkup+'<button id="humanHandBtn" type="button" class="active">Human Hand</button><button id="skeletonHandBtn" type="button">Skeleton Hand</button><button id="catPawBtn" type="button">Cat Paw</button>';
+    const selectorMarkup=recordMarkup+'<button id="humanHandBtn" type="button" class="active" style="display:none">Human Hand</button><button id="skeletonHandBtn" type="button" style="display:none">Skeleton Hand</button><button id="catPawBtn" type="button" style="display:none">Cat Paw</button>';
     if(!html.includes(recordMarkup)) throw new Error('Record button not found');
     html=html.replace(recordMarkup,selectorMarkup);
 
-    const recordingNote='<div id="recordingInfoNote" style="width:100%;padding:7px 14px;background:#fffaf0;border-bottom:1px solid #e5e1d8;color:#6b6558;font-size:12px;line-height:1.4;text-align:center;">ⓘ Hand/Paw selection is for recording only. Reference images are hidden from recordings — only your drawing process and selected hand/paw are recorded. You can switch anytime while recording.</div>';
+    const recordingNote='<div id="recordingInfoNote" style="width:100%;padding:7px 14px;background:#fffaf0;border-bottom:1px solid #e5e1d8;color:#6b6558;font-size:12px;line-height:1.4;text-align:center;">ⓘ The illustrated hand appears in recordings only. Reference images stay hidden from the recording.</div>';
     html=html.replace('</header>','</header>'+recordingNote);
+
+    const wobbleControl='<div class="slider-group"><span data-i18n="wobbleLabel">Wobble</span> <input type="range" id="wobbleSlider" min="0" max="3" value="1" step="0.5"></div>';
+    const streamlineControl=wobbleControl+'<div class="slider-group"><span>Streamline</span> <input type="range" id="streamlineSlider" min="0" max="100" value="35" step="5"></div>';
+    if(!html.includes(wobbleControl)) throw new Error('Wobble control not found');
+    html=html.replace(wobbleControl,streamlineControl);
+    html=html.replace("const wobbleSlider = document.getElementById('wobbleSlider');", "const wobbleSlider = document.getElementById('wobbleSlider');\nconst streamlineSlider = document.getElementById('streamlineSlider');");
+    html=html.replace("let smoothedWobbleX = 0, smoothedWobbleY = 0;", "let smoothedWobbleX = 0, smoothedWobbleY = 0;\nlet streamlinedPoint = null;\nlet lastRenderedPoint = null;");
+    html=html.replace("  smoothedWobbleY = 0;\n  moved = false;", "  smoothedWobbleY = 0;\n  streamlinedPoint = { x: points[0].x, y: points[0].y };\n  lastRenderedPoint = { x: points[0].x, y: points[0].y };\n  moved = false;");
+    const streamlineNeedle="  let x = p.x, y = p.y;\n\n  if (mode === 'draw') {";
+    if(!html.includes(streamlineNeedle)) throw new Error('Stroke position block not found');
+    html=html.replace(streamlineNeedle, [
+      "  let x = p.x, y = p.y;",
+      "  const streamlineStrength = Math.max(0, Math.min(1, parseFloat(streamlineSlider.value) / 100));",
+      "  if (streamlineStrength > 0) {",
+      "    const follow = 1 - streamlineStrength * 0.82;",
+      "    streamlinedPoint.x += (x - streamlinedPoint.x) * follow;",
+      "    streamlinedPoint.y += (y - streamlinedPoint.y) * follow;",
+      "    x = streamlinedPoint.x; y = streamlinedPoint.y;",
+      "  }",
+      "",
+      "  if (mode === 'draw') {"
+    ].join('\n'));
+    html=html.replace("  ctx.moveTo(prev.x, prev.y);\n  ctx.lineTo(x, y);", "  const renderPrev = streamlineStrength > 0 ? (lastRenderedPoint || prev) : prev;\n  ctx.moveTo(renderPrev.x, renderPrev.y);\n  ctx.lineTo(x, y);");
+    html=html.replace("  lastPenPos = { x, y };\n}", "  lastRenderedPoint = { x, y };\n  lastPenPos = { x, y };\n}");
 
     const marker='let lastPenPos = null;      // {x, y} in drawCanvas pixel space, live';
     if(!html.includes(marker)) throw new Error('Recording marker not found');
