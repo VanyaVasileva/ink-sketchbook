@@ -53,31 +53,6 @@
       "",
       "  if (mode === 'draw') {"
     ].join('\n'));
-    const scratchSpeedNeedle = "  const speed = dist / dt;";
-    if(!html.includes(scratchSpeedNeedle)) throw new Error('Stroke speed calculation not found');
-    html=html.replace(scratchSpeedNeedle, [
-      "  const speed = dist / dt;",
-      "  if (recordingScratchGain && recordingAudioContext) {",
-      "    const now = recordingAudioContext.currentTime;",
-      "    const scratchLevel = Math.min(0.46, 0.18 + speed * 0.075);",
-      "    recordingScratchGain.gain.cancelScheduledValues(now);",
-      "    recordingScratchGain.gain.setTargetAtTime(scratchLevel, now, 0.006);",
-      "    if (recordingScratchStopTimer) clearTimeout(recordingScratchStopTimer);",
-      "    recordingScratchStopTimer = setTimeout(() => {",
-      "      if (recordingScratchGain && recordingAudioContext) recordingScratchGain.gain.setTargetAtTime(0, recordingAudioContext.currentTime, 0.018);",
-      "    }, 55);",
-      "  }"
-    ].join('\n'));
-
-    const endStrokeNeedle = "function endStroke() {\n  if (!drawing) return;";
-    if(!html.includes(endStrokeNeedle)) throw new Error('Stroke end handler not found');
-    html=html.replace(endStrokeNeedle, [
-      "function endStroke() {",
-      "  if (recordingScratchStopTimer) { clearTimeout(recordingScratchStopTimer); recordingScratchStopTimer = null; }",
-      "  if (recordingScratchGain && recordingAudioContext) recordingScratchGain.gain.setTargetAtTime(0, recordingAudioContext.currentTime, 0.012);",
-      "  if (!drawing) return;"
-    ].join('\n'));
-
     html=html.replace("  ctx.moveTo(prev.x, prev.y);\n  ctx.lineTo(x, y);", "  const renderPrev = streamlineStrength > 0 ? (lastRenderedPoint || prev) : prev;\n  ctx.moveTo(renderPrev.x, renderPrev.y);\n  ctx.lineTo(x, y);");
     html=html.replace("  lastPenPos = { x, y };\n}", "  lastRenderedPoint = { x, y };\n  lastPenPos = { x, y };\n}");
 
@@ -178,7 +153,7 @@
       "  document.body.appendChild(recordCanvas);"
     ].join('\n'));
 
-    html=html.replace("let recordCanvas = null;", "let recordCanvas = null;\nlet recordSourceRect = null;\nlet recordingMicrophoneStream = null;\nlet recordingAudioContext = null;\nlet recordingAudioDestination = null;\nlet recordingScratchSource = null;\nlet recordingScratchGain = null;\nlet recordingScratchStopTimer = null;");
+    html=html.replace("let recordCanvas = null;", "let recordCanvas = null;\nlet recordSourceRect = null;\nlet recordingMicrophoneStream = null;");
 
     // Record at a device-safe video resolution. The artwork itself and exports
     // remain at full print resolution; only the temporary video canvas is scaled.
@@ -232,40 +207,13 @@
     html=html.replace(recordingStreamNeedle, [
       "  const stream = recordCanvas.captureStream(18);",
       "  let recordingHasAudio = false;",
-      "  const RecordingAudioContext = window.AudioContext || window.webkitAudioContext;",
-      "  if (RecordingAudioContext) {",
-      "    recordingAudioContext = new RecordingAudioContext();",
-      "    if (recordingAudioContext.state === 'suspended') await recordingAudioContext.resume();",
-      "    recordingAudioDestination = recordingAudioContext.createMediaStreamDestination();",
-      "    const scratchBuffer = recordingAudioContext.createBuffer(1, recordingAudioContext.sampleRate * 2, recordingAudioContext.sampleRate);",
-      "    const scratchData = scratchBuffer.getChannelData(0);",
-      "    for (let i = 0; i < scratchData.length; i++) scratchData[i] = (Math.random() * 2 - 1) * (0.72 + Math.random() * 0.28);",
-      "    recordingScratchSource = recordingAudioContext.createBufferSource();",
-      "    recordingScratchSource.buffer = scratchBuffer; recordingScratchSource.loop = true;",
-      "    const scratchHighpass = recordingAudioContext.createBiquadFilter();",
-      "    scratchHighpass.type = 'highpass'; scratchHighpass.frequency.value = 650;",
-      "    const scratchBand = recordingAudioContext.createBiquadFilter();",
-      "    scratchBand.type = 'bandpass'; scratchBand.frequency.value = 1900; scratchBand.Q.value = 0.7;",
-      "    recordingScratchGain = recordingAudioContext.createGain(); recordingScratchGain.gain.value = 0;",
-      "    recordingScratchSource.connect(scratchHighpass); scratchHighpass.connect(scratchBand);",
-      "    scratchBand.connect(recordingScratchGain); recordingScratchGain.connect(recordingAudioDestination);",
-      "    recordingScratchSource.start();",
-      "    recordingAudioDestination.stream.getAudioTracks().forEach(track => stream.addTrack(track));",
-      "    recordingHasAudio = true;",
-      "  }",
       "  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {",
       "    try {",
       "      recordingMicrophoneStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });",
-      "      if (recordingAudioContext && recordingAudioDestination) {",
-      "        const microphoneSource = recordingAudioContext.createMediaStreamSource(recordingMicrophoneStream);",
-      "        const microphoneGain = recordingAudioContext.createGain(); microphoneGain.gain.value = 1.6;",
-      "        microphoneSource.connect(microphoneGain); microphoneGain.connect(recordingAudioDestination);",
-      "      } else {",
-      "        recordingMicrophoneStream.getAudioTracks().forEach(track => stream.addTrack(track));",
-      "      }",
-      "      recordingHasAudio = stream.getAudioTracks().length > 0;",
+      "      recordingMicrophoneStream.getAudioTracks().forEach(track => stream.addTrack(track));",
+      "      recordingHasAudio = recordingMicrophoneStream.getAudioTracks().length > 0;",
       "    } catch (error) {",
-      "      console.warn('Microphone unavailable; using generated paper scratch sound only.', error);",
+      "      console.warn('Microphone unavailable; recording video without sound.', error);",
       "    }",
       "  }"    ].join('\n'));
 
@@ -278,10 +226,6 @@
       "  cancelAnimationFrame(recordRAF);",
       "  stream.getTracks().forEach(track => track.stop());",
       "  if (recordingMicrophoneStream) { recordingMicrophoneStream.getTracks().forEach(track => track.stop()); recordingMicrophoneStream = null; }",
-      "  if (recordingScratchStopTimer) { clearTimeout(recordingScratchStopTimer); recordingScratchStopTimer = null; }",
-      "  if (recordingScratchSource) { try { recordingScratchSource.stop(); } catch (e) {} recordingScratchSource = null; }",
-      "  recordingScratchGain = null; recordingAudioDestination = null;",
-      "  if (recordingAudioContext) { recordingAudioContext.close().catch(() => {}); recordingAudioContext = null; }",
       "  if (recordCanvas && recordCanvas.parentNode) recordCanvas.parentNode.removeChild(recordCanvas);",
       "  const outputMime = (mediaRecorder.mimeType || recordingSupport || '').split(';')[0] || 'video/mp4';",
       "  const blob = new Blob(recordedChunks, { type: outputMime });",
