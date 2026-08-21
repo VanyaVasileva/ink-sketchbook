@@ -147,6 +147,21 @@
     ].join('\n'));
     html=html.replace('recordCanvas.captureStream(30)', 'recordCanvas.captureStream(24)');
 
+    // iPhone Safari changes viewport height when its browser bars move.
+    // Do not resize the artwork canvas mid-recording, or coordinates jump.
+    const resizeListenerNeedle = [
+      "window.addEventListener('resize', () => {",
+      "  if (!printingInProgress) resize();",
+      "});"
+    ].join('\n');
+    if(!html.includes(resizeListenerNeedle)) throw new Error('Resize listener not found');
+    html=html.replace(resizeListenerNeedle, [
+      "window.addEventListener('resize', () => {",
+      "  const recordingNow = mediaRecorder && mediaRecorder.state !== 'inactive';",
+      "  if (!printingInProgress && !recordingNow) resize();",
+      "});"
+    ].join('\n'));
+
     const stopRegex=/mediaRecorder\.onstop = \(\) => \{[\s\S]*?hintText\.textContent = t\('recordingSavedMsg'\);\n  \};/;
     if(!stopRegex.test(html)) throw new Error('Recording finish function not found');
     const stopReplacement=[
