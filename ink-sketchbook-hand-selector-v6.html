@@ -115,12 +115,26 @@
     ].join('\n');
     html=html.replace(frameRegex,frameReplacement);
 
+    // iPad Safari recording compatibility: prefer the generic MP4 MIME type and
+    // keep the capture canvas attached (but visually hidden) while recording.
+    html=html.replace("    'video/mp4;codecs=h264',\n", '');
+    const recordCanvasNeedle = "  recordCanvas = document.createElement('canvas');";
+    if(!html.includes(recordCanvasNeedle)) throw new Error('Recording canvas creation not found');
+    html=html.replace(recordCanvasNeedle, [
+      "  if (recordCanvas && recordCanvas.parentNode) recordCanvas.parentNode.removeChild(recordCanvas);",
+      "  recordCanvas = document.createElement('canvas');",
+      "  recordCanvas.setAttribute('aria-hidden', 'true');",
+      "  recordCanvas.style.cssText = 'position:fixed;right:0;bottom:0;width:2px;height:2px;opacity:.001;pointer-events:none;z-index:-1;';",
+      "  document.body.appendChild(recordCanvas);"
+    ].join('\n'));
+
     const stopRegex=/mediaRecorder\.onstop = \(\) => \{[\s\S]*?hintText\.textContent = t\('recordingSavedMsg'\);\n  \};/;
     if(!stopRegex.test(html)) throw new Error('Recording finish function not found');
     const stopReplacement=[
       "mediaRecorder.onstop = () => {",
       "  cancelAnimationFrame(recordRAF);",
       "  stream.getTracks().forEach(track => track.stop());",
+      "  if (recordCanvas && recordCanvas.parentNode) recordCanvas.parentNode.removeChild(recordCanvas);",
       "  const outputMime = (mediaRecorder.mimeType || recordingSupport || '').split(';')[0] || 'video/mp4';",
       "  const blob = new Blob(recordedChunks, { type: outputMime });",
       "  const fileName = `ink-sketchbook-recording.${fileExt}`;",
