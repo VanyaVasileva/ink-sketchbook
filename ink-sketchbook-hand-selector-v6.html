@@ -210,7 +210,7 @@
       "  let recordingHasAudio = false;",
       "  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {",
       "    try {",
-      "      recordingMicrophoneStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });",
+      "      recordingMicrophoneStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: true, autoGainControl: false } });",
       "      const RecordingAudioContext = window.AudioContext || window.webkitAudioContext;",
       "      if (RecordingAudioContext) {",
       "        recordingAudioContext = new RecordingAudioContext();",
