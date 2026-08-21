@@ -2,10 +2,14 @@
 <html><head><meta charset="UTF-8"><title>Ink Sketchbook Hand Selector v6</title></head><body><p style="font-family:sans-serif;padding:20px">Loading hand selector test…</p><script>
 (async function(){
   const baseUrl='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/feature/new-button/ink-sketchbook-with-hand.html';
+  const humanHandUrl='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/feature/new-button/flat-vector-pencil-hand-opaque.png';
   const skeletonUrl='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/feature/new-button/Skeleton-hand.png';
   const catPawUrl='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/feature/new-button/Fluffy-paw.png';
   try {
     const blobToDataUrl=(blob)=>new Promise((resolve,reject)=>{const fr=new FileReader();fr.onload=()=>resolve(fr.result);fr.onerror=reject;fr.readAsDataURL(blob);});
+
+    const humanHandBlob=await fetch(humanHandUrl,{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('Could not load the illustrated human hand');return r.blob();});
+    const humanHandDataUrl=await blobToDataUrl(humanHandBlob);
 
     const skeletonBlob=await fetch(skeletonUrl,{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('Could not load Skeleton-hand.png');return r.blob();});
     const skeletonDataUrl=await blobToDataUrl(skeletonBlob);
@@ -32,6 +36,10 @@
     if(!html.includes(marker)) throw new Error('Recording marker not found');
 
     const setup=[
+      "const studioHumanHandIcon = new Image();",
+      "let studioHumanHandReady = false;",
+      "studioHumanHandIcon.onload = () => { studioHumanHandReady = true; };",
+      "studioHumanHandIcon.src = " + JSON.stringify(humanHandDataUrl) + ";",
       "const skeletonHandIcon = new Image();",
       "let skeletonHandReady = false;",
       "skeletonHandIcon.onload = () => { skeletonHandReady = true; };",
@@ -84,13 +92,21 @@
       "      const drawX = lastPenPos.x - tipX * scale;",
       "      const drawY = lastPenPos.y - tipY * scale;",
       "      recordCtx.drawImage(skeletonHandIcon, drawX, drawY, srcW * scale, srcH * scale);",
-      "    } else if (selectedRecordingHand === 'human' && handIconReady) {",
-      "      const scale = HAND_DISPLAY_WIDTH / HAND_SRC_SIZE;",
-      "      const drawW = HAND_SRC_SIZE * scale;",
-      "      const drawH = HAND_SRC_SIZE * scale;",
-      "      const drawX = lastPenPos.x - HAND_TIP_X * scale;",
-      "      const drawY = lastPenPos.y - HAND_TIP_Y * scale;",
-      "      recordCtx.drawImage(handIcon, drawX, drawY, drawW, drawH);",
+      "    } else if (selectedRecordingHand === 'human' && studioHumanHandReady) {",
+      "      const srcW = 1254, srcH = 1254;",
+      "      const tipX = 214, tipY = 555;",
+      "      const displayW = Math.min(recordCanvas.width * 0.66, recordCanvas.height * 1.10);",
+      "      const scale = displayW / srcW;",
+      "      const drawX = lastPenPos.x - tipX * scale;",
+      "      const drawY = lastPenPos.y - tipY * scale;",
+      "      recordCtx.save();",
+      "      recordCtx.globalAlpha = 1;",
+      "      recordCtx.shadowColor = 'rgba(62,43,32,.26)';",
+      "      recordCtx.shadowBlur = Math.max(8, displayW * 0.035);",
+      "      recordCtx.shadowOffsetX = Math.max(4, displayW * 0.012);",
+      "      recordCtx.shadowOffsetY = Math.max(7, displayW * 0.02);",
+      "      recordCtx.drawImage(studioHumanHandIcon, drawX, drawY, srcW * scale, srcH * scale);",
+      "      recordCtx.restore();",
       "    }",
       "  }",
       "  recordRAF = requestAnimationFrame(compositeRecordFrame);",
