@@ -121,7 +121,10 @@
       "mediaRecorder.onstop = () => {",
       "  cancelAnimationFrame(recordRAF);",
       "  stream.getTracks().forEach(track => track.stop());",
-      "  const blob = new Blob(recordedChunks, { type: recordingSupport });",
+      "  const outputMime = (mediaRecorder.mimeType || recordingSupport || '').split(';')[0] || 'video/mp4';",
+      "  const blob = new Blob(recordedChunks, { type: outputMime });",
+      "  const fileName = `ink-sketchbook-recording.${fileExt}`;",
+      "  const recordingFile = new File([blob], fileName, { type: outputMime });",
       "  const url = URL.createObjectURL(blob);",
       "  if (lastRecordingUrl) URL.revokeObjectURL(lastRecordingUrl);",
       "  lastRecordingUrl = url;",
@@ -140,20 +143,23 @@
       "  preview.style.cssText = 'display:block;width:100%;max-height:58vh;background:#24211e;border-radius:12px;';",
       "  const actions = document.createElement('div');",
       "  actions.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;';",
+      "  const saveShare = document.createElement('button');",
+      "  saveShare.type = 'button'; saveShare.textContent = 'Save / Share recording';",
+      "  saveShare.style.cssText = 'display:flex;align-items:center;justify-content:center;padding:13px 15px;border:0;border-radius:11px;background:#9f5f47;color:white;font-weight:750;text-align:center;';",
+      "  const canShareFile = !!(navigator.share && navigator.canShare && navigator.canShare({ files: [recordingFile] }));",
+      "  if (!canShareFile) saveShare.style.display = 'none';",
+      "  saveShare.onclick = async () => { try { await navigator.share({ files: [recordingFile], title: 'Ink Sketchbook recording' }); } catch (error) { if (error && error.name !== 'AbortError') hintText.textContent = 'Please use Download recording instead.'; } };",
       "  const download = document.createElement('a');",
-      "  download.href = url; download.download = `ink-sketchbook-recording.${fileExt}`; download.textContent = 'Download recording';",
-      "  download.style.cssText = 'display:flex;align-items:center;justify-content:center;padding:13px 15px;border-radius:11px;background:#9f5f47;color:white;text-decoration:none;font-weight:750;text-align:center;';",
-      "  const openVideo = document.createElement('a');",
-      "  openVideo.href = url; openVideo.target = '_blank'; openVideo.rel = 'noopener'; openVideo.textContent = 'Open video';",
-      "  openVideo.style.cssText = 'display:flex;align-items:center;justify-content:center;padding:13px 15px;border-radius:11px;background:#292620;color:white;text-decoration:none;font-weight:750;text-align:center;';",
+      "  download.href = url; download.download = fileName; download.textContent = 'Download recording';",
+      "  download.style.cssText = 'display:flex;align-items:center;justify-content:center;padding:13px 15px;border-radius:11px;background:#292620;color:white;text-decoration:none;font-weight:750;text-align:center;';",
       "  const note = document.createElement('p');",
-      "  note.textContent = 'On iPad, if Download opens the video, use Share → Save Video or Save to Files.';",
+      "  note.textContent = 'On iPad, tap Save / Share recording, then choose Save Video or Save to Files.';",
       "  note.style.cssText = 'margin:12px 0 0;color:#746d64;font-size:12px;line-height:1.45;text-align:center;';",
       "  const close = document.createElement('button');",
       "  close.type = 'button'; close.textContent = 'Close';",
       "  close.style.cssText = 'display:block;width:100%;margin-top:10px;padding:11px;border:1px solid #ded7ca;border-radius:11px;background:#f3eee7;color:#292620;font-weight:700;';",
       "  close.onclick = () => overlay.remove();",
-      "  actions.append(download, openVideo);",
+      "  actions.append(saveShare, download);",
       "  card.append(title, preview, actions, note, close);",
       "  overlay.appendChild(card);",
       "  document.body.appendChild(overlay);",
@@ -163,7 +169,6 @@
       "};"
     ].join('\n');
     html=html.replace(stopRegex,stopReplacement);
-    html=html.replace('  mediaRecorder.start();','  mediaRecorder.start(500);');
 
     document.open();document.write(html);document.close();
   } catch(err) {
