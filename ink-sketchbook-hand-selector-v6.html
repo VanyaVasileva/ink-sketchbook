@@ -49,6 +49,7 @@
       "catPawIcon.onload = () => { catPawReady = true; };",
       "if (" + JSON.stringify(catPawDataUrl) + ") catPawIcon.src = " + JSON.stringify(catPawDataUrl) + ";",
       "let selectedRecordingHand = 'human';",
+      "let lastRecordingUrl = null;",
       "function setRecordingHand(mode) {",
       "  if (mode === 'cat' && !catPawReady) return;",
       "  selectedRecordingHand = (mode === 'skeleton' || mode === 'cat') ? mode : 'human';",
@@ -113,6 +114,56 @@
       "}"
     ].join('\n');
     html=html.replace(frameRegex,frameReplacement);
+
+    const stopRegex=/mediaRecorder\.onstop = \(\) => \{[\s\S]*?hintText\.textContent = t\('recordingSavedMsg'\);\n  \};/;
+    if(!stopRegex.test(html)) throw new Error('Recording finish function not found');
+    const stopReplacement=[
+      "mediaRecorder.onstop = () => {",
+      "  cancelAnimationFrame(recordRAF);",
+      "  stream.getTracks().forEach(track => track.stop());",
+      "  const blob = new Blob(recordedChunks, { type: recordingSupport });",
+      "  const url = URL.createObjectURL(blob);",
+      "  if (lastRecordingUrl) URL.revokeObjectURL(lastRecordingUrl);",
+      "  lastRecordingUrl = url;",
+      "  const oldPanel = document.getElementById('recordingResultPanel');",
+      "  if (oldPanel) oldPanel.remove();",
+      "  const overlay = document.createElement('div');",
+      "  overlay.id = 'recordingResultPanel';",
+      "  overlay.style.cssText = 'position:fixed;inset:0;z-index:999999;background:rgba(28,25,22,.72);display:flex;align-items:center;justify-content:center;padding:18px;';",
+      "  const card = document.createElement('div');",
+      "  card.style.cssText = 'width:min(720px,94vw);max-height:92vh;overflow:auto;background:#fffdf8;border-radius:18px;padding:18px;box-shadow:0 24px 70px rgba(0,0,0,.35);font-family:system-ui,sans-serif;color:#292620;';",
+      "  const title = document.createElement('h2');",
+      "  title.textContent = 'Your recording is ready';",
+      "  title.style.cssText = 'margin:0 0 12px;font-size:22px;';",
+      "  const preview = document.createElement('video');",
+      "  preview.src = url; preview.controls = true; preview.playsInline = true; preview.preload = 'metadata';",
+      "  preview.style.cssText = 'display:block;width:100%;max-height:58vh;background:#24211e;border-radius:12px;';",
+      "  const actions = document.createElement('div');",
+      "  actions.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;';",
+      "  const download = document.createElement('a');",
+      "  download.href = url; download.download = `ink-sketchbook-recording.${fileExt}`; download.textContent = 'Download recording';",
+      "  download.style.cssText = 'display:flex;align-items:center;justify-content:center;padding:13px 15px;border-radius:11px;background:#9f5f47;color:white;text-decoration:none;font-weight:750;text-align:center;';",
+      "  const openVideo = document.createElement('a');",
+      "  openVideo.href = url; openVideo.target = '_blank'; openVideo.rel = 'noopener'; openVideo.textContent = 'Open video';",
+      "  openVideo.style.cssText = 'display:flex;align-items:center;justify-content:center;padding:13px 15px;border-radius:11px;background:#292620;color:white;text-decoration:none;font-weight:750;text-align:center;';",
+      "  const note = document.createElement('p');",
+      "  note.textContent = 'On iPad, if Download opens the video, use Share → Save Video or Save to Files.';",
+      "  note.style.cssText = 'margin:12px 0 0;color:#746d64;font-size:12px;line-height:1.45;text-align:center;';",
+      "  const close = document.createElement('button');",
+      "  close.type = 'button'; close.textContent = 'Close';",
+      "  close.style.cssText = 'display:block;width:100%;margin-top:10px;padding:11px;border:1px solid #ded7ca;border-radius:11px;background:#f3eee7;color:#292620;font-weight:700;';",
+      "  close.onclick = () => overlay.remove();",
+      "  actions.append(download, openVideo);",
+      "  card.append(title, preview, actions, note, close);",
+      "  overlay.appendChild(card);",
+      "  document.body.appendChild(overlay);",
+      "  recordBtn.classList.remove('recording');",
+      "  recordBtn.querySelector('span').textContent = t('recordBtn');",
+      "  hintText.textContent = 'Recording ready — play it or download it now.';",
+      "};"
+    ].join('\n');
+    html=html.replace(stopRegex,stopReplacement);
+    html=html.replace('  mediaRecorder.start();','  mediaRecorder.start(500);');
 
     document.open();document.write(html);document.close();
   } catch(err) {
