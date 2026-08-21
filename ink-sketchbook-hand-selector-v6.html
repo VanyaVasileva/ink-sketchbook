@@ -89,11 +89,12 @@
       "function compositeRecordFrame() {",
       "  recordCtx.fillStyle = paperColorPicker.value || '#ffffff';",
       "  recordCtx.fillRect(0, 0, recordCanvas.width, recordCanvas.height);",
-      "  recordCtx.drawImage(drawCanvas, 0, 0, recordCanvas.width, recordCanvas.height);",
-      "  const recordScaleX = recordCanvas.width / drawCanvas.width;",
-      "  const recordScaleY = recordCanvas.height / drawCanvas.height;",
-      "  const recordPenX = lastPenPos ? lastPenPos.x * recordScaleX : 0;",
-      "  const recordPenY = lastPenPos ? lastPenPos.y * recordScaleY : 0;",
+      "  const source = recordSourceRect || { x: 0, y: 0, width: drawCanvas.width, height: drawCanvas.height };",
+      "  recordCtx.drawImage(drawCanvas, source.x, source.y, source.width, source.height, 0, 0, recordCanvas.width, recordCanvas.height);",
+      "  const recordScaleX = recordCanvas.width / source.width;",
+      "  const recordScaleY = recordCanvas.height / source.height;",
+      "  const recordPenX = lastPenPos ? (lastPenPos.x - source.x) * recordScaleX : 0;",
+      "  const recordPenY = lastPenPos ? (lastPenPos.y - source.y) * recordScaleY : 0;",
       "  if (lastPenPos) {",
       "    if (selectedRecordingHand === 'cat' && catPawReady) {",
       "      const srcW = 1024, srcH = 1024;",
@@ -142,6 +143,8 @@
       "  document.body.appendChild(recordCanvas);"
     ].join('\n'));
 
+    html=html.replace("let recordCanvas = null;", "let recordCanvas = null;\nlet recordSourceRect = null;");
+
     // Record at a device-safe video resolution. The artwork itself and exports
     // remain at full print resolution; only the temporary video canvas is scaled.
     const recordSizeNeedle = [
@@ -150,10 +153,24 @@
     ].join('\n');
     if(!html.includes(recordSizeNeedle)) throw new Error('Recording canvas size setup not found');
     html=html.replace(recordSizeNeedle, [
+      "  const canvasRectForRecording = drawCanvas.getBoundingClientRect();",
+      "  const wrapRectForRecording = wrap.getBoundingClientRect();",
+      "  const visibleLeft = Math.max(canvasRectForRecording.left, wrapRectForRecording.left);",
+      "  const visibleTop = Math.max(canvasRectForRecording.top, wrapRectForRecording.top);",
+      "  const visibleRight = Math.min(canvasRectForRecording.right, wrapRectForRecording.right);",
+      "  const visibleBottom = Math.min(canvasRectForRecording.bottom, wrapRectForRecording.bottom);",
+      "  const visibleWidth = Math.max(1, visibleRight - visibleLeft);",
+      "  const visibleHeight = Math.max(1, visibleBottom - visibleTop);",
+      "  recordSourceRect = {",
+      "    x: (visibleLeft - canvasRectForRecording.left) * drawCanvas.width / canvasRectForRecording.width,",
+      "    y: (visibleTop - canvasRectForRecording.top) * drawCanvas.height / canvasRectForRecording.height,",
+      "    width: visibleWidth * drawCanvas.width / canvasRectForRecording.width,",
+      "    height: visibleHeight * drawCanvas.height / canvasRectForRecording.height",
+      "  };",
       "  const recordMaxLongSide = 1920;",
-      "  const recordVideoScale = Math.min(1, recordMaxLongSide / Math.max(drawCanvas.width, drawCanvas.height));",
-      "  recordCanvas.width = Math.max(2, Math.round(drawCanvas.width * recordVideoScale));",
-      "  recordCanvas.height = Math.max(2, Math.round(drawCanvas.height * recordVideoScale));"
+      "  const recordVideoScale = Math.min(1, recordMaxLongSide / Math.max(recordSourceRect.width, recordSourceRect.height));",
+      "  recordCanvas.width = Math.max(2, Math.round(recordSourceRect.width * recordVideoScale));",
+      "  recordCanvas.height = Math.max(2, Math.round(recordSourceRect.height * recordVideoScale));"
     ].join('\n'));
     html=html.replace('recordCanvas.captureStream(30)', 'recordCanvas.captureStream(24)');
 
