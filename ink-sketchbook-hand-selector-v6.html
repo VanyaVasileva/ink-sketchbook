@@ -38,8 +38,22 @@
     const setup=[
       "const studioHumanHandIcon = new Image();",
       "let studioHumanHandReady = false;",
-      "studioHumanHandIcon.onload = () => { studioHumanHandReady = true; };",
-      "studioHumanHandIcon.src = " + JSON.stringify(humanHandDataUrl) + ";",
+      "const studioHumanHandSource = new Image();",
+      "studioHumanHandSource.onload = () => {",
+      "  const clean = document.createElement('canvas');",
+      "  clean.width = studioHumanHandSource.naturalWidth; clean.height = studioHumanHandSource.naturalHeight;",
+      "  const cleanCtx = clean.getContext('2d', { willReadFrequently: true });",
+      "  cleanCtx.drawImage(studioHumanHandSource, 0, 0);",
+      "  const pixels = cleanCtx.getImageData(0, 0, clean.width, clean.height);",
+      "  for (let i = 3; i < pixels.data.length; i += 4) {",
+      "    const a = pixels.data[i];",
+      "    pixels.data[i] = a <= 28 ? 0 : (a >= 238 ? 255 : Math.round((a - 28) * 255 / 210));",
+      "  }",
+      "  cleanCtx.putImageData(pixels, 0, 0);",
+      "  studioHumanHandIcon.onload = () => { studioHumanHandReady = true; };",
+      "  studioHumanHandIcon.src = clean.toDataURL('image/png');",
+      "};",
+      "studioHumanHandSource.src = " + JSON.stringify(humanHandDataUrl) + ";",
       "const skeletonHandIcon = new Image();",
       "let skeletonHandReady = false;",
       "skeletonHandIcon.onload = () => { skeletonHandReady = true; };",
@@ -106,10 +120,6 @@
       "      const drawY = recordPenY - tipY * scale;",
       "      recordCtx.save();",
       "      recordCtx.globalAlpha = 1;",
-      "      recordCtx.shadowColor = 'rgba(62,43,32,.26)';",
-      "      recordCtx.shadowBlur = Math.max(8, displayW * 0.035);",
-      "      recordCtx.shadowOffsetX = Math.max(4, displayW * 0.012);",
-      "      recordCtx.shadowOffsetY = Math.max(7, displayW * 0.02);",
       "      recordCtx.drawImage(studioHumanHandIcon, drawX, drawY, srcW * scale, srcH * scale);",
       "      recordCtx.restore();",
       "    }",
@@ -160,6 +170,25 @@
       "  const recordingNow = mediaRecorder && mediaRecorder.state !== 'inactive';",
       "  if (!printingInProgress && !recordingNow) resize();",
       "});"
+    ].join('\n'));
+
+    const recordClickNeedle = "recordBtn.onclick = () => {";
+    if(!html.includes(recordClickNeedle)) throw new Error('Record click handler not found');
+    html=html.replace(recordClickNeedle, "recordBtn.onclick = async () => {");
+    const recordingStreamNeedle = "  const stream = recordCanvas.captureStream(24);";
+    if(!html.includes(recordingStreamNeedle)) throw new Error('Recording stream setup not found');
+    html=html.replace(recordingStreamNeedle, [
+      "  const stream = recordCanvas.captureStream(24);",
+      "  let recordingHasAudio = false;",
+      "  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {",
+      "    try {",
+      "      const microphoneStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });",
+      "      microphoneStream.getAudioTracks().forEach(track => stream.addTrack(track));",
+      "      recordingHasAudio = microphoneStream.getAudioTracks().length > 0;",
+      "    } catch (error) {",
+      "      console.warn('Microphone unavailable; recording video without sound.', error);",
+      "    }",
+      "  }"
     ].join('\n'));
 
     const stopRegex=/mediaRecorder\.onstop = \(\) => \{[\s\S]*?hintText\.textContent = t\('recordingSavedMsg'\);\n  \};/;
