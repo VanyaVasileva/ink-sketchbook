@@ -153,7 +153,7 @@
       "  document.body.appendChild(recordCanvas);"
     ].join('\n'));
 
-    html=html.replace("let recordCanvas = null;", "let recordCanvas = null;\nlet recordSourceRect = null;\nlet recordingMicrophoneStream = null;\nlet recordingAudioContext = null;\nlet recordingRealMicrophoneGain = null;\nlet recordingMicGateTimer = null;");
+    html=html.replace("let recordCanvas = null;", "let recordCanvas = null;\nlet recordSourceRect = null;\nlet recordingMicrophoneStream = null;\nlet recordingAudioContext = null;\nlet recordingRealMicrophoneGain = null;");
 
     // Record at a device-safe video resolution. The artwork itself and exports
     // remain at full print resolution; only the temporary video canvas is scaled.
@@ -210,14 +210,14 @@
       "  let recordingHasAudio = false;",
       "  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {",
       "    try {",
-      "      recordingMicrophoneStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: true, autoGainControl: false } });",
+      "      recordingMicrophoneStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });",
       "      const RecordingAudioContext = window.AudioContext || window.webkitAudioContext;",
       "      if (RecordingAudioContext) {",
       "        recordingAudioContext = new RecordingAudioContext();",
       "        if (recordingAudioContext.state === 'suspended') await recordingAudioContext.resume();",
       "        const realMicrophoneSource = recordingAudioContext.createMediaStreamSource(recordingMicrophoneStream);",
       "        recordingRealMicrophoneGain = recordingAudioContext.createGain();",
-      "        recordingRealMicrophoneGain.gain.value = 0;",
+      "        recordingRealMicrophoneGain.gain.value = 96;",
       "        const realMicrophoneOutput = recordingAudioContext.createMediaStreamDestination();",
       "        realMicrophoneSource.connect(recordingRealMicrophoneGain);",
       "        recordingRealMicrophoneGain.connect(realMicrophoneOutput);",
@@ -235,33 +235,6 @@
       "  mediaRecorder = new MediaRecorder(stream, { mimeType: recordingSupport });",
       "  mediaRecorder = new MediaRecorder(stream, { mimeType: recordingSupport, videoBitsPerSecond: isPhoneRecording ? 6000000 : 14000000, audioBitsPerSecond: 256000 });"
     );
-    const gateStartNeedle = "function startStroke(e) {\n  drawing = true;";
-    if(!html.includes(gateStartNeedle)) throw new Error('Stroke start handler not found for microphone gate');
-    html=html.replace(gateStartNeedle, [
-      "function startStroke(e) {",
-      "  drawing = true;",
-      "  if (recordingMicGateTimer) { clearTimeout(recordingMicGateTimer); recordingMicGateTimer = null; }",
-      "  if (recordingRealMicrophoneGain && recordingAudioContext) {",
-      "    const gateNow = recordingAudioContext.currentTime;",
-      "    recordingRealMicrophoneGain.gain.cancelScheduledValues(gateNow);",
-      "    recordingRealMicrophoneGain.gain.setValueAtTime(recordingRealMicrophoneGain.gain.value, gateNow);",
-      "    recordingRealMicrophoneGain.gain.linearRampToValueAtTime(96, gateNow + 0.008);",
-      "  }"
-    ].join('\n'));
-    const gateEndNeedle = "function endStroke() {\n  if (!drawing) return;";
-    if(!html.includes(gateEndNeedle)) throw new Error('Stroke end handler not found for microphone gate');
-    html=html.replace(gateEndNeedle, [
-      "function endStroke() {",
-      "  if (recordingMicGateTimer) clearTimeout(recordingMicGateTimer);",
-      "  recordingMicGateTimer = setTimeout(() => {",
-      "    if (recordingRealMicrophoneGain && recordingAudioContext) {",
-      "      const gateNow = recordingAudioContext.currentTime;",
-      "      recordingRealMicrophoneGain.gain.cancelScheduledValues(gateNow);",
-      "      recordingRealMicrophoneGain.gain.setTargetAtTime(0, gateNow, 0.012);",
-      "    }",
-      "  }, 110);",
-      "  if (!drawing) return;"
-    ].join('\n'));
     html=html.replace('  mediaRecorder.start();', '  mediaRecorder.start(1000);');
 
     const stopRegex=/mediaRecorder\.onstop = \(\) => \{[\s\S]*?hintText\.textContent = t\('recordingSavedMsg'\);\n  \};/;
@@ -271,7 +244,6 @@
       "  cancelAnimationFrame(recordRAF);",
       "  stream.getTracks().forEach(track => track.stop());",
       "  if (recordingMicrophoneStream) { recordingMicrophoneStream.getTracks().forEach(track => track.stop()); recordingMicrophoneStream = null; }",
-      "  if (recordingMicGateTimer) { clearTimeout(recordingMicGateTimer); recordingMicGateTimer = null; }",
       "  recordingRealMicrophoneGain = null;",
       "  if (recordingAudioContext) { recordingAudioContext.close().catch(() => {}); recordingAudioContext = null; }",
       "  if (recordCanvas && recordCanvas.parentNode) recordCanvas.parentNode.removeChild(recordCanvas);",
