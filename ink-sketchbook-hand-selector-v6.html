@@ -153,7 +153,7 @@
       "  document.body.appendChild(recordCanvas);"
     ].join('\n'));
 
-    html=html.replace("let recordCanvas = null;", "let recordCanvas = null;\nlet recordSourceRect = null;\nlet recordingMicrophoneStream = null;");
+    html=html.replace("let recordCanvas = null;", "let recordCanvas = null;\nlet recordSourceRect = null;\nlet recordingMicrophoneStream = null;\nlet recordingAudioContext = null;");
 
     // Record at a device-safe video resolution. The artwork itself and exports
     // remain at full print resolution; only the temporary video canvas is scaled.
@@ -210,8 +210,21 @@
       "  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {",
       "    try {",
       "      recordingMicrophoneStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });",
-      "      recordingMicrophoneStream.getAudioTracks().forEach(track => stream.addTrack(track));",
-      "      recordingHasAudio = recordingMicrophoneStream.getAudioTracks().length > 0;",
+      "      const RecordingAudioContext = window.AudioContext || window.webkitAudioContext;",
+      "      if (RecordingAudioContext) {",
+      "        recordingAudioContext = new RecordingAudioContext();",
+      "        if (recordingAudioContext.state === 'suspended') await recordingAudioContext.resume();",
+      "        const realMicrophoneSource = recordingAudioContext.createMediaStreamSource(recordingMicrophoneStream);",
+      "        const realMicrophoneGain = recordingAudioContext.createGain();",
+      "        realMicrophoneGain.gain.value = 4.0;",
+      "        const realMicrophoneOutput = recordingAudioContext.createMediaStreamDestination();",
+      "        realMicrophoneSource.connect(realMicrophoneGain);",
+      "        realMicrophoneGain.connect(realMicrophoneOutput);",
+      "        realMicrophoneOutput.stream.getAudioTracks().forEach(track => stream.addTrack(track));",
+      "      } else {",
+      "        recordingMicrophoneStream.getAudioTracks().forEach(track => stream.addTrack(track));",
+      "      }",
+      "      recordingHasAudio = stream.getAudioTracks().length > 0;",
       "    } catch (error) {",
       "      console.warn('Microphone unavailable; recording video without sound.', error);",
       "    }",
@@ -226,6 +239,7 @@
       "  cancelAnimationFrame(recordRAF);",
       "  stream.getTracks().forEach(track => track.stop());",
       "  if (recordingMicrophoneStream) { recordingMicrophoneStream.getTracks().forEach(track => track.stop()); recordingMicrophoneStream = null; }",
+      "  if (recordingAudioContext) { recordingAudioContext.close().catch(() => {}); recordingAudioContext = null; }",
       "  if (recordCanvas && recordCanvas.parentNode) recordCanvas.parentNode.removeChild(recordCanvas);",
       "  const outputMime = (mediaRecorder.mimeType || recordingSupport || '').split(';')[0] || 'video/mp4';",
       "  const blob = new Blob(recordedChunks, { type: outputMime });",
