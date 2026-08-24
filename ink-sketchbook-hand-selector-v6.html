@@ -191,7 +191,7 @@
       "        if (recordingAudioContext.state === 'suspended') await recordingAudioContext.resume();",
       "        const micSource = recordingAudioContext.createMediaStreamSource(recordingMicrophoneStream);",
       "        recordingAudioGain = recordingAudioContext.createGain();",
-      "        recordingAudioGain.gain.value = 1;",
+      "        recordingAudioGain.gain.value = 96;",
       "        const micDestination = recordingAudioContext.createMediaStreamDestination();",
       "        micSource.connect(recordingAudioGain);",
       "        recordingAudioGain.connect(micDestination);",
@@ -207,7 +207,7 @@
 
     html=html.replace(
       "  mediaRecorder = new MediaRecorder(stream, { mimeType: recordingSupport });",
-      "  mediaRecorder = new MediaRecorder(stream, { mimeType: recordingSupport, videoBitsPerSecond: isPhoneRecording ? 6000000 : 14000000, audioBitsPerSecond: 192000 });"
+      "  mediaRecorder = new MediaRecorder(stream, { mimeType: recordingSupport, videoBitsPerSecond: isPhoneRecording ? 6000000 : 14000000, audioBitsPerSecond: 256000 });"
     );
     html=html.replace('  mediaRecorder.start();', '  mediaRecorder.start(1000);');
 
