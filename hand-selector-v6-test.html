@@ -37,10 +37,11 @@
     const recordingControls=wobbleControl+
       '<div class="slider-group"><span>Streamline</span> <input type="range" id="streamlineSlider" min="0" max="100" value="35" step="5"></div>'+
       '<div class="slider-group"><span>Recording hand</span><select id="recordingHandSelect" style="width:100%;border:1px solid #d8d3c6;border-radius:7px;padding:8px 10px;background:#fff;color:#2a2620;font-size:16px;"><option value="human">Original</option><option value="cream">Cream sleeve</option><option value="sage">Sage sleeve</option><option value="pink">Pink sleeve</option><option value="dark">Dark sleeve</option><option value="brownOatmeal">Brown + oatmeal</option></select></div>'+
-      '<div class="slider-group"><span>Hand size <b id="recordingHandSizeValue" style="font-weight:600;">100%</b></span> <input type="range" id="recordingHandSize" min="60" max="140" value="100" step="5"></div>';
+      '<div class="slider-group"><span>Hand size <b id="recordingHandSizeValue" style="font-weight:600;">100%</b></span> <input type="range" id="recordingHandSize" min="60" max="140" value="100" step="5"></div>'+
+      '<div class="slider-group"><span>Recording sound</span><select id="recordingSoundSelect" style="width:100%;border:1px solid #d8d3c6;border-radius:7px;padding:8px 10px;background:#fff;color:#2a2620;font-size:16px;"><option value="natural">Natural</option><option value="focus">Drawing Focus</option></select><small style="color:#8a8373;line-height:1.35;">Drawing Focus lowers room sound while the pencil is lifted and brings the real pencil scratch forward while drawing.</small></div>';
     if(!html.includes(wobbleControl)) throw new Error('Wobble control not found');
     html=html.replace(wobbleControl,recordingControls);
-    html=html.replace("const wobbleSlider = document.getElementById('wobbleSlider');", "const wobbleSlider = document.getElementById('wobbleSlider');\nconst streamlineSlider = document.getElementById('streamlineSlider');\nconst recordingHandSelect = document.getElementById('recordingHandSelect');\nconst recordingHandSize = document.getElementById('recordingHandSize');\nconst recordingHandSizeValue = document.getElementById('recordingHandSizeValue');");
+    html=html.replace("const wobbleSlider = document.getElementById('wobbleSlider');", "const wobbleSlider = document.getElementById('wobbleSlider');\nconst streamlineSlider = document.getElementById('streamlineSlider');\nconst recordingHandSelect = document.getElementById('recordingHandSelect');\nconst recordingHandSize = document.getElementById('recordingHandSize');\nconst recordingHandSizeValue = document.getElementById('recordingHandSizeValue');\nconst recordingSoundSelect = document.getElementById('recordingSoundSelect');");
     html=html.replace("let smoothedWobbleX = 0, smoothedWobbleY = 0;", "let smoothedWobbleX = 0, smoothedWobbleY = 0;\nlet streamlinedPoint = null;\nlet lastRenderedPoint = null;");
     html=html.replace("  smoothedWobbleY = 0;\n  moved = false;", "  smoothedWobbleY = 0;\n  streamlinedPoint = { x: points[0].x, y: points[0].y };\n  lastRenderedPoint = { x: points[0].x, y: points[0].y };\n  moved = false;");
     const streamlineNeedle="  let x = p.x, y = p.y;\n\n  if (mode === 'draw') {";
@@ -75,9 +76,11 @@
       "});",
       "let selectedRecordingHand = 'human';",
       "let recordingHandUserScale = 1;",
+      "let recordingSoundMode = 'natural';",
       "let lastRecordingUrl = null;",
       "if (recordingHandSelect) recordingHandSelect.onchange = () => { selectedRecordingHand = recordingHandSelect.value || 'human'; requestAnimationFrame(fitCanvasDisplay); };",
       "if (recordingHandSize) recordingHandSize.oninput = () => { recordingHandUserScale = Math.max(.6, Math.min(1.4, parseFloat(recordingHandSize.value || '100') / 100)); if (recordingHandSizeValue) recordingHandSizeValue.textContent = Math.round(recordingHandUserScale * 100) + '%'; };",
+      "if (recordingSoundSelect) recordingSoundSelect.onchange = () => { recordingSoundMode = recordingSoundSelect.value || 'natural'; };",
       marker
     ].join('\n');
     html=html.replace(marker,setup);
@@ -124,7 +127,7 @@
       "  document.body.appendChild(recordCanvas);"
     ].join('\n'));
 
-    html=html.replace("let recordCanvas = null;", "let recordCanvas = null;\nlet recordSourceRect = null;\nlet recordingMicrophoneStream = null;\nlet recordingAudioContext = null;\nlet recordingAudioGain = null;");
+    html=html.replace("let recordCanvas = null;", "let recordCanvas = null;\nlet recordSourceRect = null;\nlet recordingMicrophoneStream = null;\nlet recordingAudioContext = null;\nlet recordingAudioGain = null;\nlet recordingAudioHighpass = null;\nlet recordingAudioPresence = null;\nlet recordingFocusRAF = null;");
 
     const recordSizeNeedle = [
       "  recordCanvas.width = drawCanvas.width;",
@@ -191,9 +194,33 @@
       "        if (recordingAudioContext.state === 'suspended') await recordingAudioContext.resume();",
       "        const micSource = recordingAudioContext.createMediaStreamSource(recordingMicrophoneStream);",
       "        recordingAudioGain = recordingAudioContext.createGain();",
-      "        recordingAudioGain.gain.value = 96;",
       "        const micDestination = recordingAudioContext.createMediaStreamDestination();",
-      "        micSource.connect(recordingAudioGain);",
+      "        if (recordingSoundMode === 'focus') {",
+      "          recordingAudioHighpass = recordingAudioContext.createBiquadFilter();",
+      "          recordingAudioHighpass.type = 'highpass';",
+      "          recordingAudioHighpass.frequency.value = 140;",
+      "          recordingAudioHighpass.Q.value = 0.7;",
+      "          recordingAudioPresence = recordingAudioContext.createBiquadFilter();",
+      "          recordingAudioPresence.type = 'peaking';",
+      "          recordingAudioPresence.frequency.value = 3200;",
+      "          recordingAudioPresence.Q.value = 1.1;",
+      "          recordingAudioPresence.gain.value = 6;",
+      "          recordingAudioGain.gain.value = 8;",
+      "          micSource.connect(recordingAudioHighpass);",
+      "          recordingAudioHighpass.connect(recordingAudioPresence);",
+      "          recordingAudioPresence.connect(recordingAudioGain);",
+      "          const followDrawingSound = () => {",
+      "            if (!recordingAudioContext || !recordingAudioGain || recordingSoundMode !== 'focus') return;",
+      "            const targetGain = drawing ? 96 : 8;",
+      "            const timeConstant = drawing ? 0.012 : 0.08;",
+      "            recordingAudioGain.gain.setTargetAtTime(targetGain, recordingAudioContext.currentTime, timeConstant);",
+      "            recordingFocusRAF = requestAnimationFrame(followDrawingSound);",
+      "          };",
+      "          followDrawingSound();",
+      "        } else {",
+      "          recordingAudioGain.gain.value = 96;",
+      "          micSource.connect(recordingAudioGain);",
+      "        }",
       "        recordingAudioGain.connect(micDestination);",
       "        micDestination.stream.getAudioTracks().forEach(track => stream.addTrack(track));",
       "      } else {",
@@ -216,9 +243,10 @@
     const stopReplacement=[
       "mediaRecorder.onstop = () => {",
       "  cancelAnimationFrame(recordRAF);",
+      "  if (recordingFocusRAF) { cancelAnimationFrame(recordingFocusRAF); recordingFocusRAF = null; }",
       "  stream.getTracks().forEach(track => track.stop());",
       "  if (recordingMicrophoneStream) { recordingMicrophoneStream.getTracks().forEach(track => track.stop()); recordingMicrophoneStream = null; }",
-      "  recordingAudioGain = null;",
+      "  recordingAudioGain = null; recordingAudioHighpass = null; recordingAudioPresence = null;",
       "  if (recordingAudioContext) { recordingAudioContext.close().catch(() => {}); recordingAudioContext = null; }",
       "  if (recordCanvas && recordCanvas.parentNode) recordCanvas.parentNode.removeChild(recordCanvas);",
       "  const outputMime = (mediaRecorder.mimeType || recordingSupport || '').split(';')[0] || 'video/mp4';",
