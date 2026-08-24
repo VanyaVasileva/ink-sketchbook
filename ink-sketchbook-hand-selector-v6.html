@@ -36,7 +36,7 @@
     const wobbleControl='<div class="slider-group"><span data-i18n="wobbleLabel">Wobble</span> <input type="range" id="wobbleSlider" min="0" max="3" value="1" step="0.5"></div>';
     const recordingControls=wobbleControl+
       '<div class="slider-group"><span>Streamline</span> <input type="range" id="streamlineSlider" min="0" max="100" value="35" step="5"></div>'+
-      '<div class="slider-group"><span>Recording hand</span><select id="recordingHandSelect" style="width:100%;border:1px solid #d8d3c6;border-radius:7px;padding:8px 10px;background:#fff;color:#2a2620;font-size:13px;"><option value="human">Original</option><option value="cream">Cream sleeve</option><option value="sage">Sage sleeve</option><option value="pink">Pink sleeve</option><option value="dark">Dark sleeve</option><option value="brownOatmeal">Brown + oatmeal</option></select></div>'+
+      '<div class="slider-group"><span>Recording hand</span><select id="recordingHandSelect" style="width:100%;border:1px solid #d8d3c6;border-radius:7px;padding:8px 10px;background:#fff;color:#2a2620;font-size:16px;"><option value="human">Original</option><option value="cream">Cream sleeve</option><option value="sage">Sage sleeve</option><option value="pink">Pink sleeve</option><option value="dark">Dark sleeve</option><option value="brownOatmeal">Brown + oatmeal</option></select></div>'+
       '<div class="slider-group"><span>Hand size <b id="recordingHandSizeValue" style="font-weight:600;">100%</b></span> <input type="range" id="recordingHandSize" min="60" max="140" value="100" step="5"></div>';
     if(!html.includes(wobbleControl)) throw new Error('Wobble control not found');
     html=html.replace(wobbleControl,recordingControls);
@@ -76,7 +76,7 @@
       "let selectedRecordingHand = 'human';",
       "let recordingHandUserScale = 1;",
       "let lastRecordingUrl = null;",
-      "if (recordingHandSelect) recordingHandSelect.onchange = () => { selectedRecordingHand = recordingHandSelect.value || 'human'; };",
+      "if (recordingHandSelect) recordingHandSelect.onchange = () => { selectedRecordingHand = recordingHandSelect.value || 'human'; requestAnimationFrame(fitCanvasDisplay); };",
       "if (recordingHandSize) recordingHandSize.oninput = () => { recordingHandUserScale = Math.max(.6, Math.min(1.4, parseFloat(recordingHandSize.value || '100') / 100)); if (recordingHandSizeValue) recordingHandSizeValue.textContent = Math.round(recordingHandUserScale * 100) + '%'; };",
       marker
     ].join('\n');
@@ -124,7 +124,7 @@
       "  document.body.appendChild(recordCanvas);"
     ].join('\n'));
 
-    html=html.replace("let recordCanvas = null;", "let recordCanvas = null;\nlet recordSourceRect = null;\nlet recordingMicrophoneStream = null;");
+    html=html.replace("let recordCanvas = null;", "let recordCanvas = null;\nlet recordSourceRect = null;\nlet recordingMicrophoneStream = null;\nlet recordingAudioContext = null;\nlet recordingAudioGain = null;");
 
     const recordSizeNeedle = [
       "  recordCanvas.width = drawCanvas.width;",
@@ -161,9 +161,17 @@
     ].join('\n');
     if(!html.includes(resizeListenerNeedle)) throw new Error('Resize listener not found');
     html=html.replace(resizeListenerNeedle, [
+      "let stableSketchViewportWidth = window.innerWidth;",
       "window.addEventListener('resize', () => {",
       "  const recordingNow = mediaRecorder && mediaRecorder.state !== 'inactive';",
-      "  if (!printingInProgress && !recordingNow) resize();",
+      "  if (printingInProgress || recordingNow) return;",
+      "  const widthDelta = Math.abs(window.innerWidth - stableSketchViewportWidth);",
+      "  if (widthDelta > 80) {",
+      "    stableSketchViewportWidth = window.innerWidth;",
+      "    resize();",
+      "  } else {",
+      "    requestAnimationFrame(fitCanvasDisplay);",
+      "  }",
       "});"
     ].join('\n'));
 
@@ -177,7 +185,20 @@
       "  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {",
       "    try {",
       "      recordingMicrophoneStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });",
-      "      recordingMicrophoneStream.getAudioTracks().forEach(track => stream.addTrack(track));",
+      "      const RecordingAudioContext = window.AudioContext || window.webkitAudioContext;",
+      "      if (RecordingAudioContext) {",
+      "        recordingAudioContext = new RecordingAudioContext();",
+      "        if (recordingAudioContext.state === 'suspended') await recordingAudioContext.resume();",
+      "        const micSource = recordingAudioContext.createMediaStreamSource(recordingMicrophoneStream);",
+      "        recordingAudioGain = recordingAudioContext.createGain();",
+      "        recordingAudioGain.gain.value = 1;",
+      "        const micDestination = recordingAudioContext.createMediaStreamDestination();",
+      "        micSource.connect(recordingAudioGain);",
+      "        recordingAudioGain.connect(micDestination);",
+      "        micDestination.stream.getAudioTracks().forEach(track => stream.addTrack(track));",
+      "      } else {",
+      "        recordingMicrophoneStream.getAudioTracks().forEach(track => stream.addTrack(track));",
+      "      }",
       "    } catch (error) {",
       "      console.warn('Microphone unavailable; recording video without sound.', error);",
       "    }",
@@ -197,6 +218,8 @@
       "  cancelAnimationFrame(recordRAF);",
       "  stream.getTracks().forEach(track => track.stop());",
       "  if (recordingMicrophoneStream) { recordingMicrophoneStream.getTracks().forEach(track => track.stop()); recordingMicrophoneStream = null; }",
+      "  recordingAudioGain = null;",
+      "  if (recordingAudioContext) { recordingAudioContext.close().catch(() => {}); recordingAudioContext = null; }",
       "  if (recordCanvas && recordCanvas.parentNode) recordCanvas.parentNode.removeChild(recordCanvas);",
       "  const outputMime = (mediaRecorder.mimeType || recordingSupport || '').split(';')[0] || 'video/mp4';",
       "  const blob = new Blob(recordedChunks, { type: outputMime });",
