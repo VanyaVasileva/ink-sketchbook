@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Ink Sketchbook Hand Selector v6</title></head><body><p style="font-family:sans-serif;padding:20px">Loading hand selector test…</p><script>
+(async function(){
+  const baseUrl='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/feature/new-button/ink-sketchbook-with-hand.html';
+  const humanHandUrl='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/feature/new-button/clean-flat-vector-pencil-hand.webp.b64';
+  const customerHandUrls={
+    cream:'https://raw.githubusercontent.com/VanyaVasileva/drawing-hand-studio-clean/main/assets/hand-cream-sleeve.png',
+    sage:'https://raw.githubusercontent.com/VanyaVasileva/drawing-hand-studio-clean/main/assets/hand-sage-sleeve.png',
+    pink:'https://raw.githubusercontent.com/VanyaVasileva/drawing-hand-studio-clean/main/assets/hand-pink-sleeve.png',
+    dark:'https://raw.githubusercontent.com/VanyaVasileva/drawing-hand-studio-clean/main/assets/hand-dark-sleeve.png',
+    brownOatmeal:'https://raw.githubusercontent.com/VanyaVasileva/drawing-hand-studio-clean/main/assets/hand-brown-oatmeal.png'
+  };
+  const handMeta={
+    human:{srcW:1536,srcH:1024,tipX:224,tipY:352,scale:1},
+    cream:{srcW:1672,srcH:941,tipX:157.168,tipY:246.542,scale:1.319},
+    sage:{srcW:1672,srcH:941,tipX:183.92,tipY:264.421,scale:1.292},
+    pink:{srcW:1672,srcH:941,tipX:230.736,tipY:257.834,scale:1.308},
+    dark:{srcW:1672,srcH:941,tipX:142.12,tipY:264.421,scale:1.280},
+    brownOatmeal:{srcW:1672,srcH:941,tipX:180.576,tipY:230.545,scale:1.398}
+  };
+  try {
+    const blobToDataUrl=(blob)=>new Promise((resolve,reject)=>{const fr=new FileReader();fr.onload=()=>resolve(fr.result);fr.onerror=reject;fr.readAsDataURL(blob);});
+
+    const humanHandBase64=await fetch(humanHandUrl,{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('Could not load the illustrated human hand');return r.text();});
+    const recordingHandSources={human:'data:image/webp;base64,'+humanHandBase64.trim()};
+    for(const [name,url] of Object.entries(customerHandUrls)){
+      const blob=await fetch(url,{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('Could not load '+name+' hand');return r.blob();});
+      recordingHandSources[name]=await blobToDataUrl(blob);
+    }
+
+    let html=await fetch(baseUrl,{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('Could not load Ink Sketchbook');return r.text();});
+
+    const recordingNote='<div id="recordingInfoNote" style="width:100%;padding:7px 14px;background:#fffaf0;border-bottom:1px solid #e5e1d8;color:#6b6558;font-size:12px;line-height:1.4;text-align:center;">ⓘ The illustrated hand appears in recordings only. Reference images stay hidden from the recording.</div>';
+    html=html.replace('</header>','</header>'+recordingNote);
+
+    const wobbleControl='<div class="slider-group"><span data-i18n="wobbleLabel">Wobble</span> <input type="range" id="wobbleSlider" min="0" max="3" value="1" step="0.5"></div>';
+    const recordingControls=wobbleControl+
+      '<div class="slider-group"><span>Streamline</span> <input type="range" id="streamlineSlider" min="0" max="100" value="35" step="5"></div>'+
+      '<div class="slider-group"><span>Recording hand</span><select id="recordingHandSelect" style="width:100%;border:1px solid #d8d3c6;border-radius:7px;padding:8px 10px;background:#fff;color:#2a2620;font-size:16px;"><option value="human">Original</option><option value="cream">Cream sleeve</option><option value="sage">Sage sleeve</option><option value="pink">Pink sleeve</option><option value="dark">Dark sleeve</option><option value="brownOatmeal">Brown + oatmeal</option></select></div>'+
+      '<div class="slider-group"><span>Hand size <b id="recordingHandSizeValue" style="font-weight:600;">100%</b></span> <input type="range" id="recordingHandSize" min="60" max="140" value="100" step="5"></div>';
+    if(!html.includes(wobbleControl)) throw new Error('Wobble control not found');
+    html=html.replace(wobbleControl,recordingControls);
+    html=html.replace("const wobbleSlider = document.getElementById('wobbleSlider');", "const wobbleSlider = document.getElementById('wobbleSlider');\nconst streamlineSlider = document.getElementById('streamlineSlider');\nconst recordingHandSelect = document.getElementById('recordingHandSelect');\nconst recordingHandSize = document.getElementById('recordingHandSize');\nconst recordingHandSizeValue = document.getElementById('recordingHandSizeValue');");
+    html=html.replace("let smoothedWobbleX = 0, smoothedWobbleY = 0;", "let smoothedWobbleX = 0, smoothedWobbleY = 0;\nlet streamlinedPoint = null;\nlet lastRenderedPoint = null;");
+    html=html.replace("  smoothedWobbleY = 0;\n  moved = false;", "  smoothedWobbleY = 0;\n  streamlinedPoint = { x: points[0].x, y: points[0].y };\n  lastRenderedPoint = { x: points[0].x, y: points[0].y };\n  moved = false;");
+    const streamlineNeedle="  let x = p.x, y = p.y;\n\n  if (mode === 'draw') {";
+    if(!html.includes(streamlineNeedle)) throw new Error('Stroke position block not found');
+    html=html.replace(streamlineNeedle, [
+      "  let x = p.x, y = p.y;",
+      "  const streamlineStrength = Math.max(0, Math.min(1, parseFloat(streamlineSlider.value) / 100));",
+      "  if (streamlineStrength > 0) {",
+      "    const follow = 1 - streamlineStrength * 0.82;",
+      "    streamlinedPoint.x += (x - streamlinedPoint.x) * follow;",
+      "    streamlinedPoint.y += (y - streamlinedPoint.y) * follow;",
+      "    x = streamlinedPoint.x; y = streamlinedPoint.y;",
+      "  }",
+      "",
+      "  if (mode === 'draw') {"
+    ].join('\n'));
+    html=html.replace("  ctx.moveTo(prev.x, prev.y);\n  ctx.lineTo(x, y);", "  const renderPrev = streamlineStrength > 0 ? (lastRenderedPoint || prev) : prev;\n  ctx.moveTo(renderPrev.x, renderPrev.y);\n  ctx.lineTo(x, y);");
+    html=html.replace("  lastPenPos = { x, y };\n}", "  lastRenderedPoint = { x, y };\n  lastPenPos = { x, y };\n}");
+
+    const marker='let lastPenPos = null;      // {x, y} in drawCanvas pixel space, live';
+    if(!html.includes(marker)) throw new Error('Recording marker not found');
+    const setup=[
+      "const recordingHandSources = " + JSON.stringify(recordingHandSources) + ";",
+      "const recordingHandMeta = " + JSON.stringify(handMeta) + ";",
+      "const recordingHands = {};",
+      "Object.keys(recordingHandSources).forEach(name => {",
+      "  const meta = recordingHandMeta[name];",
+      "  const entry = { img: new Image(), ready: false, srcW: meta.srcW, srcH: meta.srcH, tipX: meta.tipX, tipY: meta.tipY, scale: meta.scale };",
+      "  entry.img.onload = () => { entry.ready = true; };",
+      "  entry.img.src = recordingHandSources[name];",
+      "  recordingHands[name] = entry;",
+      "});",
+      "let selectedRecordingHand = 'human';",
+      "let recordingHandUserScale = 1;",
+      "let lastRecordingUrl = null;",
+      "if (recordingHandSelect) recordingHandSelect.onchange = () => { selectedRecordingHand = recordingHandSelect.value || 'human'; requestAnimationFrame(fitCanvasDisplay); };",
+      "if (recordingHandSize) recordingHandSize.oninput = () => { recordingHandUserScale = Math.max(.6, Math.min(1.4, parseFloat(recordingHandSize.value || '100') / 100)); if (recordingHandSizeValue) recordingHandSizeValue.textContent = Math.round(recordingHandUserScale * 100) + '%'; };",
+      marker
+    ].join('\n');
+    html=html.replace(marker,setup);
+
+    const frameRegex=/function compositeRecordFrame\(\) \{[\s\S]*?recordRAF = requestAnimationFrame\(compositeRecordFrame\);\n\}/;
+    if(!frameRegex.test(html)) throw new Error('Recording frame function not found');
+    const frameReplacement=[
+      "function compositeRecordFrame() {",
+      "  recordCtx.fillStyle = paperColorPicker.value || '#ffffff';",
+      "  recordCtx.fillRect(0, 0, recordCanvas.width, recordCanvas.height);",
+      "  const source = recordSourceRect || { x: 0, y: 0, width: drawCanvas.width, height: drawCanvas.height };",
+      "  recordCtx.drawImage(drawCanvas, source.x, source.y, source.width, source.height, 0, 0, recordCanvas.width, recordCanvas.height);",
+      "  const recordScaleX = recordCanvas.width / source.width;",
+      "  const recordScaleY = recordCanvas.height / source.height;",
+      "  const recordPenX = lastPenPos ? (lastPenPos.x - source.x) * recordScaleX : 0;",
+      "  const recordPenY = lastPenPos ? (lastPenPos.y - source.y) * recordScaleY : 0;",
+      "  if (lastPenPos) {",
+      "    const selected = recordingHands[selectedRecordingHand] || recordingHands.human;",
+      "    if (selected && selected.ready) {",
+      "      const baseDisplayW = Math.min(recordCanvas.width * 0.66, recordCanvas.height * 1.10);",
+      "      const displayW = baseDisplayW * selected.scale * recordingHandUserScale;",
+      "      const scale = displayW / selected.srcW;",
+      "      const drawX = recordPenX - selected.tipX * scale;",
+      "      const drawY = recordPenY - selected.tipY * scale;",
+      "      recordCtx.save();",
+      "      recordCtx.globalAlpha = 1;",
+      "      recordCtx.drawImage(selected.img, drawX, drawY, selected.srcW * scale, selected.srcH * scale);",
+      "      recordCtx.restore();",
+      "    }",
+      "  }",
+      "  recordRAF = requestAnimationFrame(compositeRecordFrame);",
+      "}"
+    ].join('\n');
+    html=html.replace(frameRegex,frameReplacement);
+
+    html=html.replace("    'video/mp4;codecs=h264',\n", '');
+    const recordCanvasNeedle = "  recordCanvas = document.createElement('canvas');";
+    if(!html.includes(recordCanvasNeedle)) throw new Error('Recording canvas creation not found');
+    html=html.replace(recordCanvasNeedle, [
+      "  if (recordCanvas && recordCanvas.parentNode) recordCanvas.parentNode.removeChild(recordCanvas);",
+      "  recordCanvas = document.createElement('canvas');",
+      "  recordCanvas.setAttribute('aria-hidden', 'true');",
+      "  recordCanvas.style.cssText = 'position:fixed;right:0;bottom:0;width:2px;height:2px;opacity:.001;pointer-events:none;z-index:-1;';",
+      "  document.body.appendChild(recordCanvas);"
+    ].join('\n'));
+
+    html=html.replace("let recordCanvas = null;", "let recordCanvas = null;\nlet recordSourceRect = null;\nlet recordingMicrophoneStream = null;\nlet recordingAudioContext = null;\nlet recordingAudioGain = null;");
+
+    const recordSizeNeedle = [
+      "  recordCanvas.width = drawCanvas.width;",
+      "  recordCanvas.height = drawCanvas.height;"
+    ].join('\n');
+    if(!html.includes(recordSizeNeedle)) throw new Error('Recording canvas size setup not found');
+    html=html.replace(recordSizeNeedle, [
+      "  const canvasRectForRecording = drawCanvas.getBoundingClientRect();",
+      "  const wrapRectForRecording = wrap.getBoundingClientRect();",
+      "  const visibleLeft = Math.max(canvasRectForRecording.left, wrapRectForRecording.left);",
+      "  const visibleTop = Math.max(canvasRectForRecording.top, wrapRectForRecording.top);",
+      "  const visibleRight = Math.min(canvasRectForRecording.right, wrapRectForRecording.right);",
+      "  const visibleBottom = Math.min(canvasRectForRecording.bottom, wrapRectForRecording.bottom);",
+      "  const visibleWidth = Math.max(1, visibleRight - visibleLeft);",
+      "  const visibleHeight = Math.max(1, visibleBottom - visibleTop);",
+      "  recordSourceRect = {",
+      "    x: (visibleLeft - canvasRectForRecording.left) * drawCanvas.width / canvasRectForRecording.width,",
+      "    y: (visibleTop - canvasRectForRecording.top) * drawCanvas.height / canvasRectForRecording.height,",
+      "    width: visibleWidth * drawCanvas.width / canvasRectForRecording.width,",
+      "    height: visibleHeight * drawCanvas.height / canvasRectForRecording.height",
+      "  };",
+      "  const isPhoneRecording = /iPhone|iPod/i.test(navigator.userAgent) || Math.min(screen.width, screen.height) < 600;",
+      "  const recordMaxLongSide = isPhoneRecording ? 1280 : 2160;",
+      "  const recordVideoScale = Math.min(1, recordMaxLongSide / Math.max(recordSourceRect.width, recordSourceRect.height));",
+      "  recordCanvas.width = Math.max(2, Math.round(recordSourceRect.width * recordVideoScale));",
+      "  recordCanvas.height = Math.max(2, Math.round(recordSourceRect.height * recordVideoScale));"
+    ].join('\n'));
+    html=html.replace('recordCanvas.captureStream(30)', 'recordCanvas.captureStream(24)');
+
+    const resizeListenerNeedle = [
+      "window.addEventListener('resize', () => {",
+      "  if (!printingInProgress) resize();",
+      "});"
+    ].join('\n');
+    if(!html.includes(resizeListenerNeedle)) throw new Error('Resize listener not found');
+    html=html.replace(resizeListenerNeedle, [
+      "let stableSketchViewportWidth = window.innerWidth;",
+      "window.addEventListener('resize', () => {",
+      "  const recordingNow = mediaRecorder && mediaRecorder.state !== 'inactive';",
+      "  if (printingInProgress || recordingNow) return;",
+      "  const widthDelta = Math.abs(window.innerWidth - stableSketchViewportWidth);",
+      "  if (widthDelta > 80) {",
+      "    stableSketchViewportWidth = window.innerWidth;",
+      "    resize();",
+      "  } else {",
+      "    requestAnimationFrame(fitCanvasDisplay);",
+      "  }",
+      "});"
+    ].join('\n'));
+
+    const recordClickNeedle = "recordBtn.onclick = () => {";
+    if(!html.includes(recordClickNeedle)) throw new Error('Record click handler not found');
+    html=html.replace(recordClickNeedle, "recordBtn.onclick = async () => {");
+    const recordingStreamNeedle = "  const stream = recordCanvas.captureStream(24);";
+    if(!html.includes(recordingStreamNeedle)) throw new Error('Recording stream setup not found');
+    html=html.replace(recordingStreamNeedle, [
+      "  const stream = recordCanvas.captureStream(24);",
+      "  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {",
+      "    try {",
+      "      recordingMicrophoneStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });",
+      "      const RecordingAudioContext = window.AudioContext || window.webkitAudioContext;",
+      "      if (RecordingAudioContext) {",
+      "        recordingAudioContext = new RecordingAudioContext();",
+      "        if (recordingAudioContext.state === 'suspended') await recordingAudioContext.resume();",
+      "        const micSource = recordingAudioContext.createMediaStreamSource(recordingMicrophoneStream);",
+      "        recordingAudioGain = recordingAudioContext.createGain();",
+      "        recordingAudioGain.gain.value = 96;",
+      "        const micDestination = recordingAudioContext.createMediaStreamDestination();",
+      "        micSource.connect(recordingAudioGain);",
+      "        recordingAudioGain.connect(micDestination);",
+      "        micDestination.stream.getAudioTracks().forEach(track => stream.addTrack(track));",
+      "      } else {",
+      "        recordingMicrophoneStream.getAudioTracks().forEach(track => stream.addTrack(track));",
+      "      }",
+      "    } catch (error) {",
+      "      console.warn('Microphone unavailable; recording video without sound.', error);",
+      "    }",
+      "  }"
+    ].join('\n'));
+
+    html=html.replace(
+      "  mediaRecorder = new MediaRecorder(stream, { mimeType: recordingSupport });",
+      "  mediaRecorder = new MediaRecorder(stream, { mimeType: recordingSupport, videoBitsPerSecond: isPhoneRecording ? 6000000 : 14000000, audioBitsPerSecond: 256000 });"
+    );
+    html=html.replace('  mediaRecorder.start();', '  mediaRecorder.start(1000);');
+
+    const stopRegex=/mediaRecorder\.onstop = \(\) => \{[\s\S]*?hintText\.textContent = t\('recordingSavedMsg'\);\n  \};/;
+    if(!stopRegex.test(html)) throw new Error('Recording finish function not found');
+    const stopReplacement=[
+      "mediaRecorder.onstop = () => {",
+      "  cancelAnimationFrame(recordRAF);",
+      "  stream.getTracks().forEach(track => track.stop());",
+      "  if (recordingMicrophoneStream) { recordingMicrophoneStream.getTracks().forEach(track => track.stop()); recordingMicrophoneStream = null; }",
+      "  recordingAudioGain = null;",
+      "  if (recordingAudioContext) { recordingAudioContext.close().catch(() => {}); recordingAudioContext = null; }",
+      "  if (recordCanvas && recordCanvas.parentNode) recordCanvas.parentNode.removeChild(recordCanvas);",
+      "  const outputMime = (mediaRecorder.mimeType || recordingSupport || '').split(';')[0] || 'video/mp4';",
+      "  const blob = new Blob(recordedChunks, { type: outputMime });",
+      "  const fileName = `ink-sketchbook-recording.${fileExt}`;",
+      "  const recordingFile = new File([blob], fileName, { type: outputMime });",
+      "  const url = URL.createObjectURL(blob);",
+      "  if (lastRecordingUrl) URL.revokeObjectURL(lastRecordingUrl);",
+      "  lastRecordingUrl = url;",
+      "  const oldPanel = document.getElementById('recordingResultPanel');",
+      "  if (oldPanel) oldPanel.remove();",
+      "  const overlay = document.createElement('div');",
+      "  overlay.id = 'recordingResultPanel';",
+      "  overlay.style.cssText = 'position:fixed;inset:0;z-index:999999;background:rgba(28,25,22,.72);display:flex;align-items:center;justify-content:center;padding:18px;';",
+      "  const card = document.createElement('div');",
+      "  card.style.cssText = 'width:min(720px,94vw);max-height:92vh;overflow:auto;background:#fffdf8;border-radius:18px;padding:18px;box-shadow:0 24px 70px rgba(0,0,0,.35);font-family:system-ui,sans-serif;color:#292620;';",
+      "  const title = document.createElement('h2');",
+      "  title.textContent = 'Your recording is ready';",
+      "  title.style.cssText = 'margin:0 0 12px;font-size:22px;';",
+      "  const preview = document.createElement('video');",
+      "  preview.src = url; preview.controls = true; preview.playsInline = true; preview.preload = 'metadata';",
+      "  preview.style.cssText = 'display:block;width:100%;max-height:58vh;background:#24211e;border-radius:12px;';",
+      "  const actions = document.createElement('div');",
+      "  actions.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;';",
+      "  const saveShare = document.createElement('button');",
+      "  saveShare.type = 'button'; saveShare.textContent = 'Save / Share recording';",
+      "  saveShare.style.cssText = 'display:flex;align-items:center;justify-content:center;padding:13px 15px;border:0;border-radius:11px;background:#9f5f47;color:white;font-weight:750;text-align:center;';",
+      "  const canShareFile = !!(navigator.share && navigator.canShare && navigator.canShare({ files: [recordingFile] }));",
+      "  if (!canShareFile) saveShare.style.display = 'none';",
+      "  saveShare.onclick = async () => { try { await navigator.share({ files: [recordingFile], title: 'Ink Sketchbook recording' }); } catch (error) { if (error && error.name !== 'AbortError') hintText.textContent = 'Please use Download recording instead.'; } };",
+      "  const download = document.createElement('a');",
+      "  download.href = url; download.download = fileName; download.textContent = 'Download recording';",
+      "  download.style.cssText = 'display:flex;align-items:center;justify-content:center;padding:13px 15px;border-radius:11px;background:#292620;color:white;text-decoration:none;font-weight:750;text-align:center;';",
+      "  const note = document.createElement('p');",
+      "  note.textContent = 'On iPad, tap Save / Share recording, then choose Save Video or Save to Files.';",
+      "  note.style.cssText = 'margin:12px 0 0;color:#746d64;font-size:12px;line-height:1.45;text-align:center;';",
+      "  const close = document.createElement('button');",
+      "  close.type = 'button'; close.textContent = 'Close';",
+      "  close.style.cssText = 'display:block;width:100%;margin-top:10px;padding:11px;border:1px solid #ded7ca;border-radius:11px;background:#f3eee7;color:#292620;font-weight:700;';",
+      "  close.onclick = () => overlay.remove();",
+      "  actions.append(saveShare, download);",
+      "  card.append(title, preview, actions, note, close);",
+      "  overlay.appendChild(card);",
+      "  document.body.appendChild(overlay);",
+      "  recordBtn.classList.remove('recording');",
+      "  recordBtn.querySelector('span').textContent = t('recordBtn');",
+      "  hintText.textContent = 'Recording ready — play it or download it now.';",
+      "};"
+    ].join('\n');
+    html=html.replace(stopRegex,stopReplacement);
+
+    document.open();document.write(html);document.close();
+  } catch(err) {
+    document.body.innerHTML='<div style="font-family:sans-serif;padding:24px"><h2>Could not load test</h2><pre>'+String(err)+'</pre></div>';
+  }
+})();
+</script></body></html>
