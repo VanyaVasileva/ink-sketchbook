@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Ink Sketchbook Hand Selector v7</title></head><body><p style="font-family:sans-serif;padding:20px">Loading recording reference toggle test…</p><script>
+(async function(){
+  const v6Url='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/main/hand-selector-v6-test.html';
+  try {
+    let source=await fetch(v6Url,{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('Could not load hand selector v6');return r.text();});
+    const marker='    document.open();document.write(html);document.close();';
+    if(!source.includes(marker)) throw new Error('v6 publish marker not found');
+
+    const patch=String.raw`
+    // v7: keep references out of recordings by default, but let the creator
+    // explicitly include the visible reference layer when a background/reference
+    // is meant to be part of the finished recording.
+    html=html.replace(
+      'Reference images stay hidden from the recording.',
+      'Reference stays hidden from the recording by default. Turn on “Reference in recording” when you want it included.'
+    );
+
+    const recordingHandControl='<div class="slider-group"><span>Recording hand</span><select id="recordingHandSelect"';
+    const referenceRecordingControl='<button id="recordReferenceBtn" type="button">🎞 Reference in recording: Off</button>';
+    if(!html.includes(recordingHandControl)) throw new Error('Recording hand control not found');
+    html=html.replace(recordingHandControl,referenceRecordingControl+recordingHandControl);
+
+    const recordingDomNeedle="const recordingHandSizeValue = document.getElementById('recordingHandSizeValue');";
+    if(!html.includes(recordingDomNeedle)) throw new Error('Recording control DOM setup not found');
+    html=html.replace(recordingDomNeedle, recordingDomNeedle+"\nconst recordReferenceBtn = document.getElementById('recordReferenceBtn');");
+
+    const recordingStateNeedle="let recordingHandUserScale = 1;";
+    if(!html.includes(recordingStateNeedle)) throw new Error('Recording state setup not found');
+    html=html.replace(recordingStateNeedle, [
+      recordingStateNeedle,
+      "let recordReferenceInVideo = false;",
+      "if (recordReferenceBtn) recordReferenceBtn.onclick = () => {",
+      "  recordReferenceInVideo = !recordReferenceInVideo;",
+      "  recordReferenceBtn.classList.toggle('active', recordReferenceInVideo);",
+      "  recordReferenceBtn.textContent = '🎞 Reference in recording: ' + (recordReferenceInVideo ? 'On' : 'Off');",
+      "};"
+    ].join('\n'));
+
+    const frameSourceNeedle="  const source = recordSourceRect || { x: 0, y: 0, width: drawCanvas.width, height: drawCanvas.height };";
+    if(!html.includes(frameSourceNeedle)) throw new Error('Recording crop source not found');
+    html=html.replace(frameSourceNeedle, [
+      frameSourceNeedle,
+      "  if (recordReferenceInVideo && refImage && refVisible) {",
+      "    const refScaleX = refCanvas.width / drawCanvas.width;",
+      "    const refScaleY = refCanvas.height / drawCanvas.height;",
+      "    recordCtx.drawImage(",
+      "      refCanvas,",
+      "      source.x * refScaleX, source.y * refScaleY,",
+      "      source.width * refScaleX, source.height * refScaleY,",
+      "      0, 0, recordCanvas.width, recordCanvas.height",
+      "    );",
+      "  }"
+    ].join('\n'));
+`;
+
+    source=source.replace(marker,patch+'\n'+marker);
+    document.open();document.write(source);document.close();
+  } catch(err) {
+    document.body.innerHTML='<div style="font-family:sans-serif;padding:24px"><h2>Could not load test</h2><pre>'+String(err)+'</pre></div>';
+  }
+})();
+</script></body></html>
