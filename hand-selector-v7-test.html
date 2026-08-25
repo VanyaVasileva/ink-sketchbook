@@ -3,7 +3,14 @@
 (async function(){
   const url='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/main/hand-selector-v9-video-test.html?cache='+Date.now();
   try {
-    const html=await fetch(url,{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('Could not load video test');return r.text();});
+    let html=await fetch(url,{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('Could not load video test');return r.text();});
+
+    // Repair the nested template delimiters before Safari executes v9.
+    // The original v9 source used escaped backticks inside String.raw, which
+    // survived into the generated v8 loader and caused an immediate syntax error.
+    html=html.replace("const videoPatch=String.raw\\`", "const videoPatch=String.raw${'`'}");
+    html=html.replace("    \\`;\n    source=source.replace(innerMarker,videoPatch+'\\n'+innerMarker);", "    ${'`'};\n    source=source.replace(innerMarker,videoPatch+'\\n'+innerMarker);");
+
     document.open();document.write(html);document.close();
   } catch(err) {
     document.body.innerHTML='<div style="font-family:sans-serif;padding:24px"><h2>Could not load video test</h2><pre>'+String(err)+'</pre></div>';
