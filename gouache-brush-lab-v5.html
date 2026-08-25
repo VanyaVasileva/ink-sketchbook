@@ -3,35 +3,40 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Reference Crayon Brush v6</title>
+<title>Marker Brush Lab v1</title>
 <style>
 :root{--bg:#f3efe8;--panel:#fffdf8;--ink:#2f2a27;--muted:#8d8176;--line:#d9d1c8}
 *{box-sizing:border-box}html,body{height:100%}body{margin:0;background:var(--bg);color:var(--ink);font-family:ui-rounded,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;overflow:hidden}
 .wrap{height:100%;padding:5px;display:grid;grid-template-rows:auto 1fr;gap:5px}.top,.bar,.stage{background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:0 6px 18px rgba(50,40,30,.05)}
-.top{padding:7px 9px}.top b{font-size:17px}.top span{display:block;font-size:11px;color:var(--muted);margin-top:2px}.app{min-height:0;display:grid;grid-template-rows:auto 1fr;gap:5px}.bar{padding:6px;display:flex;gap:8px;align-items:center;overflow-x:auto}.control{min-width:132px;font-size:10px}.control label{display:flex;justify-content:space-between;margin-bottom:2px}.control input{width:100%}.locked{min-width:116px;font-size:11px;font-weight:750;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:#fff}.swatches{display:flex;gap:6px;min-width:170px}.sw{width:28px;height:28px;border-radius:50%;border:2px solid #fff;outline:1px solid var(--line);padding:0}.sw.active{outline:2px solid #332b27}button{appearance:none;border:1px solid var(--line);background:white;border-radius:9px;padding:8px 10px;font:inherit;font-weight:650;color:var(--ink)}.stage{min-height:0;padding:3px;position:relative}.canvasWrap{position:relative;width:100%;height:100%}canvas{position:absolute;inset:0;width:100%;height:100%;border-radius:9px;touch-action:none}#paper{background:#fff}.hint{display:none}
-@media(min-width:800px){.wrap{max-width:1180px;margin:auto;padding:8px;gap:8px}.app{grid-template-columns:245px 1fr;grid-template-rows:1fr;gap:8px}.bar{display:block;padding:10px}.control,.locked{margin-bottom:12px}.stage{padding:5px}.hint{display:block;position:absolute;right:10px;bottom:8px;font-size:10px;color:var(--muted);pointer-events:none}}
+.top{padding:7px 9px}.top b{font-size:17px}.top span{display:block;font-size:11px;color:var(--muted);margin-top:2px}.app{min-height:0;display:grid;grid-template-rows:auto 1fr;gap:5px}.bar{padding:6px;display:flex;gap:8px;align-items:center;overflow-x:auto}.modes{display:flex;gap:5px;min-width:max-content}.mode.active{background:#342f2b;color:#fff;border-color:#342f2b}.control{min-width:126px;font-size:10px}.control label{display:flex;justify-content:space-between;margin-bottom:2px}.control input{width:100%}.swatches{display:flex;gap:6px;min-width:205px}.sw{width:28px;height:28px;border-radius:50%;border:2px solid #fff;outline:1px solid var(--line);padding:0}.sw.active{outline:2px solid #332b27}button{appearance:none;border:1px solid var(--line);background:white;border-radius:9px;padding:8px 10px;font:inherit;font-weight:650;color:var(--ink)}.stage{min-height:0;padding:3px;position:relative}.canvasWrap{position:relative;width:100%;height:100%}canvas{position:absolute;inset:0;width:100%;height:100%;border-radius:9px;touch-action:none}#paper{background:#fff}.hint{display:none}
+@media(min-width:800px){.wrap{max-width:1180px;margin:auto;padding:8px;gap:8px}.app{grid-template-columns:250px 1fr;grid-template-rows:1fr;gap:8px}.bar{display:block;padding:10px}.modes{display:grid;grid-template-columns:1fr 1fr;min-width:0;margin-bottom:12px}.modes .mode:last-child{grid-column:1/-1}.control{margin-bottom:12px}.swatches{min-width:0;flex-wrap:wrap;margin-bottom:12px}.stage{padding:5px}.hint{display:block;position:absolute;right:10px;bottom:8px;font-size:10px;color:var(--muted);pointer-events:none}}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="top"><b>Reference Crayon — v6</b><span>Rebuilt from the crayon reference: dense opaque body, directional dry fibres, scratchy broken tooth and rough dusty edges — no clean white cut-outs.</span></div>
+  <div class="top"><b>Marker Lab — v1</b><span>Fresh start: clean felt markers. Round felt, chisel and pressure brush tips. No crayon texture.</span></div>
   <div class="app">
     <div class="bar">
-      <div class="control"><label>Size <span id="sv">32</span></label><input id="size" type="range" min="4" max="90" value="32"></div>
-      <div class="locked">Fill 100% opaque</div>
-      <div class="control"><label>Dry break <span id="bv">56%</span></label><input id="dry" type="range" min="0" max="100" value="56"></div>
-      <div class="control"><label>Fibres <span id="fv">72%</span></label><input id="fiber" type="range" min="0" max="100" value="72"></div>
-      <div class="control"><label>Dust <span id="dv">12%</span></label><input id="dust" type="range" min="0" max="60" value="12"></div>
+      <div class="modes">
+        <button class="mode active" data-mode="round">Round Felt</button>
+        <button class="mode" data-mode="chisel">Chisel</button>
+        <button class="mode" data-mode="brush">Brush Marker</button>
+      </div>
+      <div class="control"><label>Size <span id="sv">24</span></label><input id="size" type="range" min="4" max="100" value="24"></div>
+      <div class="control"><label>Ink opacity <span id="ov">100%</span></label><input id="opacity" type="range" min="60" max="100" value="100"></div>
+      <div class="control"><label>Edge bleed <span id="bv">8%</span></label><input id="bleed" type="range" min="0" max="40" value="8"></div>
+      <div class="control" id="angleControl"><label>Chisel angle <span id="av">35°</span></label><input id="angle" type="range" min="0" max="90" value="35"></div>
       <div class="swatches">
-        <button class="sw active" data-c="#a98b5e" style="background:#a98b5e"></button>
-        <button class="sw" data-c="#c38b68" style="background:#c38b68"></button>
-        <button class="sw" data-c="#ead8cb" style="background:#ead8cb"></button>
-        <button class="sw" data-c="#efece4" style="background:#efece4"></button>
-        <button class="sw" data-c="#49320c" style="background:#49320c"></button>
+        <button class="sw active" data-c="#313131" style="background:#313131"></button>
+        <button class="sw" data-c="#c45f52" style="background:#c45f52"></button>
+        <button class="sw" data-c="#df8a4c" style="background:#df8a4c"></button>
+        <button class="sw" data-c="#c8a843" style="background:#c8a843"></button>
+        <button class="sw" data-c="#6b9a76" style="background:#6b9a76"></button>
+        <button class="sw" data-c="#5b86a4" style="background:#5b86a4"></button>
       </div>
       <button id="undo">Undo</button><button id="clear">Clear</button>
     </div>
-    <div class="stage"><div class="canvasWrap"><canvas id="paper"></canvas><canvas id="live"></canvas></div><div class="hint">The white texture follows the stroke direction like dry crayon fibres. It is painted white, not transparent.</div></div>
+    <div class="stage"><div class="canvasWrap"><canvas id="paper"></canvas><canvas id="live"></canvas></div><div class="hint">Round Felt = steady clean line · Chisel = flat nib · Brush Marker = pressure-sensitive width</div></div>
   </div>
 </div>
 <script>
@@ -39,123 +44,81 @@
 const paper=document.getElementById('paper'),live=document.getElementById('live'),wrap=document.querySelector('.canvasWrap');
 const pctx=paper.getContext('2d',{alpha:false,desynchronized:true});
 const lctx=live.getContext('2d',{desynchronized:true});
-const sizeEl=document.getElementById('size'),dryEl=document.getElementById('dry'),fiberEl=document.getElementById('fiber'),dustEl=document.getElementById('dust');
-const sv=document.getElementById('sv'),bv=document.getElementById('bv'),fv=document.getElementById('fv'),dv=document.getElementById('dv');
-let size=32,dry=.56,fiber=.72,dust=.12,color='#a98b5e',dpr=1,drawing=false,points=[],history=[],strokeSeed=1;
-function seeded(seed){let s=seed>>>0;return()=>{s=(s*1664525+1013904223)>>>0;return s/4294967296}}
+const mask=document.createElement('canvas'),mctx=mask.getContext('2d');
+const bleedMask=document.createElement('canvas'),bctx=bleedMask.getContext('2d');
+const sizeEl=document.getElementById('size'),opacityEl=document.getElementById('opacity'),bleedEl=document.getElementById('bleed'),angleEl=document.getElementById('angle');
+const sv=document.getElementById('sv'),ov=document.getElementById('ov'),bv=document.getElementById('bv'),av=document.getElementById('av');
+let size=24,opacity=1,bleed=.08,angle=35*Math.PI/180,color='#313131',mode='round',dpr=1,drawing=false,points=[],history=[];
 function resize(preserve=true){
   const r=wrap.getBoundingClientRect();let snap=null;
   if(preserve&&paper.width){snap=document.createElement('canvas');snap.width=paper.width;snap.height=paper.height;snap.getContext('2d').drawImage(paper,0,0)}
   dpr=Math.max(1,Math.min(2,window.devicePixelRatio||1));
-  [paper,live].forEach(c=>{c.width=Math.max(1,Math.floor(r.width*dpr));c.height=Math.max(1,Math.floor(r.height*dpr));c.style.width=r.width+'px';c.style.height=r.height+'px'});
-  pctx.setTransform(dpr,0,0,dpr,0,0);lctx.setTransform(dpr,0,0,dpr,0,0);
+  [paper,live,mask,bleedMask].forEach(c=>{c.width=Math.max(1,Math.floor(r.width*dpr));c.height=Math.max(1,Math.floor(r.height*dpr));c.style.width=r.width+'px';c.style.height=r.height+'px'});
+  pctx.setTransform(dpr,0,0,dpr,0,0);lctx.setTransform(dpr,0,0,dpr,0,0);mctx.setTransform(dpr,0,0,dpr,0,0);bctx.setTransform(dpr,0,0,dpr,0,0);
   pctx.fillStyle='#fff';pctx.fillRect(0,0,r.width,r.height);
   if(snap){pctx.save();pctx.setTransform(1,0,0,1,0,0);pctx.drawImage(snap,0,0,snap.width,snap.height,0,0,paper.width,paper.height);pctx.restore()}
 }
-function save(){try{history.push(paper.toDataURL('image/png'));if(history.length>20)history.shift()}catch(_){}}
+function save(){try{history.push(paper.toDataURL('image/png'));if(history.length>24)history.shift()}catch(_){}}
 function restore(data){const img=new Image();img.onload=()=>{const r=wrap.getBoundingClientRect();pctx.setTransform(dpr,0,0,dpr,0,0);pctx.fillStyle='#fff';pctx.fillRect(0,0,r.width,r.height);pctx.drawImage(img,0,0,r.width,r.height)};img.src=data}
-function pos(e){const r=live.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top,p:(e.pointerType==='pen'&&e.pressure>0)?Math.max(.18,Math.min(1,e.pressure)):.62}}
-function smoothPath(ctx,pts,w,stroke){
+function pos(e){const r=live.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top,p:(e.pointerType==='pen'&&e.pressure>0)?Math.max(.08,Math.min(1,e.pressure)):.58}}
+function smoothStroke(ctx,pts,w){
   if(pts.length<2)return;ctx.beginPath();ctx.moveTo(pts[0].x,pts[0].y);
   for(let i=1;i<pts.length-1;i++){const mx=(pts[i].x+pts[i+1].x)/2,my=(pts[i].y+pts[i+1].y)/2;ctx.quadraticCurveTo(pts[i].x,pts[i].y,mx,my)}
-  const n=pts.length-1;ctx.quadraticCurveTo(pts[n-1].x,pts[n-1].y,pts[n].x,pts[n].y);ctx.strokeStyle=stroke;ctx.lineWidth=w;ctx.lineCap='round';ctx.lineJoin='round';ctx.stroke();
+  const n=pts.length-1;ctx.quadraticCurveTo(pts[n-1].x,pts[n-1].y,pts[n].x,pts[n].y);ctx.lineWidth=w;ctx.lineCap='round';ctx.lineJoin='round';ctx.stroke();
 }
-function frameAt(i){
-  const a=points[Math.max(0,i-2)],b=points[Math.min(points.length-1,i+2)];let tx=b.x-a.x,ty=b.y-a.y;const len=Math.hypot(tx,ty)||1;tx/=len;ty/=len;return{tx,ty,nx:-ty,ny:tx};
-}
-function roughFleck(ctx,x,y,r,rand){
-  const n=4+Math.floor(rand()*5);ctx.beginPath();
-  for(let j=0;j<n;j++){const a=Math.PI*2*j/n+(rand()-.5)*.6,rr=r*(.3+rand()*1.05),px=x+Math.cos(a)*rr,py=y+Math.sin(a)*rr;if(j===0)ctx.moveTo(px,py);else ctx.lineTo(px,py)}
-  ctx.closePath();ctx.fill();
-}
-function brokenFiber(ctx,x,y,tx,ty,nx,ny,len,w,rand){
-  const pieces=2+Math.floor(rand()*4),gap=.18+rand()*.75;let start=-len*.5;
-  ctx.strokeStyle='#fff';ctx.lineCap='round';ctx.lineJoin='round';ctx.lineWidth=w;
-  for(let p=0;p<pieces;p++){
-    const plen=(len/pieces)*(.35+rand()*.75);const s=start+rand()*gap*2;const e=Math.min(len*.5,s+plen);if(e<=s)continue;
-    const j1=(rand()-.5)*w*2.2,j2=(rand()-.5)*w*2.6;
-    ctx.beginPath();ctx.moveTo(x+tx*s+nx*j1,y+ty*s+ny*j1);ctx.quadraticCurveTo(x+tx*((s+e)/2)+nx*(rand()-.5)*w*3.2,y+ty*((s+e)/2)+ny*(rand()-.5)*w*3.2,x+tx*e+nx*j2,y+ty*e+ny*j2);ctx.stroke();
-    start=e+gap*(.4+rand()*2.2);
+function drawBrushRibbon(ctx,pts,extra=0){
+  if(pts.length<2)return;
+  const left=[],right=[];
+  for(let i=0;i<pts.length;i++){
+    const a=pts[Math.max(0,i-1)],b=pts[Math.min(pts.length-1,i+1)];let dx=b.x-a.x,dy=b.y-a.y;const len=Math.hypot(dx,dy)||1;dx/=len;dy/=len;const nx=-dy,ny=dx;
+    const pressure=pts[i].p;const half=(size*(.20+.82*pressure)+extra*2)/2;
+    left.push({x:pts[i].x+nx*half,y:pts[i].y+ny*half});right.push({x:pts[i].x-nx*half,y:pts[i].y-ny*half});
   }
+  ctx.beginPath();ctx.moveTo(left[0].x,left[0].y);for(let i=1;i<left.length;i++)ctx.lineTo(left[i].x,left[i].y);for(let i=right.length-1;i>=0;i--)ctx.lineTo(right[i].x,right[i].y);ctx.closePath();ctx.fill();
+  const sHalf=(size*(.20+.82*pts[0].p)+extra*2)/2,eHalf=(size*(.20+.82*pts[pts.length-1].p)+extra*2)/2;
+  ctx.beginPath();ctx.arc(pts[0].x,pts[0].y,sHalf,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(pts[pts.length-1].x,pts[pts.length-1].y,eHalf,0,Math.PI*2);ctx.fill();
+}
+function drawChisel(ctx,pts,extra=0){
+  if(pts.length<2)return;
+  const nibW=size+extra*2,nibH=size*.30+extra*1.4;
+  const spacing=Math.max(.55,nibH*.18);
+  for(let i=1;i<pts.length;i++){
+    const a=pts[i-1],b=pts[i],dx=b.x-a.x,dy=b.y-a.y,dist=Math.hypot(dx,dy);if(dist===0)continue;
+    const steps=Math.max(1,Math.ceil(dist/spacing));
+    for(let s=0;s<=steps;s++){
+      const t=s/steps,x=a.x+dx*t,y=a.y+dy*t;
+      ctx.save();ctx.translate(x,y);ctx.rotate(angle);ctx.fillRect(-nibW/2,-nibH/2,nibW,nibH);ctx.restore();
+    }
+  }
+}
+function buildMasks(){
+  const r=wrap.getBoundingClientRect();mctx.clearRect(0,0,r.width,r.height);bctx.clearRect(0,0,r.width,r.height);if(points.length<2)return;
+  mctx.fillStyle='#000';mctx.strokeStyle='#000';bctx.fillStyle='#000';bctx.strokeStyle='#000';
+  const bleedPx=bleed*6;
+  if(mode==='round'){
+    let avg=0;for(const p of points)avg+=p.p;avg/=points.length;const core=size*(.94+.08*avg);
+    smoothStroke(mctx,points,core);smoothStroke(bctx,points,core+bleedPx*2);
+  }else if(mode==='brush'){
+    drawBrushRibbon(mctx,points,0);drawBrushRibbon(bctx,points,bleedPx);
+  }else{
+    drawChisel(mctx,points,0);drawChisel(bctx,points,bleedPx);
+  }
+}
+function paintThroughMask(ctx,maskCanvas,alpha){
+  const r=wrap.getBoundingClientRect();ctx.save();ctx.globalCompositeOperation='source-over';ctx.globalAlpha=alpha;ctx.fillStyle=color;ctx.fillRect(0,0,r.width,r.height);ctx.globalCompositeOperation='destination-in';ctx.globalAlpha=1;ctx.drawImage(maskCanvas,0,0,r.width,r.height);ctx.restore();
 }
 function render(){
-  const r=wrap.getBoundingClientRect();lctx.clearRect(0,0,r.width,r.height);if(points.length<2)return;
-  let p=0;for(const q of points)p+=q.p;p/=points.length;
-  const w=size*(.985+.025*p);
-  lctx.save();lctx.globalAlpha=1;lctx.globalCompositeOperation='source-over';
-
-  // Dense opaque crayon body.
-  smoothPath(lctx,points,w,color);
-
-  const rand=seeded(strokeSeed);
-
-  // Colour bristles at the silhouette: scratchy/fibrous edge instead of a perfect marker edge.
-  let i=2;
-  while(i<points.length-2){
-    i+=2+Math.floor(Math.pow(rand(),.7)*(5+fiber*6));if(i>=points.length-2)break;
-    if(rand()>.22+fiber*.62)continue;
-    const f=frameAt(i),side=rand()<.5?-1:1,base=points[i];
-    const off=w*(.45+rand()*.11)*side,len=1.2+rand()*(3+fiber*8),along=(rand()-.5)*2.5;
-    const x=base.x+f.nx*off+f.tx*along,y=base.y+f.ny*off+f.ty*along;
-    lctx.strokeStyle=color;lctx.lineWidth=.35+rand()*(.5+fiber*.7);lctx.lineCap='round';
-    lctx.beginPath();lctx.moveTo(x-f.tx*len*.25,y-f.ty*len*.25);lctx.quadraticCurveTo(x+f.nx*(rand()-.5)*1.4,y+f.ny*(rand()-.5)*1.4,x+f.tx*len+f.nx*side*(.5+rand()*1.7),y+f.ty*len+f.ny*side*(.5+rand()*1.7));lctx.stroke();
-  }
-
-  // Directional dry tooth inside the stroke. Mostly short broken fibres, not dots.
-  i=1;
-  while(i<points.length-2){
-    i+=1+Math.floor(Math.pow(rand(),.72)*(4+dry*7));if(i>=points.length-2)break;
-    if(rand()>.20+dry*.72)continue;
-    const f=frameAt(i),base=points[i],off=(rand()-.5)*w*.78;
-    const x=base.x+f.nx*off,y=base.y+f.ny*off;
-    const q=rand();
-    if(q<.68){
-      const len=.8+rand()*(2.4+fiber*8.5),fw=.18+rand()*(.28+dry*.5);
-      brokenFiber(lctx,x,y,f.tx,f.ty,f.nx,f.ny,len,fw,rand);
-    }else{
-      // Rough crumb patch made from many tiny fragments, never one clean shape.
-      lctx.fillStyle='#fff';const count=1+Math.floor(Math.pow(rand(),1.45)*(3+dry*8));
-      const spreadAlong=1+rand()*(2+fiber*5),spreadAcross=.5+rand()*(1+dry*2.6);
-      for(let k=0;k<count;k++){
-        const aa=(rand()-.5)*spreadAlong,nn=(rand()-.5)*spreadAcross;
-        const rr=rand()<.08?(.8+rand()*1.2):(.08+Math.pow(rand(),1.8)*.58);
-        roughFleck(lctx,x+f.tx*aa+f.nx*nn,y+f.ty*aa+f.ny*nn,rr,rand);
-      }
-    }
-  }
-
-  // Occasional rough edge wear: tiny broken white fibres hugging the edge.
-  i=3;
-  while(i<points.length-3){
-    i+=5+Math.floor(rand()*(10+dry*10));if(i>=points.length-3)break;
-    if(rand()>.12+dry*.28)continue;
-    const f=frameAt(i),side=rand()<.5?-1:1,base=points[i],off=w*(.43+rand()*.055)*side;
-    const x=base.x+f.nx*off,y=base.y+f.ny*off;
-    brokenFiber(lctx,x,y,f.tx,f.ty,f.nx,f.ny,.7+rand()*(2.5+fiber*4),.18+rand()*.38,rand);
-    if(rand()<.42){lctx.fillStyle='#fff';const n=1+Math.floor(rand()*5);for(let k=0;k<n;k++)roughFleck(lctx,x+(rand()-.5)*3.5,y+(rand()-.5)*2.2,.07+rand()*.34,rand)}
-  }
-
-  // Very sparse powder dust — secondary, not the main texture.
-  if(dust>0){
-    lctx.fillStyle='#fff';i=2;
-    while(i<points.length-2){
-      i+=7+Math.floor(rand()*(18+dust*24));if(i>=points.length-2)break;
-      if(rand()>.10+dust*.7)continue;
-      const f=frameAt(i),base=points[i],cloud=1+Math.floor(Math.pow(rand(),1.5)*(2+dust*8));
-      for(let k=0;k<cloud;k++){
-        const along=(rand()-.5)*(2+dust*8),across=(rand()-.5)*w*.72;
-        roughFleck(lctx,base.x+f.tx*along+f.nx*across,base.y+f.ty*along+f.ny*across,.045+rand()*(.08+dust*.18),rand);
-      }
-    }
-  }
-  lctx.restore();
+  const r=wrap.getBoundingClientRect();lctx.clearRect(0,0,r.width,r.height);if(points.length<2)return;buildMasks();
+  if(bleed>0)paintThroughMask(lctx,bleedMask,Math.min(.20,opacity*(.035+bleed*.20)));
+  paintThroughMask(lctx,mask,opacity);
 }
-function down(e){if(e.pointerType!=='pen'&&e.button!==undefined&&e.button!==0)return;e.preventDefault();save();drawing=true;points=[pos(e)];strokeSeed=((points[0].x*73856093)^(points[0].y*19349663)^(Date.now()&0xffff))>>>0;try{live.setPointerCapture(e.pointerId)}catch(_){}}
-function move(e){if(!drawing)return;e.preventDefault();const evs=e.getCoalescedEvents?e.getCoalescedEvents():[e];for(const ee of evs){const q=pos(ee),last=points[points.length-1];if(!last||Math.hypot(q.x-last.x,q.y-last.y)>.55)points.push(q)}render()}
-function up(e){if(!drawing)return;e.preventDefault();const q=pos(e),last=points[points.length-1];if(!last||Math.hypot(q.x-last.x,q.y-last.y)>.3)points.push(q);render();const r=wrap.getBoundingClientRect();pctx.drawImage(live,0,0,r.width,r.height);lctx.clearRect(0,0,r.width,r.height);drawing=false;points=[];try{live.releasePointerCapture(e.pointerId)}catch(_){}}
-sizeEl.oninput=e=>{size=+e.target.value;sv.textContent=size};dryEl.oninput=e=>{dry=+e.target.value/100;bv.textContent=e.target.value+'%'};fiberEl.oninput=e=>{fiber=+e.target.value/100;fv.textContent=e.target.value+'%'};dustEl.oninput=e=>{dust=+e.target.value/100;dv.textContent=e.target.value+'%'};
-document.querySelectorAll('.sw').forEach(b=>b.onclick=()=>{document.querySelectorAll('.sw').forEach(x=>x.classList.remove('active'));b.classList.add('active');color=b.dataset.c});
-document.getElementById('undo').onclick=()=>{const prev=history.pop();if(prev)restore(prev)};document.getElementById('clear').onclick=()=>{save();const r=wrap.getBoundingClientRect();pctx.fillStyle='#fff';pctx.fillRect(0,0,r.width,r.height)};
+function down(e){if(e.pointerType!=='pen'&&e.button!==undefined&&e.button!==0)return;e.preventDefault();save();drawing=true;points=[pos(e)];try{live.setPointerCapture(e.pointerId)}catch(_){}}
+function move(e){if(!drawing)return;e.preventDefault();const evs=e.getCoalescedEvents?e.getCoalescedEvents():[e];for(const ee of evs){const q=pos(ee),last=points[points.length-1];if(!last||Math.hypot(q.x-last.x,q.y-last.y)>.45)points.push(q)}render()}
+function up(e){if(!drawing)return;e.preventDefault();const q=pos(e),last=points[points.length-1];if(!last||Math.hypot(q.x-last.x,q.y-last.y)>.25)points.push(q);render();const r=wrap.getBoundingClientRect();pctx.drawImage(live,0,0,r.width,r.height);lctx.clearRect(0,0,r.width,r.height);mctx.clearRect(0,0,r.width,r.height);bctx.clearRect(0,0,r.width,r.height);drawing=false;points=[];try{live.releasePointerCapture(e.pointerId)}catch(_){}}
+document.querySelectorAll('.mode').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.mode').forEach(x=>x.classList.remove('active'));b.classList.add('active');mode=b.dataset.mode}));
+sizeEl.addEventListener('input',e=>{size=+e.target.value;sv.textContent=size});opacityEl.addEventListener('input',e=>{opacity=+e.target.value/100;ov.textContent=e.target.value+'%'});bleedEl.addEventListener('input',e=>{bleed=+e.target.value/100;bv.textContent=e.target.value+'%'});angleEl.addEventListener('input',e=>{angle=+e.target.value*Math.PI/180;av.textContent=e.target.value+'°'});
+document.querySelectorAll('.sw').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.sw').forEach(x=>x.classList.remove('active'));b.classList.add('active');color=b.dataset.c}));
+document.getElementById('undo').addEventListener('click',()=>{const prev=history.pop();if(prev)restore(prev)});document.getElementById('clear').addEventListener('click',()=>{save();const r=wrap.getBoundingClientRect();pctx.fillStyle='#fff';pctx.fillRect(0,0,r.width,r.height)});
 live.addEventListener('pointerdown',down,{passive:false});live.addEventListener('pointermove',move,{passive:false});live.addEventListener('pointerup',up,{passive:false});live.addEventListener('pointercancel',up,{passive:false});live.addEventListener('contextmenu',e=>e.preventDefault());
 let rt;window.addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(()=>resize(true),120)});resize(false);
 })();
