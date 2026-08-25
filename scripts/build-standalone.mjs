@@ -98,8 +98,24 @@ async function executeWrapper(wrapperHtml, label) {
   return written;
 }
 
+// v7's first 500% experiment changed v8's lookup key before v8 had created the
+// control. Keep the original 300% lookup during assembly; we expand the finished
+// HTML control immediately afterward instead.
+let v7ForBuild = localFiles['hand-selector-v7-test.html'];
+const eager500 = `'const refSizeControl=\\'<div class="slider-group"><span>Background size</span> <input type="range" id="refSizeSlider" min="25" max="500" value="100"></div>\\';'`;
+const safe300 = `'const refSizeControl=\\'<div class="slider-group"><span>Background size</span> <input type="range" id="refSizeSlider" min="25" max="300" value="100"></div>\\';'`;
+if (!v7ForBuild.includes(eager500)) throw new Error('Expected v7 background-size patch was not found');
+v7ForBuild = v7ForBuild.replace(eager500, safe300);
+
 console.log('1/3 Applying current video/UI test to v8...');
-const transformedV8 = await executeWrapper(localFiles['hand-selector-v7-test.html'], 'v7-wrapper');
+let transformedV8 = await executeWrapper(v7ForBuild, 'v7-wrapper');
+
+const placementHook = '    html=html.replace(refSizeControl,refSizeControl+videoControls+guideControls);';
+if (!transformedV8.includes(placementHook)) throw new Error('Background control placement hook not found after v7 transform');
+transformedV8 = transformedV8.replace(
+  placementHook,
+  placementHook + "\n    html=html.replace('id=\"refSizeSlider\" min=\"25\" max=\"300\"', 'id=\"refSizeSlider\" min=\"25\" max=\"500\"');"
+);
 
 console.log('2/3 Applying layer test to v6...');
 const transformedV6 = await executeWrapper(transformedV8, 'v8-wrapper');
