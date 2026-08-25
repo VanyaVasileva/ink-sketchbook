@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Ink Sketchbook Layer Test v8</title></head><body><p style="font-family:sans-serif;padding:20px">Loading background + private sketch overlay test…</p><script>
+(async function(){
+  const v6Url='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/main/hand-selector-v6-test.html';
+  try {
+    let source=await fetch(v6Url,{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('Could not load hand selector v6');return r.text();});
+    const marker='    document.open();document.write(html);document.close();';
+    if(!source.includes(marker)) throw new Error('v6 publish marker not found');
+
+    const recordingReferencePatch=String.raw`
+    html=html.replace(
+      'Reference images stay hidden from the recording.',
+      'Background can be included in the recording. The sketch overlay always stays private and is never recorded.'
+    );
+
+    const recordingHandControl='<div class="slider-group"><span>Recording hand</span><select id="recordingHandSelect"';
+    const referenceRecordingControl='<button id="recordReferenceBtn" type="button" class="active">🎞 Background in recording: On</button>';
+    if(!html.includes(recordingHandControl)) throw new Error('Recording hand control not found');
+    html=html.replace(recordingHandControl,referenceRecordingControl+recordingHandControl);
+
+    const recordingDomNeedle="const recordingHandSizeValue = document.getElementById('recordingHandSizeValue');";
+    if(!html.includes(recordingDomNeedle)) throw new Error('Recording control DOM setup not found');
+    html=html.replace(recordingDomNeedle, recordingDomNeedle+"\nconst recordReferenceBtn = document.getElementById('recordReferenceBtn');");
+
+    const recordingStateNeedle="let recordingHandUserScale = 1;";
+    if(!html.includes(recordingStateNeedle)) throw new Error('Recording state setup not found');
+    html=html.replace(recordingStateNeedle, [
+      recordingStateNeedle,
+      "let recordReferenceInVideo = true;",
+      "if (recordReferenceBtn) recordReferenceBtn.onclick = () => {",
+      "  recordReferenceInVideo = !recordReferenceInVideo;",
+      "  recordReferenceBtn.classList.toggle('active', recordReferenceInVideo);",
+      "  recordReferenceBtn.textContent = '🎞 Background in recording: ' + (recordReferenceInVideo ? 'On' : 'Off');",
+      "};"
+    ].join('\n'));
+
+    const frameSourceNeedle="  const source = recordSourceRect || { x: 0, y: 0, width: drawCanvas.width, height: drawCanvas.height };";
+    if(!html.includes(frameSourceNeedle)) throw new Error('Recording crop source not found');
+    html=html.replace(frameSourceNeedle, [
+      frameSourceNeedle,
+      "  if (recordReferenceInVideo && refImage && refVisible) {",
+      "    const refScaleX = refCanvas.width / drawCanvas.width;",
+      "    const refScaleY = refCanvas.height / drawCanvas.height;",
+      "    recordCtx.drawImage(",
+      "      refCanvas,",
+      "      source.x * refScaleX, source.y * refScaleY,",
+      "      source.width * refScaleX, source.height * refScaleY,",
+      "      0, 0, recordCanvas.width, recordCanvas.height",
+      "    );",
+      "  }"
+    ].join('\n'));
+`;
+
+    const layerPatch=String.raw`
+    // --- v8 independent layers -------------------------------------------------
+    // refCanvas = background/scene (optionally recorded)
+    // guideCanvas = private sketch overlay (visible while drawing, NEVER recorded)
+    // drawCanvas = real ink
+    html=html.replace(
+      '<canvas id="refCanvas"></canvas>\n      <canvas id="drawCanvas"></canvas>',
+      '<canvas id="refCanvas"></canvas>\n      <canvas id="guideCanvas"></canvas>\n      <canvas id="drawCanvas"></canvas>'
+    );
+    html=html.replace(
+      '#refCanvas { z-index: 1; }\n  #drawCanvas { z-index: 2; }',
+      '#refCanvas { z-index: 1; }\n  #guideCanvas { z-index: 2; pointer-events: none; }\n  #drawCanvas { z-index: 3; }'
+    );
+
+    html=html.replace('📷 <span data-i18n="referenceBtn">Reference</span>', '🖼 <span>Background / scene</span>');
+    html=html.replace('<span data-i18n="fadeLabel">Fade</span> <input type="range" id="opacitySlider" min="10" max="100" value="70">', '<span>Background opacity</span> <input type="range" id="opacitySlider" min="10" max="100" value="100">');
+    html=html.replace('<span data-i18n="refSizeLabel">Reference size</span>', '<span>Background size</span>');
+
+    const refSizeControl='<div class="slider-group"><span>Background size</span> <input type="range" id="refSizeSlider" min="25" max="300" value="100"></div>';
+    const guideControls=[
+      '<div id="guideControls" style="border-top:1px solid #e5e1d8;padding-top:10px;display:flex;flex-direction:column;gap:8px;">',
+      '<div style="font-size:12px;font-weight:700;color:#2a2620;">Sketch overlay <span style="font-weight:500;color:#8a8373;">· hidden from recording</span></div>',
+      '<label class="filebtn" for="guideFileInput">📝 Upload sketch overlay</label>',
+      '<input type="file" id="guideFileInput" accept="image/*" />',
+      '<button id="toggleGuideBtn" class="active" type="button">👁 Sketch overlay visible</button>',
+      '<button id="moveGuideBtn" type="button">↔ Move sketch</button>',
+      '<button id="removeGuideBtn" type="button" style="display:none;">✕ Remove sketch</button>',
+      '<div class="slider-group"><span>Sketch opacity</span> <input type="range" id="guideOpacitySlider" min="5" max="100" value="45"></div>',
+      '<div class="slider-group"><span>Sketch size</span> <input type="range" id="guideSizeSlider" min="10" max="300" value="100"></div>',
+      '<button id="resetGuidePosBtn" type="button">◎ Center sketch</button>',
+      '</div>'
+    ].join('');
+    if(!html.includes(refSizeControl)) throw new Error('Background size control not found');
+    html=html.replace(refSizeControl,refSizeControl+guideControls);
+
+    const canvasDomNeedle=[
+      "const refCanvas = document.getElementById('refCanvas');",
+      "const drawCanvas = document.getElementById('drawCanvas');",
+      "const refCtx = refCanvas.getContext('2d');",
+      "const ctx = drawCanvas.getContext('2d', { willReadFrequently: true });"
+    ].join('\n');
+    if(!html.includes(canvasDomNeedle)) throw new Error('Canvas DOM setup not found');
+    html=html.replace(canvasDomNeedle, [
+      "const refCanvas = document.getElementById('refCanvas');",
+      "const guideCanvas = document.getElementById('guideCanvas');",
+      "const drawCanvas = document.getElementById('drawCanvas');",
+      "const refCtx = refCanvas.getContext('2d');",
+      "const guideCtx = guideCanvas.getContext('2d');",
+      "const ctx = drawCanvas.getContext('2d', { willReadFrequently: true });"
+    ].join('\n'));
+
+    const refSliderNeedle="const refSizeSlider = document.getElementById('refSizeSlider');";
+    if(!html.includes(refSliderNeedle)) throw new Error('Reference slider DOM setup not found');
+    html=html.replace(refSliderNeedle, [
+      refSliderNeedle,
+      "const guideFileInput = document.getElementById('guideFileInput');",
+      "const toggleGuideBtn = document.getElementById('toggleGuideBtn');",
+      "const moveGuideBtn = document.getElementById('moveGuideBtn');",
+      "const removeGuideBtn = document.getElementById('removeGuideBtn');",
+      "const guideOpacitySlider = document.getElementById('guideOpacitySlider');",
+      "const guideSizeSlider = document.getElementById('guideSizeSlider');",
+      "const resetGuidePosBtn = document.getElementById('resetGuidePosBtn');"
+    ].join('\n'));
+
+    // Keep all three visual canvases locked to exactly the same display geometry.
+    html=html.split('[refCanvas, drawCanvas].forEach').join('[refCanvas, guideCanvas, drawCanvas].forEach');
+    html=html.replace(
+      "  refCanvas.style.transform = t;\n  drawCanvas.style.transform = t;",
+      "  refCanvas.style.transform = t;\n  guideCanvas.style.transform = t;\n  drawCanvas.style.transform = t;"
+    );
+    html=html.replace(
+      "  if (prev) ctx.putImageData(prev, 0, 0);\n  drawRef();\n  fitCanvasDisplay();",
+      "  if (prev) ctx.putImageData(prev, 0, 0);\n  drawRef();\n  drawGuide();\n  fitCanvasDisplay();"
+    );
+
+    const guideLogicNeedle="refSizeSlider.addEventListener('input', drawRef);";
+    if(!html.includes(guideLogicNeedle)) throw new Error('Reference render hook not found');
+    const guideLogic=[
+      guideLogicNeedle,
+      "",
+      "let guideImage = null;",
+      "let guideVisible = true;",
+      "let guideOffsetX = 0;",
+      "let guideOffsetY = 0;",
+      "let guideMoveMode = false;",
+      "let guideDrag = null;",
+      "",
+      "function drawGuide() {",
+      "  if (!guideCanvas || !guideCtx) return;",
+      "  guideCtx.clearRect(0, 0, guideCanvas.width, guideCanvas.height);",
+      "  if (!guideImage || !guideVisible) return;",
+      "  const cw = guideCanvas.width, ch = guideCanvas.height;",
+      "  const iw = guideImage.width, ih = guideImage.height;",
+      "  const fitScale = Math.min(cw / iw, ch / ih) * 0.72;",
+      "  const autoScale = Math.min(fitScale, 1);",
+      "  const userScale = (parseFloat(guideSizeSlider.value) || 100) / 100;",
+      "  const scale = autoScale * userScale;",
+      "  const w = iw * scale, h = ih * scale;",
+      "  const x = (cw - w) / 2 + guideOffsetX;",
+      "  const y = (ch - h) / 2 + guideOffsetY;",
+      "  guideCtx.imageSmoothingEnabled = true;",
+      "  guideCtx.imageSmoothingQuality = 'high';",
+      "  guideCtx.globalAlpha = (parseFloat(guideOpacitySlider.value) || 45) / 100;",
+      "  guideCtx.drawImage(guideImage, x, y, w, h);",
+      "  guideCtx.globalAlpha = 1;",
+      "}",
+      "",
+      "guideFileInput.addEventListener('change', (e) => {",
+      "  const file = e.target.files && e.target.files[0];",
+      "  if (!file) return;",
+      "  const reader = new FileReader();",
+      "  reader.onload = (ev) => {",
+      "    const img = new Image();",
+      "    img.onload = () => {",
+      "      guideImage = img;",
+      "      guideVisible = true;",
+      "      guideOffsetX = 0; guideOffsetY = 0;",
+      "      guideSizeSlider.value = 100;",
+      "      toggleGuideBtn.classList.add('active');",
+      "      toggleGuideBtn.textContent = '👁 Sketch overlay visible';",
+      "      removeGuideBtn.style.display = 'inline-block';",
+      "      drawGuide();",
+      "      hintText.textContent = 'Sketch overlay loaded — tap Move sketch, then drag it into place. It will not appear in recordings.';",
+      "    };",
+      "    img.onerror = () => { hintText.textContent = 'That sketch image could not be loaded.'; };",
+      "    img.src = ev.target.result;",
+      "  };",
+      "  reader.readAsDataURL(file);",
+      "});",
+      "",
+      "toggleGuideBtn.onclick = () => {",
+      "  if (!guideImage) return;",
+      "  guideVisible = !guideVisible;",
+      "  toggleGuideBtn.classList.toggle('active', guideVisible);",
+      "  toggleGuideBtn.textContent = guideVisible ? '👁 Sketch overlay visible' : '🙈 Sketch overlay hidden';",
+      "  drawGuide();",
+      "};",
+      "guideOpacitySlider.addEventListener('input', drawGuide);",
+      "guideSizeSlider.addEventListener('input', drawGuide);",
+      "resetGuidePosBtn.onclick = () => { guideOffsetX = 0; guideOffsetY = 0; drawGuide(); };",
+      "",
+      "function setGuideMoveMode(on) {",
+      "  guideMoveMode = !!on && !!guideImage;",
+      "  moveGuideBtn.classList.toggle('active', guideMoveMode);",
+      "  moveGuideBtn.textContent = guideMoveMode ? '✓ Moving sketch — drag it' : '↔ Move sketch';",
+      "  drawCanvas.style.pointerEvents = guideMoveMode ? 'none' : 'auto';",
+      "  guideCanvas.style.pointerEvents = guideMoveMode ? 'auto' : 'none';",
+      "  guideCanvas.style.cursor = guideMoveMode ? 'move' : 'default';",
+      "  if (guideMoveMode) hintText.textContent = 'Drag the sketch overlay freely. Tap Moving sketch again when you are ready to draw.';",
+      "}",
+      "moveGuideBtn.onclick = () => {",
+      "  if (!guideImage) { hintText.textContent = 'Upload a sketch overlay first.'; return; }",
+      "  setGuideMoveMode(!guideMoveMode);",
+      "};",
+      "removeGuideBtn.onclick = () => {",
+      "  setGuideMoveMode(false);",
+      "  guideImage = null; guideFileInput.value = '';",
+      "  guideOffsetX = 0; guideOffsetY = 0;",
+      "  removeGuideBtn.style.display = 'none';",
+      "  guideCtx.clearRect(0, 0, guideCanvas.width, guideCanvas.height);",
+      "};",
+      "",
+      "guideCanvas.addEventListener('pointerdown', (e) => {",
+      "  if (!guideMoveMode || !guideImage) return;",
+      "  e.preventDefault();",
+      "  const p = getPos(e);",
+      "  guideDrag = { pointerId: e.pointerId, x: p.x, y: p.y, ox: guideOffsetX, oy: guideOffsetY };",
+      "  try { guideCanvas.setPointerCapture(e.pointerId); } catch (_) {}",
+      "});",
+      "guideCanvas.addEventListener('pointermove', (e) => {",
+      "  if (!guideDrag || guideDrag.pointerId !== e.pointerId) return;",
+      "  e.preventDefault();",
+      "  const p = getPos(e);",
+      "  guideOffsetX = guideDrag.ox + (p.x - guideDrag.x);",
+      "  guideOffsetY = guideDrag.oy + (p.y - guideDrag.y);",
+      "  drawGuide();",
+      "});",
+      "function finishGuideDrag(e) {",
+      "  if (!guideDrag || guideDrag.pointerId !== e.pointerId) return;",
+      "  guideDrag = null;",
+      "  try { guideCanvas.releasePointerCapture(e.pointerId); } catch (_) {}",
+      "}",
+      "guideCanvas.addEventListener('pointerup', finishGuideDrag);",
+      "guideCanvas.addEventListener('pointercancel', finishGuideDrag);",
+      "",
+      "// The guide canvas is intentionally NEVER used by compositeRecordFrame().",
+      "// It can be visible at 100% while tracing and still remains absent from video."
+    ].join('\n');
+    html=html.replace(guideLogicNeedle,guideLogic);
+`;
+
+    source=source.replace(marker,recordingReferencePatch+'\n'+layerPatch+'\n'+marker);
+    document.open();document.write(source);document.close();
+  } catch(err) {
+    document.body.innerHTML='<div style="font-family:sans-serif;padding:24px"><h2>Could not load test</h2><pre>'+String(err)+'</pre></div>';
+  }
+})();
+</script></body></html>
