@@ -10,22 +10,21 @@
       source=source.replace(needle,replacement);
     }
 
-    // Recording: include whichever background is active (photo OR video).
     replaceOnce(
       '      "  if (recordReferenceInVideo && refImage && refVisible) {",',
       '      "  if (recordReferenceInVideo && refVisible && (refImage || backgroundVideoReady)) {",',
       'recording background condition'
     );
 
-    // Add video controls immediately before the private sketch controls.
     const controlsNeedle='    const guideControls=[';
     const controlsPatch=[
       '    const videoControls=[',
       '      \'<div id="videoBackgroundSection" style="border-top:1px solid #e5e1d8;padding-top:10px;display:flex;flex-direction:column;gap:8px;">\',',
       '      \'<div style="font-size:12px;font-weight:700;color:#2a2620;">Video background <span style="font-weight:500;color:#8a8373;">· draw while it plays</span></div>\',',
       '      \'<label class="filebtn" for="videoBgInput">🎬 Upload video</label>\',',
-      '      \'<input type="file" id="videoBgInput" accept="video/mp4,video/quicktime,video/*" />\',',
+      '      \'<input type="file" id="videoBgInput" accept="video/*" />\',',
       '      \'<div id="videoBgPlayback" style="display:none;flex-direction:column;gap:7px;">\',',
+      '      \'<div id="videoBgStatus" style="font-size:11px;color:#8a8373;text-align:center;">No video selected</div>\',',
       '      \'<div class="row" style="gap:6px;"><button id="videoBgPlayBtn" type="button">▶ Play</button><button id="videoBgLoopBtn" type="button" class="active">↻ Loop: On</button></div>\',',
       '      \'<input id="videoBgScrub" type="range" min="0" max="1000" value="0" step="1" style="width:100%;" aria-label="Video position">\',',
       '      \'<div id="videoBgTime" style="font-size:11px;color:#8a8373;text-align:center;">0:00 / 0:00</div>\',',
@@ -42,12 +41,12 @@
       'video controls placement'
     );
 
-    // Final-app DOM references for the new controls.
     const domNeedle='      "const resetGuidePosBtn = document.getElementById(\'resetGuidePosBtn\');"';
     const domReplacement=[
       domNeedle+',',
       '      "const videoBgInput = document.getElementById(\'videoBgInput\');",',
       '      "const videoBgPlayback = document.getElementById(\'videoBgPlayback\');",',
+      '      "const videoBgStatus = document.getElementById(\'videoBgStatus\');",',
       '      "const videoBgPlayBtn = document.getElementById(\'videoBgPlayBtn\');",',
       '      "const videoBgLoopBtn = document.getElementById(\'videoBgLoopBtn\');",',
       '      "const videoBgScrub = document.getElementById(\'videoBgScrub\');",',
@@ -56,25 +55,27 @@
     ].join('\n');
     replaceOnce(domNeedle,domReplacement,'video DOM references');
 
-    // State is inserted beside the guide state, before resize() first calls drawRef().
     const stateNeedle='      "let guideDrag = null;"\n    ].join(\'\\n\'));';
     const stateReplacement=[
       '      "let guideDrag = null;",',
       '      "const backgroundVideo = document.createElement(\'video\');",',
+      '      "backgroundVideo.setAttribute(\'playsinline\', \'\');",',
+      '      "backgroundVideo.setAttribute(\'webkit-playsinline\', \'\');",',
       '      "backgroundVideo.playsInline = true;",',
       '      "backgroundVideo.muted = true;",',
+      '      "backgroundVideo.defaultMuted = true;",',
       '      "backgroundVideo.preload = \'auto\';",',
       '      "backgroundVideo.loop = true;",',
-      '      "backgroundVideo.style.cssText = \'position:fixed;left:-10000px;top:0;width:2px;height:2px;opacity:0;pointer-events:none;\';",',
+      '      "backgroundVideo.style.cssText = \'position:fixed;left:1px;top:1px;width:2px;height:2px;opacity:.001;pointer-events:none;z-index:2147483647;\';",',
       '      "document.body.appendChild(backgroundVideo);",',
       '      "let backgroundVideoReady = false;",',
       '      "let backgroundVideoUrl = null;",',
-      '      "let backgroundVideoRAF = null;"',
+      '      "let backgroundVideoRAF = null;",',
+      '      "let backgroundVideoLoadToken = 0;"',
       '    ].join(\'\\n\'));'
     ].join('\n');
     replaceOnce(stateNeedle,stateReplacement,'video state');
 
-    // Teach the existing reference renderer to draw a video frame when a video is active.
     const renderAnchor='    const guideLogicNeedle="refSizeSlider.addEventListener(\'input\', drawRef);";';
     const renderPatch=[
       '    const videoRenderNeedle="  if (!refImage || !refVisible) return;";',
@@ -85,12 +86,11 @@
       '      "  if (!activeRef) return;"',
       '    ].join(\'\\n\'));',
       '    html=html.replace("  const iw = refImage.width, ih = refImage.height;","  const iw = backgroundVideoReady ? backgroundVideo.videoWidth : refImage.width, ih = backgroundVideoReady ? backgroundVideo.videoHeight : refImage.height;");',
-      '    html=html.replace("  refCtx.drawImage(refImage, x, y, w, h);","  refCtx.drawImage(activeRef, x, y, w, h);");',
+      '    html=html.replace("  refCtx.drawImage(refImage, x, y, w, h);","  try { refCtx.drawImage(activeRef, x, y, w, h); } catch (_) {}");',
       ''
     ].join('\n');
     replaceOnce(renderAnchor,renderPatch+renderAnchor,'video renderer patch');
 
-    // Add playback/upload behavior into the final app after the existing background opacity hook.
     const logicAnchor='    html=html.replace(guideLogicNeedle,guideLogic);';
     const logicPatch=[
       '    const videoLogicNeedle="opacitySlider.addEventListener(\'input\', drawRef);";',
@@ -99,23 +99,27 @@
       '      videoLogicNeedle,',
       '      "",',
       '      "function formatVideoTime(seconds) { if (!Number.isFinite(seconds) || seconds < 0) seconds = 0; const whole = Math.floor(seconds); return Math.floor(whole / 60) + \':\' + String(whole % 60).padStart(2, \'0\'); }",',
+      '      "function setVideoStatus(text) { if (videoBgStatus) videoBgStatus.textContent = text; }",',
       '      "function updateVideoControls() { const duration = Number.isFinite(backgroundVideo.duration) ? backgroundVideo.duration : 0; const current = Number.isFinite(backgroundVideo.currentTime) ? backgroundVideo.currentTime : 0; videoBgTime.textContent = formatVideoTime(current) + \' / \' + formatVideoTime(duration); if (duration > 0) videoBgScrub.value = String(Math.round((current / duration) * 1000)); videoBgPlayBtn.textContent = backgroundVideo.paused ? \'▶ Play\' : \'⏸ Pause\'; }",',
+      '      "function markVideoReady() { if (!backgroundVideo.videoWidth || !backgroundVideo.videoHeight) return; backgroundVideoReady = true; setVideoStatus(\'Video ready\'); drawRef(); updateVideoControls(); }",',
       '      "function stopVideoFrameLoop() { if (backgroundVideoRAF !== null) cancelAnimationFrame(backgroundVideoRAF); backgroundVideoRAF = null; }",',
       '      "function videoFrameLoop() { drawRef(); updateVideoControls(); if (!backgroundVideo.paused && !backgroundVideo.ended && backgroundVideoReady) backgroundVideoRAF = requestAnimationFrame(videoFrameLoop); else backgroundVideoRAF = null; }",',
       '      "function startVideoFrameLoop() { stopVideoFrameLoop(); if (backgroundVideoReady) backgroundVideoRAF = requestAnimationFrame(videoFrameLoop); }",',
-      '      "function clearBackgroundVideo(updateCanvas = true) { stopVideoFrameLoop(); try { backgroundVideo.pause(); } catch (_) {} backgroundVideoReady = false; if (backgroundVideoUrl) { URL.revokeObjectURL(backgroundVideoUrl); backgroundVideoUrl = null; } backgroundVideo.removeAttribute(\'src\'); try { backgroundVideo.load(); } catch (_) {} videoBgInput.value = \'\'; videoBgPlayback.style.display = \'none\'; videoBgScrub.value = \'0\'; videoBgTime.textContent = \'0:00 / 0:00\'; videoBgPlayBtn.textContent = \'▶ Play\'; if (updateCanvas) drawRef(); }",',
+      '      "function clearBackgroundVideo(updateCanvas = true) { stopVideoFrameLoop(); backgroundVideoLoadToken++; try { backgroundVideo.pause(); } catch (_) {} backgroundVideoReady = false; if (backgroundVideoUrl) { URL.revokeObjectURL(backgroundVideoUrl); backgroundVideoUrl = null; } backgroundVideo.removeAttribute(\'src\'); try { backgroundVideo.load(); } catch (_) {} videoBgInput.value = \'\'; videoBgPlayback.style.display = \'none\'; videoBgScrub.value = \'0\'; videoBgTime.textContent = \'0:00 / 0:00\'; videoBgPlayBtn.textContent = \'▶ Play\'; setVideoStatus(\'No video selected\'); if (updateCanvas) drawRef(); }",',
       '      "fileInput.addEventListener(\'change\', () => { if (fileInput.files && fileInput.files[0] && backgroundVideoUrl) clearBackgroundVideo(false); });",',
-      '      "videoBgInput.addEventListener(\'change\', () => { const file = videoBgInput.files && videoBgInput.files[0]; if (!file) return; stopVideoFrameLoop(); try { backgroundVideo.pause(); } catch (_) {} if (backgroundVideoUrl) URL.revokeObjectURL(backgroundVideoUrl); backgroundVideoReady = false; backgroundVideoUrl = URL.createObjectURL(file); backgroundVideo.src = backgroundVideoUrl; backgroundVideo.muted = true; backgroundVideo.loop = videoBgLoopBtn.classList.contains(\'active\'); refImage = null; fileInput.value = \'\'; const removePhotoBtn = document.getElementById(\'removeRefBtn\'); if (removePhotoBtn) removePhotoBtn.style.display = \'none\'; refVisible = true; toggleRefBtn.classList.add(\'active\'); refSizeSlider.value = 100; videoBgPlayback.style.display = \'flex\'; hintText.textContent = \'Video loaded — press Play, then draw normally over it. Video audio stays muted.\'; backgroundVideo.load(); });",',
-      '      "backgroundVideo.addEventListener(\'loadedmetadata\', updateVideoControls);",',
-      '      "backgroundVideo.addEventListener(\'loadeddata\', () => { backgroundVideoReady = true; drawRef(); updateVideoControls(); });",',
-      '      "backgroundVideo.addEventListener(\'canplay\', () => { backgroundVideoReady = true; drawRef(); updateVideoControls(); });",',
-      '      "backgroundVideo.addEventListener(\'play\', () => { updateVideoControls(); startVideoFrameLoop(); });",',
-      '      "backgroundVideo.addEventListener(\'pause\', () => { stopVideoFrameLoop(); drawRef(); updateVideoControls(); });",',
-      '      "backgroundVideo.addEventListener(\'seeked\', () => { drawRef(); updateVideoControls(); });",',
+      '      "async function primeSelectedVideo(token) { try { const p = backgroundVideo.play(); if (p && typeof p.then === \'function\') await p; if (token !== backgroundVideoLoadToken) return; backgroundVideo.pause(); if (Number.isFinite(backgroundVideo.duration) && backgroundVideo.duration > 0) { try { backgroundVideo.currentTime = Math.min(0.05, backgroundVideo.duration / 100); } catch (_) {} } else { markVideoReady(); } } catch (_) { if (token === backgroundVideoLoadToken) setVideoStatus(\'Tap Play to finish loading\'); } }",',
+      '      "videoBgInput.addEventListener(\'change\', async () => { const file = videoBgInput.files && videoBgInput.files[0]; if (!file) return; stopVideoFrameLoop(); const token = ++backgroundVideoLoadToken; try { backgroundVideo.pause(); } catch (_) {} if (backgroundVideoUrl) URL.revokeObjectURL(backgroundVideoUrl); backgroundVideoReady = false; backgroundVideoUrl = URL.createObjectURL(file); backgroundVideo.src = backgroundVideoUrl; backgroundVideo.muted = true; backgroundVideo.defaultMuted = true; backgroundVideo.loop = videoBgLoopBtn.classList.contains(\'active\'); refImage = null; fileInput.value = \'\'; const removePhotoBtn = document.getElementById(\'removeRefBtn\'); if (removePhotoBtn) removePhotoBtn.style.display = \'none\'; refVisible = true; toggleRefBtn.classList.add(\'active\'); refSizeSlider.value = 100; videoBgPlayback.style.display = \'flex\'; setVideoStatus(\'Loading selected video…\'); hintText.textContent = \'Preparing the video background…\'; try { backgroundVideo.load(); } catch (_) {} setTimeout(() => { if (token === backgroundVideoLoadToken && !backgroundVideoReady) setVideoStatus(\'Still loading… tap Play once\'); }, 3500); await primeSelectedVideo(token); });",',
+      '      "backgroundVideo.addEventListener(\'loadedmetadata\', () => { setVideoStatus(\'Preparing first frame…\'); updateVideoControls(); if (Number.isFinite(backgroundVideo.duration) && backgroundVideo.duration > 0) { try { backgroundVideo.currentTime = Math.min(0.05, backgroundVideo.duration / 100); } catch (_) {} } });",',
+      '      "backgroundVideo.addEventListener(\'loadeddata\', markVideoReady);",',
+      '      "backgroundVideo.addEventListener(\'canplay\', markVideoReady);",',
+      '      "backgroundVideo.addEventListener(\'canplaythrough\', markVideoReady);",',
+      '      "backgroundVideo.addEventListener(\'play\', () => { if (backgroundVideo.videoWidth) backgroundVideoReady = true; setVideoStatus(\'Playing\'); updateVideoControls(); startVideoFrameLoop(); });",',
+      '      "backgroundVideo.addEventListener(\'pause\', () => { stopVideoFrameLoop(); if (backgroundVideo.videoWidth) markVideoReady(); else updateVideoControls(); });",',
+      '      "backgroundVideo.addEventListener(\'seeked\', () => { markVideoReady(); });",',
       '      "backgroundVideo.addEventListener(\'timeupdate\', updateVideoControls);",',
       '      "backgroundVideo.addEventListener(\'ended\', () => { stopVideoFrameLoop(); drawRef(); updateVideoControls(); });",',
-      '      "backgroundVideo.addEventListener(\'error\', () => { hintText.textContent = \'This video could not be played in the browser. Try an MP4/H.264 video.\'; });",',
-      '      "videoBgPlayBtn.onclick = async () => { if (!backgroundVideo.src) return; if (backgroundVideo.paused) { try { await backgroundVideo.play(); } catch (_) { hintText.textContent = \'The browser could not start this video. Try MP4/H.264.\'; } } else { backgroundVideo.pause(); } updateVideoControls(); };",',
+      '      "backgroundVideo.addEventListener(\'error\', () => { const code = backgroundVideo.error ? backgroundVideo.error.code : 0; backgroundVideoReady = false; setVideoStatus(\'Could not load this video (error \' + code + \')\'); hintText.textContent = \'This video format could not be decoded. Try an MP4/H.264 video.\'; });",',
+      '      "videoBgPlayBtn.onclick = async () => { if (!backgroundVideo.src) return; if (backgroundVideo.paused) { setVideoStatus(\'Starting…\'); try { await backgroundVideo.play(); } catch (_) { setVideoStatus(\'Could not start — try another video\'); hintText.textContent = \'The browser could not start this video. Try MP4/H.264.\'; } } else { backgroundVideo.pause(); } updateVideoControls(); };",',
       '      "videoBgLoopBtn.onclick = () => { const next = !backgroundVideo.loop; backgroundVideo.loop = next; videoBgLoopBtn.classList.toggle(\'active\', next); videoBgLoopBtn.textContent = \'↻ Loop: \' + (next ? \'On\' : \'Off\'); };",',
       '      "videoBgScrub.addEventListener(\'input\', () => { const duration = Number.isFinite(backgroundVideo.duration) ? backgroundVideo.duration : 0; if (!duration) return; backgroundVideo.currentTime = (parseFloat(videoBgScrub.value) / 1000) * duration; });",',
       '      "removeVideoBgBtn.onclick = () => { clearBackgroundVideo(true); hintText.textContent = \'Video background removed.\'; };"',
