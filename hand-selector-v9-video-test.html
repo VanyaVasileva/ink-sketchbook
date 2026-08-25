@@ -46,7 +46,7 @@
       "const videoBgScrub = document.getElementById('videoBgScrub');",
       "const videoBgTime = document.getElementById('videoBgTime');",
       "const removeVideoBgBtn = document.getElementById('removeVideoBgBtn');"
-    ].join('\\n'));
+    ].join('\n'));
 
     // State must exist before the first resize(), because drawRef() is invoked
     // during startup and is replaced below with the image-or-video renderer.
@@ -64,11 +64,11 @@
       "let backgroundVideoReady = false;",
       "let backgroundVideoUrl = null;",
       "let backgroundVideoRAF = null;"
-    ].join('\\n'));
+    ].join('\n'));
 
     // Replace the original image-only reference renderer with one renderer that
     // accepts either the photo image or the current decoded video frame.
-    const drawRefRegex=/function drawRef\\(\\) \\{[\\s\\S]*?\\n\\}/;
+    const drawRefRegex=/function drawRef\(\) \{[\s\S]*?\n\}/;
     if(!drawRefRegex.test(html)) throw new Error('Background renderer not found');
     const newDrawRef=[
       "function drawRef() {",
@@ -94,7 +94,7 @@
       "  try { refCtx.drawImage(source, x, y, w, h); } catch (_) {}",
       "  refCtx.globalAlpha = 1;",
       "}"
-    ].join('\\n');
+    ].join('\n');
     html=html.replace(drawRefRegex,newDrawRef);
 
     const videoLogicNeedle="opacitySlider.addEventListener('input', drawRef);";
@@ -212,7 +212,7 @@
       "  backgroundVideo.currentTime = (parseFloat(videoBgScrub.value) / 1000) * duration;",
       "});",
       "removeVideoBgBtn.onclick = () => { clearBackgroundVideo(true); hintText.textContent = 'Video background removed.'; };"
-    ].join('\\n');
+    ].join('\n');
     html=html.replace(videoLogicNeedle,videoLogic);
 
     // v8 recorded refCanvas only when a still refImage existed. For video we
@@ -221,11 +221,8 @@
       "  if (recordReferenceInVideo && refImage && refVisible) {",
       "  if (recordReferenceInVideo && refVisible && (refImage || backgroundVideoReady)) {"
     );
-
-    // Clarify the creator recording toggle now that it applies to photo OR video.
-    html=html.replace('🎞 Background in recording: On', '🎞 Background in recording: On');
     \`;
-    source=source.replace(innerMarker,videoPatch+'\\n'+innerMarker);
+    source=source.replace(innerMarker,videoPatch+'\n'+innerMarker);
 `;
 
     source=source.replace(outerMarker,injection+'\n'+outerMarker);
