@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import vm from 'node:vm';
 
-const repoRoot = process.cwd();
+// Generated test pages are compiled here so Safari never has to run the wrapper chain itself.
 const readLocal = (name) => fs.readFile(new URL('../' + name, import.meta.url), 'utf8');
 
 const localFiles = {
@@ -120,7 +120,6 @@ for (const needle of required) {
   if (!finalHtml.includes(needle)) throw new Error(`Standalone validation failed: missing ${needle}`);
 }
 
-// Parse every classic inline script so a broken generated JavaScript block never ships.
 for (const match of finalHtml.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/gi)) {
   const attrs = match[1] || '';
   const code = match[2] || '';
