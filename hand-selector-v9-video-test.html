@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Ink Sketchbook Video Layer Test v9</title></head><body><p style="font-family:sans-serif;padding:20px">Loading video background test…</p><script>
+(async function(){
+  const v8Url='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/main/hand-selector-v8-layers-test.html';
+  try {
+    let source=await fetch(v8Url,{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('Could not load layer test v8');return r.text();});
+    const outerMarker='    document.open();document.write(source);document.close();';
+    if(!source.includes(outerMarker)) throw new Error('v8 publish marker not found');
+
+    const injection=String.raw`
+    const innerMarker='    document.open();document.write(html);document.close();';
+    if(!source.includes(innerMarker)) throw new Error('inner Ink Sketchbook publish marker not found');
+    const videoPatch=String.raw\`
+    // --- v9 drawable video background -----------------------------------------
+    // The background slot can now be either a still image or a local video.
+    // The video is rendered frame-by-frame into refCanvas, so the normal ink
+    // canvas remains fully independent and the private guideCanvas is untouched.
+    const guideControlsMarker='<div id="guideControls" style="border-top:1px solid #e5e1d8;padding-top:10px;display:flex;flex-direction:column;gap:8px;">';
+    if(!html.includes(guideControlsMarker)) throw new Error('Sketch overlay controls not found');
+    const videoControls=[
+      '<div id="videoBackgroundSection" style="border-top:1px solid #e5e1d8;padding-top:10px;display:flex;flex-direction:column;gap:8px;">',
+      '<div style="font-size:12px;font-weight:700;color:#2a2620;">Video background <span style="font-weight:500;color:#8a8373;">· draw while it plays</span></div>',
+      '<label class="filebtn" for="videoBgInput">🎬 Upload video</label>',
+      '<input type="file" id="videoBgInput" accept="video/mp4,video/quicktime,video/*" />',
+      '<div id="videoBgPlayback" style="display:none;flex-direction:column;gap:7px;">',
+      '<div class="row" style="gap:6px;">',
+      '<button id="videoBgPlayBtn" type="button">▶ Play</button>',
+      '<button id="videoBgLoopBtn" type="button" class="active">↻ Loop: On</button>',
+      '</div>',
+      '<input id="videoBgScrub" type="range" min="0" max="1000" value="0" step="1" style="width:100%;" aria-label="Video position">',
+      '<div id="videoBgTime" style="font-size:11px;color:#8a8373;text-align:center;">0:00 / 0:00</div>',
+      '<button id="removeVideoBgBtn" type="button">✕ Remove video</button>',
+      '</div>',
+      '</div>'
+    ].join('');
+    html=html.replace(guideControlsMarker,videoControls+guideControlsMarker);
+
+    const guideDomNeedle="const resetGuidePosBtn = document.getElementById('resetGuidePosBtn');";
+    if(!html.includes(guideDomNeedle)) throw new Error('Sketch overlay DOM setup not found');
+    html=html.replace(guideDomNeedle, [
+      guideDomNeedle,
+      "const videoBgInput = document.getElementById('videoBgInput');",
+      "const videoBgPlayback = document.getElementById('videoBgPlayback');",
+      "const videoBgPlayBtn = document.getElementById('videoBgPlayBtn');",
+      "const videoBgLoopBtn = document.getElementById('videoBgLoopBtn');",
+      "const videoBgScrub = document.getElementById('videoBgScrub');",
+      "const videoBgTime = document.getElementById('videoBgTime');",
+      "const removeVideoBgBtn = document.getElementById('removeVideoBgBtn');"
+    ].join('\\n'));
+
+    // State must exist before the first resize(), because drawRef() is invoked
+    // during startup and is replaced below with the image-or-video renderer.
+    const guideStateNeedle="let guideDrag = null;";
+    if(!html.includes(guideStateNeedle)) throw new Error('Layer state setup not found');
+    html=html.replace(guideStateNeedle, [
+      guideStateNeedle,
+      "const backgroundVideo = document.createElement('video');",
+      "backgroundVideo.playsInline = true;",
+      "backgroundVideo.muted = true;",
+      "backgroundVideo.preload = 'auto';",
+      "backgroundVideo.loop = true;",
+      "backgroundVideo.style.cssText = 'position:fixed;left:-10000px;top:0;width:2px;height:2px;opacity:0;pointer-events:none;';",
+      "document.body.appendChild(backgroundVideo);",
+      "let backgroundVideoReady = false;",
+      "let backgroundVideoUrl = null;",
+      "let backgroundVideoRAF = null;"
+    ].join('\\n'));
+
+    // Replace the original image-only reference renderer with one renderer that
+    // accepts either the photo image or the current decoded video frame.
+    const drawRefRegex=/function drawRef\\(\\) \\{[\\s\\S]*?\\n\\}/;
+    if(!drawRefRegex.test(html)) throw new Error('Background renderer not found');
+    const newDrawRef=[
+      "function drawRef() {",
+      "  refCtx.clearRect(0, 0, refCanvas.width, refCanvas.height);",
+      "  if (!refVisible) return;",
+      "  let source = null, iw = 0, ih = 0;",
+      "  if (backgroundVideoReady && backgroundVideo.videoWidth && backgroundVideo.videoHeight) {",
+      "    source = backgroundVideo; iw = backgroundVideo.videoWidth; ih = backgroundVideo.videoHeight;",
+      "  } else if (refImage) {",
+      "    source = refImage; iw = refImage.width; ih = refImage.height;",
+      "  }",
+      "  if (!source || !iw || !ih) return;",
+      "  const cw = refCanvas.width, ch = refCanvas.height;",
+      "  const fitScale = Math.min(cw / iw, ch / ih) * 0.9;",
+      "  const autoScale = Math.min(fitScale, 1);",
+      "  const userScale = (parseFloat(refSizeSlider.value) || 100) / 100;",
+      "  const scale = autoScale * userScale;",
+      "  const w = iw * scale, h = ih * scale;",
+      "  const x = (cw - w) / 2, y = (ch - h) / 2;",
+      "  refCtx.imageSmoothingEnabled = true;",
+      "  refCtx.imageSmoothingQuality = 'high';",
+      "  refCtx.globalAlpha = opacitySlider.value / 100;",
+      "  try { refCtx.drawImage(source, x, y, w, h); } catch (_) {}",
+      "  refCtx.globalAlpha = 1;",
+      "}"
+    ].join('\\n');
+    html=html.replace(drawRefRegex,newDrawRef);
+
+    const videoLogicNeedle="opacitySlider.addEventListener('input', drawRef);";
+    if(!html.includes(videoLogicNeedle)) throw new Error('Background opacity hook not found');
+    const videoLogic=[
+      videoLogicNeedle,
+      "",
+      "function formatVideoTime(seconds) {",
+      "  if (!Number.isFinite(seconds) || seconds < 0) seconds = 0;",
+      "  const whole = Math.floor(seconds);",
+      "  const mins = Math.floor(whole / 60);",
+      "  const secs = String(whole % 60).padStart(2, '0');",
+      "  return mins + ':' + secs;",
+      "}",
+      "function updateVideoControls() {",
+      "  const duration = Number.isFinite(backgroundVideo.duration) ? backgroundVideo.duration : 0;",
+      "  const current = Number.isFinite(backgroundVideo.currentTime) ? backgroundVideo.currentTime : 0;",
+      "  videoBgTime.textContent = formatVideoTime(current) + ' / ' + formatVideoTime(duration);",
+      "  if (duration > 0) videoBgScrub.value = String(Math.round((current / duration) * 1000));",
+      "  videoBgPlayBtn.textContent = backgroundVideo.paused ? '▶ Play' : '⏸ Pause';",
+      "}",
+      "function stopVideoFrameLoop() {",
+      "  if (backgroundVideoRAF !== null) cancelAnimationFrame(backgroundVideoRAF);",
+      "  backgroundVideoRAF = null;",
+      "}",
+      "function videoFrameLoop() {",
+      "  drawRef();",
+      "  updateVideoControls();",
+      "  if (!backgroundVideo.paused && !backgroundVideo.ended && backgroundVideoReady) {",
+      "    backgroundVideoRAF = requestAnimationFrame(videoFrameLoop);",
+      "  } else {",
+      "    backgroundVideoRAF = null;",
+      "  }",
+      "}",
+      "function startVideoFrameLoop() {",
+      "  stopVideoFrameLoop();",
+      "  if (backgroundVideoReady) backgroundVideoRAF = requestAnimationFrame(videoFrameLoop);",
+      "}",
+      "function clearBackgroundVideo(updateCanvas = true) {",
+      "  stopVideoFrameLoop();",
+      "  try { backgroundVideo.pause(); } catch (_) {}",
+      "  backgroundVideoReady = false;",
+      "  if (backgroundVideoUrl) { URL.revokeObjectURL(backgroundVideoUrl); backgroundVideoUrl = null; }",
+      "  backgroundVideo.removeAttribute('src');",
+      "  try { backgroundVideo.load(); } catch (_) {}",
+      "  videoBgInput.value = '';",
+      "  videoBgPlayback.style.display = 'none';",
+      "  videoBgScrub.value = '0';",
+      "  videoBgTime.textContent = '0:00 / 0:00';",
+      "  videoBgPlayBtn.textContent = '▶ Play';",
+      "  if (updateCanvas) drawRef();",
+      "}",
+      "",
+      "// Choosing a still photo automatically replaces the video background.",
+      "fileInput.addEventListener('change', () => {",
+      "  if (fileInput.files && fileInput.files[0] && backgroundVideoUrl) clearBackgroundVideo(false);",
+      "});",
+      "",
+      "videoBgInput.addEventListener('change', () => {",
+      "  const file = videoBgInput.files && videoBgInput.files[0];",
+      "  if (!file) return;",
+      "  stopVideoFrameLoop();",
+      "  try { backgroundVideo.pause(); } catch (_) {}",
+      "  if (backgroundVideoUrl) URL.revokeObjectURL(backgroundVideoUrl);",
+      "  backgroundVideoReady = false;",
+      "  backgroundVideoUrl = URL.createObjectURL(file);",
+      "  backgroundVideo.src = backgroundVideoUrl;",
+      "  backgroundVideo.muted = true;",
+      "  backgroundVideo.loop = videoBgLoopBtn.classList.contains('active');",
+      "  refImage = null;",
+      "  fileInput.value = '';",
+      "  const removePhotoBtn = document.getElementById('removeRefBtn');",
+      "  if (removePhotoBtn) removePhotoBtn.style.display = 'none';",
+      "  refVisible = true;",
+      "  toggleRefBtn.classList.add('active');",
+      "  refSizeSlider.value = 100;",
+      "  videoBgPlayback.style.display = 'flex';",
+      "  hintText.textContent = 'Video loaded — press Play, then draw normally over it. Video audio stays muted.';",
+      "  backgroundVideo.load();",
+      "});",
+      "backgroundVideo.addEventListener('loadedmetadata', () => { updateVideoControls(); });",
+      "backgroundVideo.addEventListener('loadeddata', () => {",
+      "  backgroundVideoReady = true; drawRef(); updateVideoControls();",
+      "});",
+      "backgroundVideo.addEventListener('canplay', () => {",
+      "  backgroundVideoReady = true; drawRef(); updateVideoControls();",
+      "});",
+      "backgroundVideo.addEventListener('play', () => { updateVideoControls(); startVideoFrameLoop(); });",
+      "backgroundVideo.addEventListener('pause', () => { stopVideoFrameLoop(); drawRef(); updateVideoControls(); });",
+      "backgroundVideo.addEventListener('seeked', () => { drawRef(); updateVideoControls(); });",
+      "backgroundVideo.addEventListener('timeupdate', updateVideoControls);",
+      "backgroundVideo.addEventListener('ended', () => { stopVideoFrameLoop(); drawRef(); updateVideoControls(); });",
+      "backgroundVideo.addEventListener('error', () => {",
+      "  hintText.textContent = 'This video could not be played in the browser. Try an MP4/H.264 video.';",
+      "});",
+      "videoBgPlayBtn.onclick = async () => {",
+      "  if (!backgroundVideo.src) return;",
+      "  if (backgroundVideo.paused) {",
+      "    try { await backgroundVideo.play(); }",
+      "    catch (_) { hintText.textContent = 'The browser could not start this video. Try MP4/H.264.'; }",
+      "  } else {",
+      "    backgroundVideo.pause();",
+      "  }",
+      "  updateVideoControls();",
+      "};",
+      "videoBgLoopBtn.onclick = () => {",
+      "  const next = !backgroundVideo.loop;",
+      "  backgroundVideo.loop = next;",
+      "  videoBgLoopBtn.classList.toggle('active', next);",
+      "  videoBgLoopBtn.textContent = '↻ Loop: ' + (next ? 'On' : 'Off');",
+      "};",
+      "videoBgScrub.addEventListener('input', () => {",
+      "  const duration = Number.isFinite(backgroundVideo.duration) ? backgroundVideo.duration : 0;",
+      "  if (!duration) return;",
+      "  backgroundVideo.currentTime = (parseFloat(videoBgScrub.value) / 1000) * duration;",
+      "});",
+      "removeVideoBgBtn.onclick = () => { clearBackgroundVideo(true); hintText.textContent = 'Video background removed.'; };"
+    ].join('\\n');
+    html=html.replace(videoLogicNeedle,videoLogic);
+
+    // v8 recorded refCanvas only when a still refImage existed. For video we
+    // intentionally record refCanvas itself whenever either background type exists.
+    html=html.replace(
+      "  if (recordReferenceInVideo && refImage && refVisible) {",
+      "  if (recordReferenceInVideo && refVisible && (refImage || backgroundVideoReady)) {"
+    );
+
+    // Clarify the creator recording toggle now that it applies to photo OR video.
+    html=html.replace('🎞 Background in recording: On', '🎞 Background in recording: On');
+    \`;
+    source=source.replace(innerMarker,videoPatch+'\\n'+innerMarker);
+`;
+
+    source=source.replace(outerMarker,injection+'\n'+outerMarker);
+    document.open();document.write(source);document.close();
+  } catch(err) {
+    document.body.innerHTML='<div style="font-family:sans-serif;padding:24px"><h2>Could not load video test</h2><pre>'+String(err)+'</pre></div>';
+  }
+})();
+</script></body></html>
