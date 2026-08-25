@@ -115,6 +115,21 @@
       "const resetGuidePosBtn = document.getElementById('resetGuidePosBtn');"
     ].join('\n'));
 
+    // Initialize the guide state before resize() is called for the first time.
+    // The previous test initialized it later, so drawGuide() hit the temporal
+    // dead zone during startup and the rest of the controls never got wired up.
+    const guideStateNeedle="let refImage = null;";
+    if(!html.includes(guideStateNeedle)) throw new Error('Reference state setup not found');
+    html=html.replace(guideStateNeedle, [
+      guideStateNeedle,
+      "let guideImage = null;",
+      "let guideVisible = true;",
+      "let guideOffsetX = 0;",
+      "let guideOffsetY = 0;",
+      "let guideMoveMode = false;",
+      "let guideDrag = null;"
+    ].join('\n'));
+
     // Keep all three visual canvases locked to exactly the same display geometry.
     html=html.split('[refCanvas, drawCanvas].forEach').join('[refCanvas, guideCanvas, drawCanvas].forEach');
     html=html.replace(
@@ -130,13 +145,6 @@
     if(!html.includes(guideLogicNeedle)) throw new Error('Reference render hook not found');
     const guideLogic=[
       guideLogicNeedle,
-      "",
-      "let guideImage = null;",
-      "let guideVisible = true;",
-      "let guideOffsetX = 0;",
-      "let guideOffsetY = 0;",
-      "let guideMoveMode = false;",
-      "let guideDrag = null;",
       "",
       "function drawGuide() {",
       "  if (!guideCanvas || !guideCtx) return;",
