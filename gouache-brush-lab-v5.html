@@ -3,18 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Marker Brush Lab v1</title>
+<title>Marker Brush Lab v2</title>
 <style>
 :root{--bg:#f3efe8;--panel:#fffdf8;--ink:#2f2a27;--muted:#8d8176;--line:#d9d1c8}
 *{box-sizing:border-box}html,body{height:100%}body{margin:0;background:var(--bg);color:var(--ink);font-family:ui-rounded,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;overflow:hidden}
 .wrap{height:100%;padding:5px;display:grid;grid-template-rows:auto 1fr;gap:5px}.top,.bar,.stage{background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:0 6px 18px rgba(50,40,30,.05)}
-.top{padding:7px 9px}.top b{font-size:17px}.top span{display:block;font-size:11px;color:var(--muted);margin-top:2px}.app{min-height:0;display:grid;grid-template-rows:auto 1fr;gap:5px}.bar{padding:6px;display:flex;gap:8px;align-items:center;overflow-x:auto}.modes{display:flex;gap:5px;min-width:max-content}.mode.active{background:#342f2b;color:#fff;border-color:#342f2b}.control{min-width:126px;font-size:10px}.control label{display:flex;justify-content:space-between;margin-bottom:2px}.control input{width:100%}.swatches{display:flex;gap:6px;min-width:205px}.sw{width:28px;height:28px;border-radius:50%;border:2px solid #fff;outline:1px solid var(--line);padding:0}.sw.active{outline:2px solid #332b27}button{appearance:none;border:1px solid var(--line);background:white;border-radius:9px;padding:8px 10px;font:inherit;font-weight:650;color:var(--ink)}.stage{min-height:0;padding:3px;position:relative}.canvasWrap{position:relative;width:100%;height:100%}canvas{position:absolute;inset:0;width:100%;height:100%;border-radius:9px;touch-action:none}#paper{background:#fff}.hint{display:none}
-@media(min-width:800px){.wrap{max-width:1180px;margin:auto;padding:8px;gap:8px}.app{grid-template-columns:250px 1fr;grid-template-rows:1fr;gap:8px}.bar{display:block;padding:10px}.modes{display:grid;grid-template-columns:1fr 1fr;min-width:0;margin-bottom:12px}.modes .mode:last-child{grid-column:1/-1}.control{margin-bottom:12px}.swatches{min-width:0;flex-wrap:wrap;margin-bottom:12px}.stage{padding:5px}.hint{display:block;position:absolute;right:10px;bottom:8px;font-size:10px;color:var(--muted);pointer-events:none}}
+.top{padding:7px 9px}.top b{font-size:17px}.top span{display:block;font-size:11px;color:var(--muted);margin-top:2px}.app{min-height:0;display:grid;grid-template-rows:auto 1fr;gap:5px}.bar{padding:6px;display:flex;gap:8px;align-items:center;overflow-x:auto}.modes,.paletteTabs{display:flex;gap:5px;min-width:max-content}.mode.active,.paletteTab.active{background:#342f2b;color:#fff;border-color:#342f2b}.control{min-width:126px;font-size:10px}.control label{display:flex;justify-content:space-between;margin-bottom:2px}.control input{width:100%}.paletteBlock{min-width:290px}.paletteLabel{font-size:10px;margin-bottom:4px;color:var(--muted)}.paletteTabs{margin-bottom:6px}.swatches{display:flex;gap:6px;flex-wrap:wrap;max-width:310px}.sw{width:30px;height:30px;border-radius:50%;border:2px solid #fff;outline:1px solid var(--line);padding:0;flex:0 0 auto}.sw.active{outline:2px solid #332b27;transform:scale(1.06)}.customRow{display:flex;align-items:center;gap:7px;margin-top:6px;font-size:10px;color:var(--muted)}#customColor{width:40px;height:32px;border:1px solid var(--line);border-radius:8px;padding:2px;background:#fff}.colorCode{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;color:var(--ink)}button{appearance:none;border:1px solid var(--line);background:white;border-radius:9px;padding:8px 10px;font:inherit;font-weight:650;color:var(--ink)}.stage{min-height:0;padding:3px;position:relative}.canvasWrap{position:relative;width:100%;height:100%}canvas{position:absolute;inset:0;width:100%;height:100%;border-radius:9px;touch-action:none}#paper{background:#fff}.hint{display:none}
+@media(min-width:800px){.wrap{max-width:1180px;margin:auto;padding:8px;gap:8px}.app{grid-template-columns:270px 1fr;grid-template-rows:1fr;gap:8px}.bar{display:block;padding:10px}.modes{display:grid;grid-template-columns:1fr 1fr;min-width:0;margin-bottom:12px}.modes .mode:last-child{grid-column:1/-1}.control{margin-bottom:12px}.paletteBlock{min-width:0;margin-bottom:12px}.paletteTabs{min-width:0;display:grid;grid-template-columns:repeat(3,1fr)}.swatches{max-width:none}.stage{padding:5px}.hint{display:block;position:absolute;right:10px;bottom:8px;font-size:10px;color:var(--muted);pointer-events:none}}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="top"><b>Marker Lab — v1</b><span>Fresh start: clean felt markers. Round felt, chisel and pressure brush tips. No crayon texture.</span></div>
+  <div class="top"><b>Marker Lab — v2</b><span>Round felt, chisel and brush markers with Classic, Muted and Pastel color palettes.</span></div>
   <div class="app">
     <div class="bar">
       <div class="modes">
@@ -26,17 +26,19 @@
       <div class="control"><label>Ink opacity <span id="ov">100%</span></label><input id="opacity" type="range" min="60" max="100" value="100"></div>
       <div class="control"><label>Edge bleed <span id="bv">8%</span></label><input id="bleed" type="range" min="0" max="40" value="8"></div>
       <div class="control" id="angleControl"><label>Chisel angle <span id="av">35°</span></label><input id="angle" type="range" min="0" max="90" value="35"></div>
-      <div class="swatches">
-        <button class="sw active" data-c="#313131" style="background:#313131"></button>
-        <button class="sw" data-c="#c45f52" style="background:#c45f52"></button>
-        <button class="sw" data-c="#df8a4c" style="background:#df8a4c"></button>
-        <button class="sw" data-c="#c8a843" style="background:#c8a843"></button>
-        <button class="sw" data-c="#6b9a76" style="background:#6b9a76"></button>
-        <button class="sw" data-c="#5b86a4" style="background:#5b86a4"></button>
+      <div class="paletteBlock">
+        <div class="paletteLabel">Color palette</div>
+        <div class="paletteTabs">
+          <button class="paletteTab active" data-palette="classic">Classic</button>
+          <button class="paletteTab" data-palette="muted">Muted</button>
+          <button class="paletteTab" data-palette="pastel">Pastel</button>
+        </div>
+        <div class="swatches" id="swatches"></div>
+        <div class="customRow"><span>Custom</span><input id="customColor" type="color" value="#313131" aria-label="Custom marker color"><span id="colorCode" class="colorCode">#313131</span></div>
       </div>
       <button id="undo">Undo</button><button id="clear">Clear</button>
     </div>
-    <div class="stage"><div class="canvasWrap"><canvas id="paper"></canvas><canvas id="live"></canvas></div><div class="hint">Round Felt = steady clean line · Chisel = flat nib · Brush Marker = pressure-sensitive width</div></div>
+    <div class="stage"><div class="canvasWrap"><canvas id="paper"></canvas><canvas id="live"></canvas></div><div class="hint">Classic = stronger marker colors · Muted = dusty earthy colors · Pastel = soft light colors</div></div>
   </div>
 </div>
 <script>
@@ -48,7 +50,30 @@ const mask=document.createElement('canvas'),mctx=mask.getContext('2d');
 const bleedMask=document.createElement('canvas'),bctx=bleedMask.getContext('2d');
 const sizeEl=document.getElementById('size'),opacityEl=document.getElementById('opacity'),bleedEl=document.getElementById('bleed'),angleEl=document.getElementById('angle');
 const sv=document.getElementById('sv'),ov=document.getElementById('ov'),bv=document.getElementById('bv'),av=document.getElementById('av');
-let size=24,opacity=1,bleed=.08,angle=35*Math.PI/180,color='#313131',mode='round',dpr=1,drawing=false,points=[],history=[];
+const swatchesEl=document.getElementById('swatches'),customColorEl=document.getElementById('customColor'),colorCodeEl=document.getElementById('colorCode');
+const palettes={
+  classic:[
+    ['Black','#313131'],['Warm Gray','#77716d'],['Brown','#74503d'],['Red','#c94f4b'],['Coral','#e06e5f'],['Orange','#df8a4c'],['Yellow','#d7b947'],['Green','#5f9470'],['Teal','#4d9191'],['Blue','#5687b5'],['Indigo','#626fa1'],['Violet','#8668a0'],['Pink','#d36f91'],['Magenta','#b95883']
+  ],
+  muted:[
+    ['Charcoal','#494542'],['Taupe','#8d7d70'],['Cocoa','#816456'],['Terracotta','#ad6d5b'],['Dusty Rose','#b8817d'],['Clay Peach','#c68b72'],['Ochre','#b99557'],['Sage','#87947b'],['Olive','#7e8463'],['Dusty Teal','#6f8f8b'],['Slate Blue','#70879a'],['Denim','#667d91'],['Mauve','#937985'],['Plum','#7d6678']
+  ],
+  pastel:[
+    ['Soft Gray','#c9c4c0'],['Cream','#efe6d3'],['Butter','#f2d98d'],['Peach','#efb997'],['Apricot','#efaa87'],['Blush','#e9acae'],['Rose','#dfa0b3'],['Lilac','#c7add8'],['Lavender','#b9b8dc'],['Powder Blue','#a9c9df'],['Sky','#9fc8dc'],['Mint','#afd3c1'],['Pistachio','#c5d3a5'],['Pale Teal','#9fc9c4']
+  ]
+};
+let size=24,opacity=1,bleed=.08,angle=35*Math.PI/180,color='#313131',mode='round',activePalette='classic',dpr=1,drawing=false,points=[],history=[];
+function setColor(next){color=next.toLowerCase();customColorEl.value=color;colorCodeEl.textContent=color.toUpperCase()}
+function renderPalette(name){
+  activePalette=name;swatchesEl.innerHTML='';
+  document.querySelectorAll('.paletteTab').forEach(b=>b.classList.toggle('active',b.dataset.palette===name));
+  palettes[name].forEach(([label,hex],index)=>{
+    const b=document.createElement('button');b.type='button';b.className='sw';b.dataset.c=hex;b.style.background=hex;b.title=label;b.setAttribute('aria-label',label+' '+hex);
+    if(hex.toLowerCase()===color.toLowerCase())b.classList.add('active');
+    b.addEventListener('click',()=>{document.querySelectorAll('.sw').forEach(x=>x.classList.remove('active'));b.classList.add('active');setColor(hex)});
+    swatchesEl.appendChild(b);
+  });
+}
 function resize(preserve=true){
   const r=wrap.getBoundingClientRect();let snap=null;
   if(preserve&&paper.width){snap=document.createElement('canvas');snap.width=paper.width;snap.height=paper.height;snap.getContext('2d').drawImage(paper,0,0)}
@@ -116,11 +141,12 @@ function down(e){if(e.pointerType!=='pen'&&e.button!==undefined&&e.button!==0)re
 function move(e){if(!drawing)return;e.preventDefault();const evs=e.getCoalescedEvents?e.getCoalescedEvents():[e];for(const ee of evs){const q=pos(ee),last=points[points.length-1];if(!last||Math.hypot(q.x-last.x,q.y-last.y)>.45)points.push(q)}render()}
 function up(e){if(!drawing)return;e.preventDefault();const q=pos(e),last=points[points.length-1];if(!last||Math.hypot(q.x-last.x,q.y-last.y)>.25)points.push(q);render();const r=wrap.getBoundingClientRect();pctx.drawImage(live,0,0,r.width,r.height);lctx.clearRect(0,0,r.width,r.height);mctx.clearRect(0,0,r.width,r.height);bctx.clearRect(0,0,r.width,r.height);drawing=false;points=[];try{live.releasePointerCapture(e.pointerId)}catch(_){}}
 document.querySelectorAll('.mode').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.mode').forEach(x=>x.classList.remove('active'));b.classList.add('active');mode=b.dataset.mode}));
+document.querySelectorAll('.paletteTab').forEach(b=>b.addEventListener('click',()=>{renderPalette(b.dataset.palette)}));
+customColorEl.addEventListener('input',e=>{document.querySelectorAll('.sw').forEach(x=>x.classList.remove('active'));setColor(e.target.value)});
 sizeEl.addEventListener('input',e=>{size=+e.target.value;sv.textContent=size});opacityEl.addEventListener('input',e=>{opacity=+e.target.value/100;ov.textContent=e.target.value+'%'});bleedEl.addEventListener('input',e=>{bleed=+e.target.value/100;bv.textContent=e.target.value+'%'});angleEl.addEventListener('input',e=>{angle=+e.target.value*Math.PI/180;av.textContent=e.target.value+'°'});
-document.querySelectorAll('.sw').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.sw').forEach(x=>x.classList.remove('active'));b.classList.add('active');color=b.dataset.c}));
 document.getElementById('undo').addEventListener('click',()=>{const prev=history.pop();if(prev)restore(prev)});document.getElementById('clear').addEventListener('click',()=>{save();const r=wrap.getBoundingClientRect();pctx.fillStyle='#fff';pctx.fillRect(0,0,r.width,r.height)});
 live.addEventListener('pointerdown',down,{passive:false});live.addEventListener('pointermove',move,{passive:false});live.addEventListener('pointerup',up,{passive:false});live.addEventListener('pointercancel',up,{passive:false});live.addEventListener('contextmenu',e=>e.preventDefault());
-let rt;window.addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(()=>resize(true),120)});resize(false);
+let rt;window.addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(()=>resize(true),120)});renderPalette('classic');resize(false);
 })();
 </script>
 </body>
