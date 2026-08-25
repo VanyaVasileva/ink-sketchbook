@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Ink Sketchbook Floating Settings Test</title></head><body><p style="font-family:sans-serif;padding:20px">Loading floating settings test…</p><script>
+(async function(){
+  const v7Url='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/main/hand-selector-v7-test.html?cache='+Date.now();
+  try {
+    let source=await fetch(v7Url,{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('Could not load current video test');return r.text();});
+    const marker='    document.open();document.write(source);document.close();';
+    if(!source.includes(marker)) throw new Error('v7 publish marker not found');
+
+    const patch=String.raw`
+    // v10 UI-only patch: settings float above the canvas, so visual layers never
+    // move when More settings is opened or closed.
+    const layerPatchNeedle='    const layerPatch=String.raw`;
+    if(!source.includes(layerPatchNeedle)) throw new Error('v8 layer patch not found');
+    const floatingPanelPatch=[
+      "    html=html.replace('</head>', '<style id=\"floatingSettingsStyle\">.main-row{position:relative!important;} .canvas-wrap{width:100%!important;min-width:0!important;} #sidePanel{position:absolute!important;right:12px!important;top:12px!important;z-index:50!important;width:min(320px,calc(100% - 24px))!important;max-height:calc(100% - 24px)!important;overflow-y:auto!important;border:1px solid #e5e1d8!important;border-radius:12px!important;box-shadow:0 12px 32px rgba(42,38,32,.18)!important;background:#fff!important;padding:12px!important;} #sidePanel.collapsed{display:none!important;} @media (max-width:700px){#sidePanel{right:8px!important;top:8px!important;width:min(310px,calc(100% - 16px))!important;max-height:calc(100% - 16px)!important;}}</style></head>');",
+      ""
+    ].join('\n');
+    source=source.replace(layerPatchNeedle,layerPatchNeedle+'\n'+floatingPanelPatch);
+
+    // Let both the photo/video background and the private sketch overlay become
+    // much larger without changing their original source media.
+    source=source.replace(
+      "const refSizeControl='<div class=\"slider-group\"><span>Background size</span> <input type=\"range\" id=\"refSizeSlider\" min=\"25\" max=\"300\" value=\"100\"></div>';",
+      "const refSizeControl='<div class=\"slider-group\"><span>Background size</span> <input type=\"range\" id=\"refSizeSlider\" min=\"25\" max=\"500\" value=\"100\"></div>';"
+    );
+    source=source.replace(
+      "'<div class=\"slider-group\"><span>Sketch size</span> <input type=\"range\" id=\"guideSizeSlider\" min=\"10\" max=\"300\" value=\"100\"></div>',",
+      "'<div class=\"slider-group\"><span>Sketch size</span> <input type=\"range\" id=\"guideSizeSlider\" min=\"10\" max=\"500\" value=\"100\"></div>',"
+    );
+`;
+
+    source=source.replace(marker,patch+'\n'+marker);
+    document.open();document.write(source);document.close();
+  } catch(err) {
+    document.body.innerHTML='<div style="font-family:sans-serif;padding:24px"><h2>Could not load floating settings test</h2><pre>'+String(err)+'</pre></div>';
+  }
+})();
+</script></body></html>
