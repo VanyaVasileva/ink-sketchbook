@@ -1,0 +1,44 @@
+name: Build standalone sketchbook test
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'hand-selector-v6-test.html'
+      - 'hand-selector-v7-test.html'
+      - 'hand-selector-v8-layers-test.html'
+      - 'scripts/build-standalone.mjs'
+      - '.github/workflows/build-standalone-sketchbook.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build and validate standalone page
+        run: node scripts/build-standalone.mjs
+
+      - name: Commit generated standalone page
+        run: |
+          if git diff --quiet -- hand-selector-standalone-test.html; then
+            echo "Standalone page already up to date."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add hand-selector-standalone-test.html
+          git commit -m "Build standalone Ink Sketchbook test"
+          git push
