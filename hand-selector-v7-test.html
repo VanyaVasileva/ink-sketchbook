@@ -91,7 +91,7 @@
     replaceOnce(renderAnchor,renderPatch+renderAnchor,'video renderer patch');
 
     // Add playback/upload behavior into the final app after the existing background opacity hook.
-    const logicAnchor='    // The guide canvas is intentionally NEVER used by compositeRecordFrame().';
+    const logicAnchor='    html=html.replace(guideLogicNeedle,guideLogic);';
     const logicPatch=[
       '    const videoLogicNeedle="opacitySlider.addEventListener(\'input\', drawRef);";',
       '    if(!html.includes(videoLogicNeedle)) throw new Error(\'Background opacity hook not found\');',
