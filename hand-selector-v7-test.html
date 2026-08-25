@@ -10,6 +10,23 @@
       source=source.replace(needle,replacement);
     }
 
+    // UI: keep settings floating above the canvas instead of taking width away.
+    const layerComment='    // drawCanvas = real ink\n';
+    const floatingPanelLine='    html=html.replace(\'</head>\', \'<style id="floatingSettingsStyle">.main-row{position:relative!important;} .canvas-wrap{width:100%!important;min-width:0!important;} #sidePanel{position:absolute!important;right:12px!important;top:12px!important;z-index:50!important;width:min(320px,calc(100% - 24px))!important;max-height:calc(100% - 24px)!important;overflow-y:auto!important;border:1px solid #e5e1d8!important;border-radius:12px!important;box-shadow:0 12px 32px rgba(42,38,32,.18)!important;background:#fff!important;padding:12px!important;} #sidePanel.collapsed{display:none!important;} @media (max-width:700px){#sidePanel{right:8px!important;top:8px!important;width:min(310px,calc(100% - 16px))!important;max-height:calc(100% - 16px)!important;}}</style></head>\');\n';
+    replaceOnce(layerComment,layerComment+floatingPanelLine,'floating settings insertion');
+
+    // UI: enlarge photo/video and private sketch ranges to 500%.
+    replaceOnce(
+      'const refSizeControl=\'<div class="slider-group"><span>Background size</span> <input type="range" id="refSizeSlider" min="25" max="300" value="100"></div>\';',
+      'const refSizeControl=\'<div class="slider-group"><span>Background size</span> <input type="range" id="refSizeSlider" min="25" max="500" value="100"></div>\';',
+      'background size range'
+    );
+    replaceOnce(
+      '\'<div class="slider-group"><span>Sketch size</span> <input type="range" id="guideSizeSlider" min="10" max="300" value="100"></div>\',',
+      '\'<div class="slider-group"><span>Sketch size</span> <input type="range" id="guideSizeSlider" min="10" max="500" value="100"></div>\',',
+      'sketch size range'
+    );
+
     replaceOnce(
       '      "  if (recordReferenceInVideo && refImage && refVisible) {",',
       '      "  if (recordReferenceInVideo && refVisible && (refImage || backgroundVideoReady)) {",',
