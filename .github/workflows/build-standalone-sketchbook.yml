@@ -33,7 +33,7 @@ jobs:
 
       - name: Commit generated standalone page
         run: |
-          if git diff --quiet -- hand-selector-standalone-test.html; then
+          if [ -z "$(git status --porcelain -- hand-selector-standalone-test.html)" ]; then
             echo "Standalone page already up to date."
             exit 0
           fi
