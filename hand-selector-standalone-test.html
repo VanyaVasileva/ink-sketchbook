@@ -166,7 +166,7 @@
       <button id="toggleRefBtn" class="active">👁</button>
       <button id="removeRefBtn" style="display:none;">✕ <span data-i18n="removeRefBtn">Remove</span></button>
       <div class="slider-group"><span>Background opacity</span> <input type="range" id="opacitySlider" min="10" max="100" value="100"></div>
-      <div class="slider-group"><span>Background size</span> <input type="range" id="refSizeSlider" min="25" max="500" value="100"></div><div id="videoBackgroundSection" style="border-top:1px solid #e5e1d8;padding-top:10px;display:flex;flex-direction:column;gap:8px;"><div style="font-size:12px;font-weight:700;color:#2a2620;">Video background <span style="font-weight:500;color:#8a8373;">· draw while it plays</span></div><label class="filebtn" for="videoBgInput">🎬 Upload video</label><input type="file" id="videoBgInput" accept="video/*" /><div id="videoBgPlayback" style="display:none;flex-direction:column;gap:7px;"><div id="videoBgStatus" style="font-size:11px;color:#8a8373;text-align:center;">No video selected</div><div class="row" style="gap:6px;"><button id="videoBgPlayBtn" type="button">▶ Play</button><button id="videoBgLoopBtn" type="button" class="active">↻ Loop: On</button></div><input id="videoBgScrub" type="range" min="0" max="1000" value="0" step="1" style="width:100%;" aria-label="Video position"><div id="videoBgTime" style="font-size:11px;color:#8a8373;text-align:center;">0:00 / 0:00</div><button id="removeVideoBgBtn" type="button">✕ Remove video</button></div></div><div id="guideControls" style="border-top:1px solid #e5e1d8;padding-top:10px;display:flex;flex-direction:column;gap:8px;"><div style="font-size:12px;font-weight:700;color:#2a2620;">Sketch overlay <span style="font-weight:500;color:#8a8373;">· hidden from recording</span></div><label class="filebtn" for="guideFileInput">📝 Upload sketch overlay</label><input type="file" id="guideFileInput" accept="image/*" /><button id="toggleGuideBtn" class="active" type="button">👁 Sketch overlay visible</button><button id="moveGuideBtn" type="button">↔ Move sketch</button><button id="removeGuideBtn" type="button" style="display:none;">✕ Remove sketch</button><div class="slider-group"><span>Sketch opacity</span> <input type="range" id="guideOpacitySlider" min="5" max="100" value="45"></div><div class="slider-group"><span>Sketch size</span> <input type="range" id="guideSizeSlider" min="10" max="500" value="100"></div><button id="resetGuidePosBtn" type="button">◎ Center sketch</button></div>
+      <div class="slider-group"><span>Background size</span> <input type="range" id="refSizeSlider" min="25" max="500" value="100"></div><div id="videoBackgroundSection" style="border-top:1px solid #e5e1d8;padding-top:10px;display:flex;flex-direction:column;gap:8px;"><div style="font-size:12px;font-weight:700;color:#2a2620;">Video background <span style="font-weight:500;color:#8a8373;">· draw while it plays</span></div><label class="filebtn" for="videoBgInput">🎬 Upload video</label><input type="file" id="videoBgInput" accept="video/*" /><div id="videoBgPlayback" style="display:none;flex-direction:column;gap:7px;"><div id="videoBgStatus" style="font-size:11px;color:#8a8373;text-align:center;">No video selected</div><div id="videoBgQuality" style="font-size:11px;line-height:1.35;color:#8a8373;text-align:center;"></div><div class="row" style="gap:6px;"><button id="videoBgPlayBtn" type="button">▶ Play</button><button id="videoBgLoopBtn" type="button" class="active">↻ Loop: On</button></div><input id="videoBgScrub" type="range" min="0" max="1000" value="0" step="1" style="width:100%;" aria-label="Video position"><div id="videoBgTime" style="font-size:11px;color:#8a8373;text-align:center;">0:00 / 0:00</div><button id="removeVideoBgBtn" type="button">✕ Remove video</button></div></div><div id="guideControls" style="border-top:1px solid #e5e1d8;padding-top:10px;display:flex;flex-direction:column;gap:8px;"><div style="font-size:12px;font-weight:700;color:#2a2620;">Sketch overlay <span style="font-weight:500;color:#8a8373;">· hidden from recording</span></div><label class="filebtn" for="guideFileInput">📝 Upload sketch overlay</label><input type="file" id="guideFileInput" accept="image/*" /><button id="toggleGuideBtn" class="active" type="button">👁 Sketch overlay visible</button><button id="moveGuideBtn" type="button">↔ Move sketch</button><button id="removeGuideBtn" type="button" style="display:none;">✕ Remove sketch</button><div class="slider-group"><span>Sketch opacity</span> <input type="range" id="guideOpacitySlider" min="5" max="100" value="45"></div><div class="slider-group"><span>Sketch size</span> <input type="range" id="guideSizeSlider" min="10" max="500" value="100"></div><button id="resetGuidePosBtn" type="button">◎ Center sketch</button></div>
       <div class="slider-group"><span data-i18n="wobbleLabel">Wobble</span> <input type="range" id="wobbleSlider" min="0" max="3" value="1" step="0.5"></div><div class="slider-group"><span>Streamline</span> <input type="range" id="streamlineSlider" min="0" max="100" value="35" step="5"></div><button id="recordReferenceBtn" type="button" class="active">🎞 Background in recording: On</button><div class="slider-group"><span>Recording hand</span><select id="recordingHandSelect" style="width:100%;border:1px solid #d8d3c6;border-radius:7px;padding:8px 10px;background:#fff;color:#2a2620;font-size:16px;"><option value="human">Original</option><option value="cream">Cream sleeve</option><option value="sage">Sage sleeve</option><option value="pink">Pink sleeve</option><option value="dark">Dark sleeve</option><option value="brownOatmeal">Brown + oatmeal</option></select></div><div class="slider-group"><span>Hand size <b id="recordingHandSizeValue" style="font-weight:600;">100%</b></span> <input type="range" id="recordingHandSize" min="60" max="140" value="100" step="5"></div>
       <div class="slider-group"><span data-i18n="thicknessLabel">Thickness</span> <input type="range" id="thicknessSlider" min="0.5" max="3" value="1" step="0.25"></div>
       <div class="slider-group"><span data-i18n="minLabel">Min</span> <input type="range" id="minSlider" min="0.5" max="6" value="1" step="0.5"></div>
@@ -263,6 +263,7 @@ const resetGuidePosBtn = document.getElementById('resetGuidePosBtn');
 const videoBgInput = document.getElementById('videoBgInput');
 const videoBgPlayback = document.getElementById('videoBgPlayback');
 const videoBgStatus = document.getElementById('videoBgStatus');
+const videoBgQuality = document.getElementById('videoBgQuality');
 const videoBgPlayBtn = document.getElementById('videoBgPlayBtn');
 const videoBgLoopBtn = document.getElementById('videoBgLoopBtn');
 const videoBgScrub = document.getElementById('videoBgScrub');
@@ -516,6 +517,7 @@ let backgroundVideoReady = false;
 let backgroundVideoUrl = null;
 let backgroundVideoRAF = null;
 let backgroundVideoLoadToken = 0;
+let backgroundVideoFile = null;
 let refVisible = true;
 let smoothedWobbleX = 0, smoothedWobbleY = 0;
 let streamlinedPoint = null;
@@ -814,15 +816,36 @@ opacitySlider.addEventListener('input', drawRef);
 function formatVideoTime(seconds) { if (!Number.isFinite(seconds) || seconds < 0) seconds = 0; const whole = Math.floor(seconds); return Math.floor(whole / 60) + ':' + String(whole % 60).padStart(2, '0'); }
 function setVideoStatus(text) { if (videoBgStatus) videoBgStatus.textContent = text; }
 function updateVideoControls() { const duration = Number.isFinite(backgroundVideo.duration) ? backgroundVideo.duration : 0; const current = Number.isFinite(backgroundVideo.currentTime) ? backgroundVideo.currentTime : 0; videoBgTime.textContent = formatVideoTime(current) + ' / ' + formatVideoTime(duration); if (duration > 0) videoBgScrub.value = String(Math.round((current / duration) * 1000)); videoBgPlayBtn.textContent = backgroundVideo.paused ? '▶ Play' : '⏸ Pause'; }
-function markVideoReady() { if (!backgroundVideo.videoWidth || !backgroundVideo.videoHeight) return; backgroundVideoReady = true; setVideoStatus('Video ready'); drawRef(); updateVideoControls(); }
+function markVideoReady() { if (!backgroundVideo.videoWidth || !backgroundVideo.videoHeight) return; backgroundVideoReady = true; lastRefResUpdate = 0; updateRefResolutionForZoom(); setVideoStatus('Video ready'); drawRef(); updateBackgroundVideoQualityInfo(); updateVideoControls(); }
 function stopVideoFrameLoop() { if (backgroundVideoRAF !== null) cancelAnimationFrame(backgroundVideoRAF); backgroundVideoRAF = null; }
 function videoFrameLoop() { drawRef(); updateVideoControls(); if (!backgroundVideo.paused && !backgroundVideo.ended && backgroundVideoReady) backgroundVideoRAF = requestAnimationFrame(videoFrameLoop); else backgroundVideoRAF = null; }
 function startVideoFrameLoop() { stopVideoFrameLoop(); if (backgroundVideoReady) backgroundVideoRAF = requestAnimationFrame(videoFrameLoop); }
-function clearBackgroundVideo(updateCanvas = true) { stopVideoFrameLoop(); backgroundVideoLoadToken++; try { backgroundVideo.pause(); } catch (_) {} backgroundVideoReady = false; if (backgroundVideoUrl) { URL.revokeObjectURL(backgroundVideoUrl); backgroundVideoUrl = null; } backgroundVideo.removeAttribute('src'); try { backgroundVideo.load(); } catch (_) {} videoBgInput.value = ''; videoBgPlayback.style.display = 'none'; videoBgScrub.value = '0'; videoBgTime.textContent = '0:00 / 0:00'; videoBgPlayBtn.textContent = '▶ Play'; setVideoStatus('No video selected'); if (updateCanvas) drawRef(); }
+function clearBackgroundVideo(updateCanvas = true) { stopVideoFrameLoop(); backgroundVideoLoadToken++; try { backgroundVideo.pause(); } catch (_) {} backgroundVideoReady = false; if (backgroundVideoUrl) { URL.revokeObjectURL(backgroundVideoUrl); backgroundVideoUrl = null; } backgroundVideo.removeAttribute('src'); try { backgroundVideo.load(); } catch (_) {} videoBgInput.value = ''; backgroundVideoFile = null; if (videoBgQuality) videoBgQuality.textContent = ''; videoBgPlayback.style.display = 'none'; videoBgScrub.value = '0'; videoBgTime.textContent = '0:00 / 0:00'; videoBgPlayBtn.textContent = '▶ Play'; setVideoStatus('No video selected'); if (updateCanvas) drawRef(); }
 fileInput.addEventListener('change', () => { if (fileInput.files && fileInput.files[0] && backgroundVideoUrl) clearBackgroundVideo(false); });
 async function primeSelectedVideo(token) { try { const p = backgroundVideo.play(); if (p && typeof p.then === 'function') await p; if (token !== backgroundVideoLoadToken) return; backgroundVideo.pause(); if (Number.isFinite(backgroundVideo.duration) && backgroundVideo.duration > 0) { try { backgroundVideo.currentTime = Math.min(0.05, backgroundVideo.duration / 100); } catch (_) {} } else { markVideoReady(); } } catch (_) { if (token === backgroundVideoLoadToken) setVideoStatus('Tap Play to finish loading'); } }
-videoBgInput.addEventListener('change', async () => { const file = videoBgInput.files && videoBgInput.files[0]; if (!file) return; stopVideoFrameLoop(); const token = ++backgroundVideoLoadToken; try { backgroundVideo.pause(); } catch (_) {} if (backgroundVideoUrl) URL.revokeObjectURL(backgroundVideoUrl); backgroundVideoReady = false; backgroundVideoUrl = URL.createObjectURL(file); backgroundVideo.src = backgroundVideoUrl; backgroundVideo.muted = true; backgroundVideo.defaultMuted = true; backgroundVideo.loop = videoBgLoopBtn.classList.contains('active'); refImage = null; fileInput.value = ''; const removePhotoBtn = document.getElementById('removeRefBtn'); if (removePhotoBtn) removePhotoBtn.style.display = 'none'; refVisible = true; toggleRefBtn.classList.add('active'); refSizeSlider.value = 100; videoBgPlayback.style.display = 'flex'; setVideoStatus('Loading selected video…'); hintText.textContent = 'Preparing the video background…'; try { backgroundVideo.load(); } catch (_) {} setTimeout(() => { if (token === backgroundVideoLoadToken && !backgroundVideoReady) setVideoStatus('Still loading… tap Play once'); }, 3500); await primeSelectedVideo(token); });
-backgroundVideo.addEventListener('loadedmetadata', () => { setVideoStatus('Preparing first frame…'); updateVideoControls(); if (Number.isFinite(backgroundVideo.duration) && backgroundVideo.duration > 0) { try { backgroundVideo.currentTime = Math.min(0.05, backgroundVideo.duration / 100); } catch (_) {} } });
+function backgroundVideoFormatLabel(file) {
+  if (!file) return 'Video';
+  const mime = (file.type || '').toLowerCase();
+  if (mime.includes('mp4')) return 'MP4';
+  if (mime.includes('quicktime')) return 'MOV';
+  if (mime.includes('webm')) return 'WebM';
+  const name = file.name || '';
+  const ext = name.includes('.') ? name.split('.').pop().toUpperCase() : '';
+  return ext || 'Video';
+}
+function updateBackgroundVideoQualityInfo() {
+  if (!videoBgQuality || !backgroundVideo.videoWidth || !backgroundVideo.videoHeight) return;
+  const w = backgroundVideo.videoWidth;
+  const h = backgroundVideo.videoHeight;
+  const duration = Number.isFinite(backgroundVideo.duration) ? backgroundVideo.duration : 0;
+  const mbps = backgroundVideoFile && duration > 0 ? (backgroundVideoFile.size * 8 / duration / 1000000) : 0;
+  const format = backgroundVideoFormatLabel(backgroundVideoFile);
+  const socialReady = Math.min(w, h) >= 1080;
+  videoBgQuality.textContent = (socialReady ? '✓ ' : '⚠ ') + format + ' · ' + w + '×' + h + (mbps > 0 ? ' · ~' + mbps.toFixed(1) + ' Mbps' : '') + (socialReady ? ' · Social-HD source' : ' · below 1080px short side — may look soft');
+  videoBgQuality.style.color = socialReady ? '#5d7459' : '#9a6239';
+}
+videoBgInput.addEventListener('change', async () => { const file = videoBgInput.files && videoBgInput.files[0]; if (!file) return; backgroundVideoFile = file; stopVideoFrameLoop(); const token = ++backgroundVideoLoadToken; try { backgroundVideo.pause(); } catch (_) {} if (backgroundVideoUrl) URL.revokeObjectURL(backgroundVideoUrl); backgroundVideoReady = false; backgroundVideoUrl = URL.createObjectURL(file); backgroundVideo.src = backgroundVideoUrl; backgroundVideo.muted = true; backgroundVideo.defaultMuted = true; backgroundVideo.loop = videoBgLoopBtn.classList.contains('active'); refImage = null; fileInput.value = ''; const removePhotoBtn = document.getElementById('removeRefBtn'); if (removePhotoBtn) removePhotoBtn.style.display = 'none'; refVisible = true; toggleRefBtn.classList.add('active'); refSizeSlider.value = 100; videoBgPlayback.style.display = 'flex'; setVideoStatus('Loading selected video…'); hintText.textContent = 'Preparing the video background…'; try { backgroundVideo.load(); } catch (_) {} setTimeout(() => { if (token === backgroundVideoLoadToken && !backgroundVideoReady) setVideoStatus('Still loading… tap Play once'); }, 3500); await primeSelectedVideo(token); });
+backgroundVideo.addEventListener('loadedmetadata', () => { setVideoStatus('Preparing first frame…'); updateBackgroundVideoQualityInfo(); updateVideoControls(); if (Number.isFinite(backgroundVideo.duration) && backgroundVideo.duration > 0) { try { backgroundVideo.currentTime = Math.min(0.05, backgroundVideo.duration / 100); } catch (_) {} } });
 backgroundVideo.addEventListener('loadeddata', markVideoReady);
 backgroundVideo.addEventListener('canplay', markVideoReady);
 backgroundVideo.addEventListener('canplaythrough', markVideoReady);
@@ -939,14 +962,31 @@ function compositeRecordFrame() {
   recordCtx.fillRect(0, 0, recordCanvas.width, recordCanvas.height);
   const source = recordSourceRect || { x: 0, y: 0, width: drawCanvas.width, height: drawCanvas.height };
   if (recordReferenceInVideo && refVisible && (refImage || backgroundVideoReady)) {
-    const refScaleX = refCanvas.width / drawCanvas.width;
-    const refScaleY = refCanvas.height / drawCanvas.height;
-    recordCtx.drawImage(
-      refCanvas,
-      source.x * refScaleX, source.y * refScaleY,
-      source.width * refScaleX, source.height * refScaleY,
-      0, 0, recordCanvas.width, recordCanvas.height
-    );
+    const activeRecordingRef = backgroundVideoReady ? backgroundVideo : refImage;
+    const iw = backgroundVideoReady ? backgroundVideo.videoWidth : refImage.width;
+    const ih = backgroundVideoReady ? backgroundVideo.videoHeight : refImage.height;
+    if (activeRecordingRef && iw > 0 && ih > 0) {
+      const cw = refCanvas.width, ch = refCanvas.height;
+      const fitScale = Math.min(cw / iw, ch / ih) * 0.9;
+      const autoScale = Math.min(fitScale, 1);
+      const userScale = (parseFloat(refSizeSlider.value) || 100) / 100;
+      const refDrawScale = autoScale * userScale;
+      const refW = iw * refDrawScale, refH = ih * refDrawScale;
+      const refX = (cw - refW) / 2, refY = (ch - refH) / 2;
+      const refScaleX = refCanvas.width / drawCanvas.width;
+      const refScaleY = refCanvas.height / drawCanvas.height;
+      const cropX = source.x * refScaleX, cropY = source.y * refScaleY;
+      const cropW = source.width * refScaleX, cropH = source.height * refScaleY;
+      const mapX = recordCanvas.width / Math.max(1, cropW);
+      const mapY = recordCanvas.height / Math.max(1, cropH);
+      recordCtx.save();
+      recordCtx.globalAlpha = Math.max(0, Math.min(1, (parseFloat(opacitySlider.value) || 100) / 100));
+      recordCtx.imageSmoothingEnabled = true;
+      recordCtx.imageSmoothingQuality = 'high';
+      recordCtx.setTransform(mapX, 0, 0, mapY, -cropX * mapX, -cropY * mapY);
+      try { recordCtx.drawImage(activeRecordingRef, refX, refY, refW, refH); } catch (_) {}
+      recordCtx.restore();
+    }
   }
   recordCtx.drawImage(drawCanvas, source.x, source.y, source.width, source.height, 0, 0, recordCanvas.width, recordCanvas.height);
   const recordScaleX = recordCanvas.width / source.width;
@@ -1002,14 +1042,16 @@ recordBtn.onclick = async () => {
     height: visibleHeight * drawCanvas.height / canvasRectForRecording.height
   };
   const isPhoneRecording = /iPhone|iPod/i.test(navigator.userAgent) || Math.min(screen.width, screen.height) < 600;
-  const recordMaxLongSide = isPhoneRecording ? 1280 : 2160;
-  const recordVideoScale = Math.min(1, recordMaxLongSide / Math.max(recordSourceRect.width, recordSourceRect.height));
-  recordCanvas.width = Math.max(2, Math.round(recordSourceRect.width * recordVideoScale));
-  recordCanvas.height = Math.max(2, Math.round(recordSourceRect.height * recordVideoScale));
+  const recordTargetLongSide = isPhoneRecording ? 1920 : 2160;
+  const sourceLongSide = Math.max(recordSourceRect.width, recordSourceRect.height);
+  const recordVideoScale = Math.min(2, recordTargetLongSide / Math.max(1, sourceLongSide));
+  const evenRecordSize = (value) => Math.max(2, Math.round(value / 2) * 2);
+  recordCanvas.width = evenRecordSize(recordSourceRect.width * recordVideoScale);
+  recordCanvas.height = evenRecordSize(recordSourceRect.height * recordVideoScale);
   recordCtx = recordCanvas.getContext('2d');
   compositeRecordFrame();
 
-  const stream = recordCanvas.captureStream(24);
+  const stream = recordCanvas.captureStream(30);
   if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
     try {
       recordingMicrophoneStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
@@ -1032,7 +1074,7 @@ recordBtn.onclick = async () => {
     }
   }
   recordedChunks = [];
-  mediaRecorder = new MediaRecorder(stream, { mimeType: recordingSupport, videoBitsPerSecond: isPhoneRecording ? 6000000 : 14000000, audioBitsPerSecond: 256000 });
+  mediaRecorder = new MediaRecorder(stream, { mimeType: recordingSupport, videoBitsPerSecond: isPhoneRecording ? 12000000 : 20000000, audioBitsPerSecond: 256000 });
   const fileExt = recordingSupport.startsWith('video/mp4') ? 'mp4' : 'webm';
   mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
   mediaRecorder.onstop = () => {
@@ -1124,7 +1166,8 @@ function getPos(e) {
 
 let lastRefResUpdate = 0;
 function updateRefResolutionForZoom() {
-  if (!refImage) return;
+  const activeSourceLong = backgroundVideoReady ? Math.max(backgroundVideo.videoWidth || 0, backgroundVideo.videoHeight || 0) : (refImage ? Math.max(refImage.width, refImage.height) : 0);
+  if (!activeSourceLong) return;
   const now = performance.now();
   if (now - lastRefResUpdate < 150) return; // throttle — don't resize the canvas on every touch event
   lastRefResUpdate = now;
@@ -1134,7 +1177,7 @@ function updateRefResolutionForZoom() {
   // genuine extra detail from the original photo — capped by the photo's own
   // native resolution, since no amount of rendering can invent detail that
   // wasn't in the source.
-  const targetLong = Math.min(baseLong * view.scale, Math.max(refImage.width, refImage.height));
+  const targetLong = Math.min(baseLong * view.scale, activeSourceLong);
   const currentLong = Math.max(refCanvas.width, refCanvas.height);
   if (targetLong <= currentLong * 1.05) return; // not enough of a jump to bother re-rendering yet
 
