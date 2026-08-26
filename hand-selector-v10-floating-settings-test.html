@@ -8,7 +8,7 @@
     if(!source.includes(marker)) throw new Error('v7 publish marker not found');
 
     const patch=String.raw`
-    // v10 UI patch: settings float above the canvas, so visual layers never
+    // v10 UI-only patch: settings float above the canvas, so visual layers never
     // move when More settings is opened or closed.
     const layerPatchNeedle='    const layerPatch=String.raw'+String.fromCharCode(96);
     if(!source.includes(layerPatchNeedle)) throw new Error('v8 layer patch not found');
@@ -16,19 +16,7 @@
       "    html=html.replace('</head>', '<style id=\"floatingSettingsStyle\">.main-row{position:relative!important;} .canvas-wrap{width:100%!important;min-width:0!important;} #sidePanel{position:absolute!important;right:12px!important;top:12px!important;z-index:50!important;width:min(320px,calc(100% - 24px))!important;max-height:calc(100% - 24px)!important;overflow-y:auto!important;border:1px solid #e5e1d8!important;border-radius:12px!important;box-shadow:0 12px 32px rgba(42,38,32,.18)!important;background:#fff!important;padding:12px!important;} #sidePanel.collapsed{display:none!important;} @media (max-width:700px){#sidePanel{right:8px!important;top:8px!important;width:min(310px,calc(100% - 16px))!important;max-height:calc(100% - 16px)!important;}}</style></head>');",
       ""
     ].join('\n');
-
-    // Recording quality patch. The old recorder capped iPad output at 2160 px,
-    // which downscaled the 3000 px ink canvas before encoding and softened the
-    // lines. Keep the real canvas pixels whenever possible and use a much higher
-    // bitrate. Disable interpolation when the ink canvas is copied to the video.
-    const sharpRecordingPatch=[
-      "    html=html.replace(\"  const recordMaxLongSide = isPhoneRecording ? 1280 : 2160;\", \"  const recordMaxLongSide = isPhoneRecording ? 1920 : 4096;\");",
-      "    html=html.replace(\"  mediaRecorder = new MediaRecorder(stream, { mimeType: recordingSupport, videoBitsPerSecond: isPhoneRecording ? 6000000 : 14000000, audioBitsPerSecond: 256000 });\", \"  mediaRecorder = new MediaRecorder(stream, { mimeType: recordingSupport, videoBitsPerSecond: isPhoneRecording ? 16000000 : 32000000, audioBitsPerSecond: 256000 });\");",
-      "    html=html.replace(\"  recordCtx.drawImage(drawCanvas, source.x, source.y, source.width, source.height, 0, 0, recordCanvas.width, recordCanvas.height);\", [\"  recordCtx.save();\",\"  recordCtx.imageSmoothingEnabled = false;\",\"  recordCtx.drawImage(drawCanvas, source.x, source.y, source.width, source.height, 0, 0, recordCanvas.width, recordCanvas.height);\",\"  recordCtx.restore();\"].join('\\n'));",
-      ""
-    ].join('\n');
-
-    source=source.replace(layerPatchNeedle,layerPatchNeedle+'\n'+floatingPanelPatch+sharpRecordingPatch);
+    source=source.replace(layerPatchNeedle,layerPatchNeedle+'\n'+floatingPanelPatch);
 
     // Let both the photo/video background and the private sketch overlay become
     // much larger without changing their original source media.
