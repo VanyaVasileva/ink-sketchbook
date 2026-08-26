@@ -58,6 +58,70 @@ jobs:
       - name: Build and validate standalone page
         run: node scripts/build-standalone.mjs
 
+      - name: Preserve native still-image background quality
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('hand-selector-standalone-test.html')
+          text = path.read_text()
+
+          draw_ref = """function drawRef() {
+            refCtx.clearRect(0, 0, refCanvas.width, refCanvas.height);"""
+          replacement = """function ensureStillBackgroundNativeQuality() {
+            if (!refImage || backgroundVideoReady) return;
+            const iw = refImage.naturalWidth || refImage.width || 0;
+            const ih = refImage.naturalHeight || refImage.height || 0;
+            if (!iw || !ih || !refCanvas.width || !refCanvas.height) return;
+            const currentLong = Math.max(refCanvas.width, refCanvas.height);
+            const requiredScale = Math.max(
+              iw / Math.max(1, refCanvas.width * 0.9),
+              ih / Math.max(1, refCanvas.height * 0.9),
+              1
+            );
+            const maxLong = 4096;
+            const maxScale = maxLong / Math.max(1, currentLong);
+            const scale = Math.min(requiredScale, maxScale);
+            if (scale > 1.01) {
+              refCanvas.width = Math.max(2, Math.round(refCanvas.width * scale));
+              refCanvas.height = Math.max(2, Math.round(refCanvas.height * scale));
+            }
+          }
+
+          function drawRef() {
+            ensureStillBackgroundNativeQuality();
+            refCtx.clearRect(0, 0, refCanvas.width, refCanvas.height);"""
+          if draw_ref not in text:
+              raise SystemExit('drawRef quality hook not found')
+          text = text.replace(draw_ref, replacement, 1)
+
+          old_display_dims = "const iw = backgroundVideoReady ? backgroundVideo.videoWidth : refImage.width, ih = backgroundVideoReady ? backgroundVideo.videoHeight : refImage.height;"
+          new_display_dims = "const iw = backgroundVideoReady ? backgroundVideo.videoWidth : (refImage.naturalWidth || refImage.width), ih = backgroundVideoReady ? backgroundVideo.videoHeight : (refImage.naturalHeight || refImage.height);"
+          if old_display_dims not in text:
+              raise SystemExit('still background display dimensions not found')
+          text = text.replace(old_display_dims, new_display_dims, 1)
+
+          old_record_w = "const iw = backgroundVideoReady ? backgroundVideo.videoWidth : refImage.width;"
+          old_record_h = "const ih = backgroundVideoReady ? backgroundVideo.videoHeight : refImage.height;"
+          new_record_w = "const iw = backgroundVideoReady ? backgroundVideo.videoWidth : (refImage.naturalWidth || refImage.width);"
+          new_record_h = "const ih = backgroundVideoReady ? backgroundVideo.videoHeight : (refImage.naturalHeight || refImage.height);"
+          if old_record_w not in text or old_record_h not in text:
+              raise SystemExit('still background recording dimensions not found')
+          text = text.replace(old_record_w, new_record_w, 1)
+          text = text.replace(old_record_h, new_record_h, 1)
+
+          old_zoom = "(refImage ? Math.max(refImage.width, refImage.height) : 0)"
+          new_zoom = "(refImage ? Math.max(refImage.naturalWidth || refImage.width, refImage.naturalHeight || refImage.height) : 0)"
+          if old_zoom not in text:
+              raise SystemExit('still background zoom dimensions not found')
+          text = text.replace(old_zoom, new_zoom, 1)
+
+          if 'function ensureStillBackgroundNativeQuality()' not in text:
+              raise SystemExit('native still-image quality patch validation failed')
+
+          path.write_text(text)
+          PY
+
       - name: Commit generated standalone page
         run: |
           if [ -z "$(git status --porcelain -- hand-selector-standalone-test.html)" ]; then
