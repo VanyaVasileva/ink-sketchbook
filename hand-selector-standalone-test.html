@@ -43,6 +43,8 @@
   #sidePanel .row.palette { flex-wrap: wrap; }
   canvas { position: absolute; touch-action: none; transform-origin: 0 0; box-shadow: 0 0 0 1px #ddd8cc; }
   #refCanvas { z-index: 1; }
+  #refDomLayer { position:absolute; z-index:1; pointer-events:none; transform-origin:0 0; overflow:visible; }
+  #refDomImage { position:absolute; display:block; max-width:none; max-height:none; object-fit:fill; image-rendering:auto; }
   #guideCanvas { z-index: 2; pointer-events: none; }
   #drawCanvas { z-index: 3; }
   .palette { display: flex; gap: 5px; }
@@ -145,6 +147,7 @@
   <div class="main-row">
     <div class="canvas-wrap">
       <canvas id="refCanvas"></canvas>
+      <div id="refDomLayer" style="display:none;"><img id="refDomImage" alt="" draggable="false" /></div>
       <canvas id="guideCanvas"></canvas>
       <canvas id="drawCanvas"></canvas>
     </div>
@@ -243,6 +246,8 @@ unlockBtn.onclick = tryUnlock;
 passcodeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') tryUnlock(); });
 
 const refCanvas = document.getElementById('refCanvas');
+const refDomLayer = document.getElementById('refDomLayer');
+const refDomImage = document.getElementById('refDomImage');
 const guideCanvas = document.getElementById('guideCanvas');
 const drawCanvas = document.getElementById('drawCanvas');
 const refCtx = refCanvas.getContext('2d');
@@ -589,7 +594,7 @@ function fitCanvasDisplay() {
   const cssH = canvasBaseCssH * fit;
   const left = EDGE_MARGIN + Math.max(0, (availW - cssW) / 2);
   const top = EDGE_MARGIN + Math.max(0, (availH - cssH) / 2);
-  [refCanvas, guideCanvas, drawCanvas].forEach(c => {
+  [refCanvas, guideCanvas, drawCanvas, refDomLayer].forEach(c => {
     c.style.width = cssW + 'px';
     c.style.height = cssH + 'px';
     c.style.left = left + 'px';
@@ -666,10 +671,44 @@ function ensureStillBackgroundNativeQuality() {
   }
 }
 
+function syncStillBackgroundDom() {
+  if (!refDomLayer || !refDomImage) return false;
+  if (!refVisible || !refImage || backgroundVideoReady) {
+    refDomLayer.style.display = 'none';
+    return false;
+  }
+  const cw = refCanvas.width, ch = refCanvas.height;
+  const iw = refImage.naturalWidth || refImage.width || 0;
+  const ih = refImage.naturalHeight || refImage.height || 0;
+  if (!cw || !ch || !iw || !ih) {
+    refDomLayer.style.display = 'none';
+    return false;
+  }
+  const fitScale = Math.min(cw / iw, ch / ih) * 0.9;
+  const autoScale = Math.min(fitScale, 1);
+  const userScale = (parseFloat(refSizeSlider.value) || 100) / 100;
+  const scale = autoScale * userScale;
+  const w = iw * scale, h = ih * scale;
+  const x = (cw - w) / 2, y = (ch - h) / 2;
+  if (refDomImage.src !== refImage.src) refDomImage.src = refImage.src;
+  refDomImage.style.left = (x / cw * 100) + '%';
+  refDomImage.style.top = (y / ch * 100) + '%';
+  refDomImage.style.width = (w / cw * 100) + '%';
+  refDomImage.style.height = (h / ch * 100) + '%';
+  refDomImage.style.opacity = String(Math.max(0, Math.min(1, (parseFloat(opacitySlider.value) || 100) / 100)));
+  refDomLayer.style.display = 'block';
+  return true;
+}
+
 function drawRef() {
   ensureStillBackgroundNativeQuality();
   refCtx.clearRect(0, 0, refCanvas.width, refCanvas.height);
-  if (!refVisible) return;
+  if (!refVisible) {
+    if (refDomLayer) refDomLayer.style.display = 'none';
+    return;
+  }
+  if (!backgroundVideoReady && refImage && syncStillBackgroundDom()) return;
+  if (refDomLayer) refDomLayer.style.display = 'none';
   const activeRef = backgroundVideoReady ? backgroundVideo : refImage;
   if (!activeRef) return;
   const cw = refCanvas.width, ch = refCanvas.height;
@@ -1215,6 +1254,7 @@ function updateRefResolutionForZoom() {
 function applyView() {
   const t = `translate(${view.x}px, ${view.y}px) rotate(${view.rotation}deg) scale(${view.scale})`;
   refCanvas.style.transform = t;
+  refDomLayer.style.transform = t;
   guideCanvas.style.transform = t;
   drawCanvas.style.transform = t;
 }
