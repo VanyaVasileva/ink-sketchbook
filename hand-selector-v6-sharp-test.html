@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Ink Sketchbook Sharp Recording Base</title></head><body><p style="font-family:sans-serif;padding:20px">Loading sharp recording base…</p><script>
+(async function(){
+  const url='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/main/hand-selector-v6-test.html?cache='+Date.now();
+  try {
+    let source=await fetch(url,{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('Could not load recording base');return r.text();});
+    const marker='    document.open();document.write(html);document.close();';
+    if(!source.includes(marker)) throw new Error('Recording publish marker not found');
+
+    const qualityPatch=String.raw`
+    // --- sharp recording quality patch ---------------------------------------
+    // Keep the recording at (or extremely close to) the real ink canvas pixels.
+    html=html.replace(
+      "  const isPhoneRecording = /iPhone|iPod/i.test(navigator.userAgent) || Math.min(screen.width, screen.height) < 600;",
+      [
+        "  recordSourceRect.x = Math.max(0, Math.round(recordSourceRect.x));",
+        "  recordSourceRect.y = Math.max(0, Math.round(recordSourceRect.y));",
+        "  recordSourceRect.width = Math.max(2, Math.min(drawCanvas.width - recordSourceRect.x, Math.round(recordSourceRect.width)));",
+        "  recordSourceRect.height = Math.max(2, Math.min(drawCanvas.height - recordSourceRect.y, Math.round(recordSourceRect.height)));",
+        "  const isPhoneRecording = /iPhone|iPod/i.test(navigator.userAgent) || Math.min(screen.width, screen.height) < 600;"
+      ].join('\n')
+    );
+
+    html=html.replace(
+      "  const recordMaxLongSide = isPhoneRecording ? 1280 : 2160;",
+      "  const recordMaxLongSide = isPhoneRecording ? 1920 : 4096;"
+    );
+
+    html=html.replace(
+      "  recordCanvas.width = Math.max(2, Math.round(recordSourceRect.width * recordVideoScale));\n  recordCanvas.height = Math.max(2, Math.round(recordSourceRect.height * recordVideoScale));",
+      [
+        "  const evenRecordSize = (value) => Math.max(2, Math.round(value / 2) * 2);",
+        "  recordCanvas.width = evenRecordSize(recordSourceRect.width * recordVideoScale);",
+        "  recordCanvas.height = evenRecordSize(recordSourceRect.height * recordVideoScale);"
+      ].join('\n')
+    );
+
+    html=html.replace(
+      "  recordCtx.drawImage(drawCanvas, source.x, source.y, source.width, source.height, 0, 0, recordCanvas.width, recordCanvas.height);",
+      [
+        "  recordCtx.save();",
+        "  recordCtx.imageSmoothingEnabled = false;",
+        "  recordCtx.drawImage(drawCanvas, source.x, source.y, source.width, source.height, 0, 0, recordCanvas.width, recordCanvas.height);",
+        "  recordCtx.restore();"
+      ].join('\n')
+    );
+
+    html=html.replace(
+      "  mediaRecorder = new MediaRecorder(stream, { mimeType: recordingSupport, videoBitsPerSecond: isPhoneRecording ? 6000000 : 14000000, audioBitsPerSecond: 256000 });",
+      "  mediaRecorder = new MediaRecorder(stream, { mimeType: recordingSupport, videoBitsPerSecond: isPhoneRecording ? 16000000 : 32000000, audioBitsPerSecond: 256000 });"
+    );
+    `;
+
+    source=source.replace(marker,qualityPatch+'\n'+marker);
+    document.open();document.write(source);document.close();
+  } catch(err) {
+    document.body.innerHTML='<div style="font-family:sans-serif;padding:24px"><h2>Could not load sharp recording base</h2><pre>'+String(err)+'</pre></div>';
+  }
+})();
+</script></body></html>
