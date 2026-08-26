@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Ink Sketchbook Sharp Layers Test</title></head><body><p style="font-family:sans-serif;padding:20px">Loading sharp layers test…</p><script>
+(async function(){
+  const url='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/main/hand-selector-v8-layers-test.html?cache='+Date.now();
+  try {
+    let source=await fetch(url,{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('Could not load layer test');return r.text();});
+    const oldBase="const v6Url='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/main/hand-selector-v6-test.html';";
+    const newBase="const v6Url='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/main/hand-selector-v6-sharp-test.html?cache='+Date.now();";
+    if(!source.includes(oldBase)) throw new Error('Layer base URL not found');
+    source=source.replace(oldBase,newBase);
+    document.open();document.write(source);document.close();
+  } catch(err) {
+    document.body.innerHTML='<div style="font-family:sans-serif;padding:24px"><h2>Could not load sharp layers test</h2><pre>'+String(err)+'</pre></div>';
+  }
+})();
+</script></body></html>
