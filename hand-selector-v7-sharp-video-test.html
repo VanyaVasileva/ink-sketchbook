@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Ink Sketchbook Sharp Video Test</title></head><body><p style="font-family:sans-serif;padding:20px">Loading sharp video test…</p><script>
+(async function(){
+  const url='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/main/hand-selector-v7-test.html?cache='+Date.now();
+  try {
+    let source=await fetch(url,{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('Could not load video test');return r.text();});
+    const oldBase="const url='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/main/hand-selector-v8-layers-test.html?cache='+Date.now();";
+    const newBase="const url='https://raw.githubusercontent.com/VanyaVasileva/ink-sketchbook/main/hand-selector-v8-sharp-layers-test.html?cache='+Date.now();";
+    if(!source.includes(oldBase)) throw new Error('Video base URL not found');
+    source=source.replace(oldBase,newBase);
+    document.open();document.write(source);document.close();
+  } catch(err) {
+    document.body.innerHTML='<div style="font-family:sans-serif;padding:24px"><h2>Could not load sharp video test</h2><pre>'+String(err)+'</pre></div>';
+  }
+})();
+</script></body></html>
