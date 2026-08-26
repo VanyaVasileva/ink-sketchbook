@@ -121,16 +121,181 @@ console.log('2/3 Applying layer test to v6...');
 const transformedV6 = await executeWrapper(transformedV8, 'v8-wrapper');
 
 console.log('3/3 Building final Ink Sketchbook HTML...');
-const finalHtml = await executeWrapper(transformedV6, 'v6-wrapper');
+let finalHtml = await executeWrapper(transformedV6, 'v6-wrapper');
+
+function replaceFinal(needle, replacement, label) {
+  if (!finalHtml.includes(needle)) throw new Error(`Final quality patch failed: ${label}`);
+  finalHtml = finalHtml.replace(needle, replacement);
+}
+
+// ---------------------------------------------------------------------------
+// High-quality video background + social-ready recording output.
+// ---------------------------------------------------------------------------
+
+// Show the creator the native source resolution/format/estimated bitrate so a
+// soft source file can be spotted before recording.
+const videoStatusMarkup = '<div id="videoBgStatus" style="font-size:11px;color:#8a8373;text-align:center;">No video selected</div>';
+replaceFinal(
+  videoStatusMarkup,
+  videoStatusMarkup + '<div id="videoBgQuality" style="font-size:11px;line-height:1.35;color:#8a8373;text-align:center;"></div>',
+  'video source quality UI'
+);
+replaceFinal(
+  "const videoBgStatus = document.getElementById('videoBgStatus');",
+  "const videoBgStatus = document.getElementById('videoBgStatus');\nconst videoBgQuality = document.getElementById('videoBgQuality');",
+  'video source quality DOM reference'
+);
+replaceFinal(
+  'let backgroundVideoLoadToken = 0;',
+  'let backgroundVideoLoadToken = 0;\nlet backgroundVideoFile = null;',
+  'video source file state'
+);
+
+const videoQualityHelpers = [
+  "function backgroundVideoFormatLabel(file) {",
+  "  if (!file) return 'Video';",
+  "  const mime = (file.type || '').toLowerCase();",
+  "  if (mime.includes('mp4')) return 'MP4';",
+  "  if (mime.includes('quicktime')) return 'MOV';",
+  "  if (mime.includes('webm')) return 'WebM';",
+  "  const name = file.name || '';",
+  "  const ext = name.includes('.') ? name.split('.').pop().toUpperCase() : '';",
+  "  return ext || 'Video';",
+  "}",
+  "function updateBackgroundVideoQualityInfo() {",
+  "  if (!videoBgQuality || !backgroundVideo.videoWidth || !backgroundVideo.videoHeight) return;",
+  "  const w = backgroundVideo.videoWidth;",
+  "  const h = backgroundVideo.videoHeight;",
+  "  const duration = Number.isFinite(backgroundVideo.duration) ? backgroundVideo.duration : 0;",
+  "  const mbps = backgroundVideoFile && duration > 0 ? (backgroundVideoFile.size * 8 / duration / 1000000) : 0;",
+  "  const format = backgroundVideoFormatLabel(backgroundVideoFile);",
+  "  const socialReady = Math.min(w, h) >= 1080;",
+  "  videoBgQuality.textContent = (socialReady ? '✓ ' : '⚠ ') + format + ' · ' + w + '×' + h + (mbps > 0 ? ' · ~' + mbps.toFixed(1) + ' Mbps' : '') + (socialReady ? ' · Social-HD source' : ' · below 1080px short side — may look soft');",
+  "  videoBgQuality.style.color = socialReady ? '#5d7459' : '#9a6239';",
+  "}"
+].join('\n');
+replaceFinal(
+  "videoBgInput.addEventListener('change', async () => { const file = videoBgInput.files && videoBgInput.files[0]; if (!file) return;",
+  videoQualityHelpers + "\nvideoBgInput.addEventListener('change', async () => { const file = videoBgInput.files && videoBgInput.files[0]; if (!file) return; backgroundVideoFile = file;",
+  'video source quality helper injection'
+);
+replaceFinal(
+  "backgroundVideo.addEventListener('loadedmetadata', () => { setVideoStatus('Preparing first frame…'); updateVideoControls();",
+  "backgroundVideo.addEventListener('loadedmetadata', () => { setVideoStatus('Preparing first frame…'); updateBackgroundVideoQualityInfo(); updateVideoControls();",
+  'video source metadata quality check'
+);
+replaceFinal(
+  "videoBgInput.value = ''; videoBgPlayback.style.display = 'none';",
+  "videoBgInput.value = ''; backgroundVideoFile = null; if (videoBgQuality) videoBgQuality.textContent = ''; videoBgPlayback.style.display = 'none';",
+  'video source quality reset'
+);
+
+// The still-photo reference already increases its backing resolution when the
+// creator zooms in. Apply the same logic to video so a 4K source remains crisp
+// while tracing instead of magnifying a 3000px intermediate canvas forever.
+replaceFinal(
+  "function updateRefResolutionForZoom() {\n  if (!refImage) return;",
+  "function updateRefResolutionForZoom() {\n  const activeSourceLong = backgroundVideoReady ? Math.max(backgroundVideo.videoWidth || 0, backgroundVideo.videoHeight || 0) : (refImage ? Math.max(refImage.width, refImage.height) : 0);\n  if (!activeSourceLong) return;",
+  'video-aware zoom resolution'
+);
+replaceFinal(
+  '  const targetLong = Math.min(baseLong * view.scale, Math.max(refImage.width, refImage.height));',
+  '  const targetLong = Math.min(baseLong * view.scale, activeSourceLong);',
+  'video-aware zoom target'
+);
+replaceFinal(
+  "function markVideoReady() { if (!backgroundVideo.videoWidth || !backgroundVideo.videoHeight) return; backgroundVideoReady = true; setVideoStatus('Video ready'); drawRef(); updateVideoControls(); }",
+  "function markVideoReady() { if (!backgroundVideo.videoWidth || !backgroundVideo.videoHeight) return; backgroundVideoReady = true; lastRefResUpdate = 0; updateRefResolutionForZoom(); setVideoStatus('Video ready'); drawRef(); updateBackgroundVideoQualityInfo(); updateVideoControls(); }",
+  'video ready high-resolution refresh'
+);
+
+// Do not record the already-rasterized refCanvas. Draw the original decoded
+// image/video frame directly into the recording canvas using the same placement,
+// fade and crop mapping. This removes one full resampling pass from the output.
+const oldRecordingBackground = [
+  '  if (recordReferenceInVideo && refVisible && (refImage || backgroundVideoReady)) {',
+  '    const refScaleX = refCanvas.width / drawCanvas.width;',
+  '    const refScaleY = refCanvas.height / drawCanvas.height;',
+  '    recordCtx.drawImage(',
+  '      refCanvas,',
+  '      source.x * refScaleX, source.y * refScaleY,',
+  '      source.width * refScaleX, source.height * refScaleY,',
+  '      0, 0, recordCanvas.width, recordCanvas.height',
+  '    );',
+  '  }'
+].join('\n');
+const directRecordingBackground = [
+  '  if (recordReferenceInVideo && refVisible && (refImage || backgroundVideoReady)) {',
+  '    const activeRecordingRef = backgroundVideoReady ? backgroundVideo : refImage;',
+  '    const iw = backgroundVideoReady ? backgroundVideo.videoWidth : refImage.width;',
+  '    const ih = backgroundVideoReady ? backgroundVideo.videoHeight : refImage.height;',
+  '    if (activeRecordingRef && iw > 0 && ih > 0) {',
+  '      const cw = refCanvas.width, ch = refCanvas.height;',
+  '      const fitScale = Math.min(cw / iw, ch / ih) * 0.9;',
+  '      const autoScale = Math.min(fitScale, 1);',
+  '      const userScale = (parseFloat(refSizeSlider.value) || 100) / 100;',
+  '      const refDrawScale = autoScale * userScale;',
+  '      const refW = iw * refDrawScale, refH = ih * refDrawScale;',
+  '      const refX = (cw - refW) / 2, refY = (ch - refH) / 2;',
+  '      const refScaleX = refCanvas.width / drawCanvas.width;',
+  '      const refScaleY = refCanvas.height / drawCanvas.height;',
+  '      const cropX = source.x * refScaleX, cropY = source.y * refScaleY;',
+  '      const cropW = source.width * refScaleX, cropH = source.height * refScaleY;',
+  '      const mapX = recordCanvas.width / Math.max(1, cropW);',
+  '      const mapY = recordCanvas.height / Math.max(1, cropH);',
+  '      recordCtx.save();',
+  '      recordCtx.globalAlpha = Math.max(0, Math.min(1, (parseFloat(opacitySlider.value) || 100) / 100));',
+  '      recordCtx.imageSmoothingEnabled = true;',
+  "      recordCtx.imageSmoothingQuality = 'high';",
+  '      recordCtx.setTransform(mapX, 0, 0, mapY, -cropX * mapX, -cropY * mapY);',
+  '      try { recordCtx.drawImage(activeRecordingRef, refX, refY, refW, refH); } catch (_) {}',
+  '      recordCtx.restore();',
+  '    }',
+  '  }'
+].join('\n');
+replaceFinal(oldRecordingBackground, directRecordingBackground, 'direct native background recording');
+
+// Social media target: never intentionally save the phone copy at 720×1280.
+// Keep iPad/tablet output slightly above 1080×1920, allow moderate upscaling if
+// the creator is zoomed in, and use even dimensions for H.264 compatibility.
+const oldRecordSize = [
+  '  const recordMaxLongSide = isPhoneRecording ? 1280 : 2160;',
+  '  const recordVideoScale = Math.min(1, recordMaxLongSide / Math.max(recordSourceRect.width, recordSourceRect.height));',
+  '  recordCanvas.width = Math.max(2, Math.round(recordSourceRect.width * recordVideoScale));',
+  '  recordCanvas.height = Math.max(2, Math.round(recordSourceRect.height * recordVideoScale));'
+].join('\n');
+const socialRecordSize = [
+  '  const recordTargetLongSide = isPhoneRecording ? 1920 : 2160;',
+  '  const sourceLongSide = Math.max(recordSourceRect.width, recordSourceRect.height);',
+  '  const recordVideoScale = Math.min(2, recordTargetLongSide / Math.max(1, sourceLongSide));',
+  '  const evenRecordSize = (value) => Math.max(2, Math.round(value / 2) * 2);',
+  '  recordCanvas.width = evenRecordSize(recordSourceRect.width * recordVideoScale);',
+  '  recordCanvas.height = evenRecordSize(recordSourceRect.height * recordVideoScale);'
+].join('\n');
+replaceFinal(oldRecordSize, socialRecordSize, 'social recording dimensions');
+
+if (!finalHtml.includes('recordCanvas.captureStream(24)')) throw new Error('Final quality patch failed: 24fps capture stream not found');
+finalHtml = finalHtml.replaceAll('recordCanvas.captureStream(24)', 'recordCanvas.captureStream(30)');
+replaceFinal(
+  'videoBitsPerSecond: isPhoneRecording ? 6000000 : 14000000, audioBitsPerSecond: 256000',
+  'videoBitsPerSecond: isPhoneRecording ? 12000000 : 20000000, audioBitsPerSecond: 256000',
+  'high recording bitrate'
+);
 
 const required = [
   'id="videoBgInput"',
+  'id="videoBgQuality"',
   'id="guideCanvas"',
   'id="guideFileInput"',
   'id="recordReferenceBtn"',
   'id="floatingSettingsStyle"',
   'id="refSizeSlider" min="25" max="500"',
   'id="guideSizeSlider" min="10" max="500"',
+  'const recordTargetLongSide = isPhoneRecording ? 1920 : 2160;',
+  'recordCanvas.captureStream(30)',
+  'videoBitsPerSecond: isPhoneRecording ? 12000000 : 20000000',
+  'const activeRecordingRef = backgroundVideoReady ? backgroundVideo : refImage;',
+  'Social-HD source',
 ];
 for (const needle of required) {
   if (!finalHtml.includes(needle)) throw new Error(`Standalone validation failed: missing ${needle}`);
