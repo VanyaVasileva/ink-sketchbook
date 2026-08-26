@@ -646,13 +646,34 @@ window.addEventListener('afterprint', () => {
 });
 resize();
 
+function ensureStillBackgroundNativeQuality() {
+  if (!refImage || backgroundVideoReady) return;
+  const iw = refImage.naturalWidth || refImage.width || 0;
+  const ih = refImage.naturalHeight || refImage.height || 0;
+  if (!iw || !ih || !refCanvas.width || !refCanvas.height) return;
+  const currentLong = Math.max(refCanvas.width, refCanvas.height);
+  const requiredScale = Math.max(
+    iw / Math.max(1, refCanvas.width * 0.9),
+    ih / Math.max(1, refCanvas.height * 0.9),
+    1
+  );
+  const maxLong = 4096;
+  const maxScale = maxLong / Math.max(1, currentLong);
+  const scale = Math.min(requiredScale, maxScale);
+  if (scale > 1.01) {
+    refCanvas.width = Math.max(2, Math.round(refCanvas.width * scale));
+    refCanvas.height = Math.max(2, Math.round(refCanvas.height * scale));
+  }
+}
+
 function drawRef() {
+  ensureStillBackgroundNativeQuality();
   refCtx.clearRect(0, 0, refCanvas.width, refCanvas.height);
   if (!refVisible) return;
   const activeRef = backgroundVideoReady ? backgroundVideo : refImage;
   if (!activeRef) return;
   const cw = refCanvas.width, ch = refCanvas.height;
-  const iw = backgroundVideoReady ? backgroundVideo.videoWidth : refImage.width, ih = backgroundVideoReady ? backgroundVideo.videoHeight : refImage.height;
+  const iw = backgroundVideoReady ? backgroundVideo.videoWidth : (refImage.naturalWidth || refImage.width), ih = backgroundVideoReady ? backgroundVideo.videoHeight : (refImage.naturalHeight || refImage.height);
   const fitScale = Math.min(cw / iw, ch / ih) * 0.9;
   // Cap how far we auto-stretch a small source image. A photo's own
   // resolution is a hard limit — stretching it further than ~2x its native
@@ -963,8 +984,8 @@ function compositeRecordFrame() {
   const source = recordSourceRect || { x: 0, y: 0, width: drawCanvas.width, height: drawCanvas.height };
   if (recordReferenceInVideo && refVisible && (refImage || backgroundVideoReady)) {
     const activeRecordingRef = backgroundVideoReady ? backgroundVideo : refImage;
-    const iw = backgroundVideoReady ? backgroundVideo.videoWidth : refImage.width;
-    const ih = backgroundVideoReady ? backgroundVideo.videoHeight : refImage.height;
+    const iw = backgroundVideoReady ? backgroundVideo.videoWidth : (refImage.naturalWidth || refImage.width);
+    const ih = backgroundVideoReady ? backgroundVideo.videoHeight : (refImage.naturalHeight || refImage.height);
     if (activeRecordingRef && iw > 0 && ih > 0) {
       const cw = refCanvas.width, ch = refCanvas.height;
       const fitScale = Math.min(cw / iw, ch / ih) * 0.9;
@@ -1170,7 +1191,7 @@ function getPos(e) {
 
 let lastRefResUpdate = 0;
 function updateRefResolutionForZoom() {
-  const activeSourceLong = backgroundVideoReady ? Math.max(backgroundVideo.videoWidth || 0, backgroundVideo.videoHeight || 0) : (refImage ? Math.max(refImage.width, refImage.height) : 0);
+  const activeSourceLong = backgroundVideoReady ? Math.max(backgroundVideo.videoWidth || 0, backgroundVideo.videoHeight || 0) : (refImage ? Math.max(refImage.naturalWidth || refImage.width, refImage.naturalHeight || refImage.height) : 0);
   if (!activeSourceLong) return;
   const now = performance.now();
   if (now - lastRefResUpdate < 150) return; // throttle — don't resize the canvas on every touch event
