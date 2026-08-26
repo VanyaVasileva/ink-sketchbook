@@ -131,11 +131,11 @@ jobs:
           text = path.read_text()
 
           css_needle = """  #refCanvas { z-index: 1; }
-            #guideCanvas { z-index: 2; }"""
+            #guideCanvas { z-index: 2; pointer-events: none; }"""
           css_replacement = """  #refCanvas { z-index: 1; }
             #refDomLayer { position:absolute; z-index:1; pointer-events:none; transform-origin:0 0; overflow:visible; }
             #refDomImage { position:absolute; display:block; max-width:none; max-height:none; object-fit:fill; image-rendering:auto; }
-            #guideCanvas { z-index: 2; }"""
+            #guideCanvas { z-index: 2; pointer-events: none; }"""
           if css_needle not in text:
               raise SystemExit('DOM reference CSS insertion point not found')
           text = text.replace(css_needle, css_replacement, 1)
