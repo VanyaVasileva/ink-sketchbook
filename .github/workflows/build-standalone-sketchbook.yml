@@ -28,6 +28,33 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Guarantee social-HD short side
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/build-standalone.mjs')
+          text = path.read_text()
+          old = """  '  const recordTargetLongSide = isPhoneRecording ? 1920 : 2160;',
+            '  const sourceLongSide = Math.max(recordSourceRect.width, recordSourceRect.height);',
+            '  const recordVideoScale = Math.min(2, recordTargetLongSide / Math.max(1, sourceLongSide));',
+            '  const evenRecordSize = (value) => Math.max(2, Math.round(value / 2) * 2);',
+            '  recordCanvas.width = evenRecordSize(recordSourceRect.width * recordVideoScale);',
+            '  recordCanvas.height = evenRecordSize(recordSourceRect.height * recordVideoScale);'"""
+          new = """  '  const recordTargetLongSide = isPhoneRecording ? 1920 : 2160;',
+            '  const recordMinShortSide = 1080;',
+            '  const sourceLongSide = Math.max(recordSourceRect.width, recordSourceRect.height);',
+            '  const sourceShortSide = Math.min(recordSourceRect.width, recordSourceRect.height);',
+            '  const scaleForLongSide = recordTargetLongSide / Math.max(1, sourceLongSide);',
+            '  const scaleForShortSide = recordMinShortSide / Math.max(1, sourceShortSide);',
+            '  const recordVideoScale = Math.min(2.5, Math.max(scaleForLongSide, scaleForShortSide));',
+            '  const evenRecordSize = (value) => Math.max(2, Math.round(value / 2) * 2);',
+            '  recordCanvas.width = evenRecordSize(recordSourceRect.width * recordVideoScale);',
+            '  recordCanvas.height = evenRecordSize(recordSourceRect.height * recordVideoScale);'"""
+          if old not in text:
+              raise SystemExit('Social recording size block not found')
+          path.write_text(text.replace(old, new, 1))
+          PY
+
       - name: Build and validate standalone page
         run: node scripts/build-standalone.mjs
 
