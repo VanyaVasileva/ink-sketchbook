@@ -122,6 +122,120 @@ jobs:
           path.write_text(text)
           PY
 
+      - name: Display still photos without canvas resampling
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('hand-selector-standalone-test.html')
+          text = path.read_text()
+
+          css_needle = """  #refCanvas { z-index: 1; }
+            #guideCanvas { z-index: 2; }"""
+          css_replacement = """  #refCanvas { z-index: 1; }
+            #refDomLayer { position:absolute; z-index:1; pointer-events:none; transform-origin:0 0; overflow:visible; }
+            #refDomImage { position:absolute; display:block; max-width:none; max-height:none; object-fit:fill; image-rendering:auto; }
+            #guideCanvas { z-index: 2; }"""
+          if css_needle not in text:
+              raise SystemExit('DOM reference CSS insertion point not found')
+          text = text.replace(css_needle, css_replacement, 1)
+
+          html_needle = """      <canvas id="refCanvas"></canvas>
+                <canvas id="guideCanvas"></canvas>"""
+          html_replacement = """      <canvas id="refCanvas"></canvas>
+                <div id="refDomLayer" style="display:none;"><img id="refDomImage" alt="" draggable="false" /></div>
+                <canvas id="guideCanvas"></canvas>"""
+          if html_needle not in text:
+              raise SystemExit('DOM reference layer insertion point not found')
+          text = text.replace(html_needle, html_replacement, 1)
+
+          refs_needle = """const refCanvas = document.getElementById('refCanvas');
+          const guideCanvas = document.getElementById('guideCanvas');"""
+          refs_replacement = """const refCanvas = document.getElementById('refCanvas');
+          const refDomLayer = document.getElementById('refDomLayer');
+          const refDomImage = document.getElementById('refDomImage');
+          const guideCanvas = document.getElementById('guideCanvas');"""
+          if refs_needle not in text:
+              raise SystemExit('DOM reference JS bindings insertion point not found')
+          text = text.replace(refs_needle, refs_replacement, 1)
+
+          fit_needle = "[refCanvas, guideCanvas, drawCanvas].forEach(c => {"
+          fit_replacement = "[refCanvas, guideCanvas, drawCanvas, refDomLayer].forEach(c => {"
+          if fit_needle not in text:
+              raise SystemExit('DOM reference layout sync point not found')
+          text = text.replace(fit_needle, fit_replacement, 1)
+
+          view_needle = """  refCanvas.style.transform = t;
+            guideCanvas.style.transform = t;"""
+          view_replacement = """  refCanvas.style.transform = t;
+            refDomLayer.style.transform = t;
+            guideCanvas.style.transform = t;"""
+          if view_needle not in text:
+              raise SystemExit('DOM reference view transform sync point not found')
+          text = text.replace(view_needle, view_replacement, 1)
+
+          draw_needle = """function drawRef() {
+            ensureStillBackgroundNativeQuality();
+            refCtx.clearRect(0, 0, refCanvas.width, refCanvas.height);
+            if (!refVisible) return;
+            const activeRef = backgroundVideoReady ? backgroundVideo : refImage;"""
+          draw_replacement = """function syncStillBackgroundDom() {
+            if (!refDomLayer || !refDomImage) return false;
+            if (!refVisible || !refImage || backgroundVideoReady) {
+              refDomLayer.style.display = 'none';
+              return false;
+            }
+            const cw = refCanvas.width, ch = refCanvas.height;
+            const iw = refImage.naturalWidth || refImage.width || 0;
+            const ih = refImage.naturalHeight || refImage.height || 0;
+            if (!cw || !ch || !iw || !ih) {
+              refDomLayer.style.display = 'none';
+              return false;
+            }
+            const fitScale = Math.min(cw / iw, ch / ih) * 0.9;
+            const autoScale = Math.min(fitScale, 1);
+            const userScale = (parseFloat(refSizeSlider.value) || 100) / 100;
+            const scale = autoScale * userScale;
+            const w = iw * scale, h = ih * scale;
+            const x = (cw - w) / 2, y = (ch - h) / 2;
+            if (refDomImage.src !== refImage.src) refDomImage.src = refImage.src;
+            refDomImage.style.left = (x / cw * 100) + '%';
+            refDomImage.style.top = (y / ch * 100) + '%';
+            refDomImage.style.width = (w / cw * 100) + '%';
+            refDomImage.style.height = (h / ch * 100) + '%';
+            refDomImage.style.opacity = String(Math.max(0, Math.min(1, (parseFloat(opacitySlider.value) || 100) / 100)));
+            refDomLayer.style.display = 'block';
+            return true;
+          }
+
+          function drawRef() {
+            ensureStillBackgroundNativeQuality();
+            refCtx.clearRect(0, 0, refCanvas.width, refCanvas.height);
+            if (!refVisible) {
+              if (refDomLayer) refDomLayer.style.display = 'none';
+              return;
+            }
+            if (!backgroundVideoReady && refImage && syncStillBackgroundDom()) return;
+            if (refDomLayer) refDomLayer.style.display = 'none';
+            const activeRef = backgroundVideoReady ? backgroundVideo : refImage;"""
+          if draw_needle not in text:
+              raise SystemExit('DOM reference draw hook not found')
+          text = text.replace(draw_needle, draw_replacement, 1)
+
+          required = [
+              'id="refDomLayer"',
+              'id="refDomImage"',
+              'function syncStillBackgroundDom()',
+              '[refCanvas, guideCanvas, drawCanvas, refDomLayer].forEach',
+              'refDomLayer.style.transform = t;'
+          ]
+          for needle in required:
+              if needle not in text:
+                  raise SystemExit('DOM still-image quality validation failed: ' + needle)
+
+          path.write_text(text)
+          PY
+
       - name: Commit generated standalone page
         run: |
           if [ -z "$(git status --porcelain -- hand-selector-standalone-test.html)" ]; then
