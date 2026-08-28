@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ink Sketchbook — Metallic Pen Test</title>
+<style>
+  html,body{margin:0;height:100%;background:#f6f4f0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+  #loading{height:100%;display:flex;align-items:center;justify-content:center;color:#6b6558;font-size:14px}
+</style>
+</head>
+<body>
+<div id="loading">Loading metallic pen test…</div>
+<script>
+(async function () {
+  try {
+    const response = await fetch('index.html?metallic-source=1', { cache: 'no-store' });
+    if (!response.ok) throw new Error('Could not load the sketchbook source.');
+    let html = await response.text();
+
+    const metallicCss = `
+  .material-palette { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+  .material-btn {
+    display:flex; align-items:center; gap:6px; padding:6px 9px; border-radius:7px;
+    background:#fff; color:#2a2620; border:1px solid #d8d3c6; font-size:12px;
+  }
+  .material-btn.active { background:#fff; color:#2a2620; border-color:#2a2620; box-shadow:0 0 0 1px #2a2620; }
+  .metal-dot { width:17px; height:17px; border-radius:50%; flex:0 0 17px; border:1px solid rgba(60,52,40,.18); }
+  .material-btn[data-material="ink"] .metal-dot { background:#2a2620; }
+  .material-btn[data-material="gold"] .metal-dot {
+    background:linear-gradient(110deg,#76500d 0%,#b4811d 22%,#f2cf68 43%,#fff7c6 51%,#d7a52e 64%,#8a5c10 100%);
+  }
+  .material-btn[data-material="rose"] .metal-dot {
+    background:linear-gradient(110deg,#75433e 0%,#a96157 22%,#e1a18d 43%,#fff0e5 51%,#c47b6c 65%,#74413b 100%);
+  }
+  .material-btn[data-material="silver"] .metal-dot {
+    background:linear-gradient(110deg,#565b61 0%,#9299a0 22%,#d7dce0 43%,#ffffff 51%,#b0b7bd 66%,#555a60 100%);
+  }
+  .material-note { font-size:11px; line-height:1.35; color:#8a8373; margin-top:-4px; }
+`;
+    html = html.replace('  footer {', metallicCss + '\n  footer {');
+
+    const materialUi = `
+      <div class="material-palette" id="materialPalette">
+        <button type="button" class="material-btn active" data-material="ink"><span class="metal-dot"></span>Ink</button>
+        <button type="button" class="material-btn" data-material="gold"><span class="metal-dot"></span>Gold</button>
+        <button type="button" class="material-btn" data-material="rose"><span class="metal-dot"></span>Rose Gold</button>
+        <button type="button" class="material-btn" data-material="silver"><span class="metal-dot"></span>Silver</button>
+      </div>
+      <div class="material-note">Metallic pens use reflective light and dark bands — not flat yellow, pink or grey.</div>`;
+    html = html.replace(
+      '      <div class="row palette" id="palette"></div>\n      <input type="color" id="colorPicker"',
+      '      <div class="row palette" id="palette"></div>\n' + materialUi + '\n      <input type="color" id="colorPicker"'
+    );
+
+    const materialEngine = `
+let currentMaterial = 'ink';
+const METAL_MATERIALS = {
+  gold: {
+    stops: ['#68470b','#936615','#c9962a','#e8bd4b','#fff4a8','#fffbe3','#d9a62f','#76500d'],
+    shine: 'rgba(255,251,225,0.72)'
+  },
+  rose: {
+    stops: ['#6d403b','#96564f','#c97c6d','#e4a792','#ffe2d0','#fff7ef','#c77b6d','#70413c'],
+    shine: 'rgba(255,244,238,0.68)'
+  },
+  silver: {
+    stops: ['#4d5258','#747b82','#aeb5bb','#d8dde1','#f8fafb','#ffffff','#adb4ba','#51565c'],
+    shine: 'rgba(255,255,255,0.72)'
+  }
+};
+function createMetallicStrokeStyle(x1, y1, x2, y2, width, material) {
+  const metal = METAL_MATERIALS[material];
+  if (!metal) return currentColor;
+  const dx = x2 - x1, dy = y2 - y1;
+  const len = Math.hypot(dx, dy) || 1;
+  const nx = -dy / len, ny = dx / len;
+  const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
+  const half = Math.max(width * 0.62, 1);
+  const g = ctx.createLinearGradient(cx - nx * half, cy - ny * half, cx + nx * half, cy + ny * half);
+  const positions = [0, 0.13, 0.31, 0.44, 0.51, 0.59, 0.79, 1];
+  positions.forEach((pos, i) => g.addColorStop(pos, metal.stops[i]));
+  return g;
+}
+function createMetallicDotStyle(x, y, width, material) {
+  const metal = METAL_MATERIALS[material];
+  if (!metal) return currentColor;
+  const r = Math.max(width / 2, 1);
+  const g = ctx.createRadialGradient(x - r * 0.23, y - r * 0.28, r * 0.05, x, y, r);
+  g.addColorStop(0, metal.stops[5]);
+  g.addColorStop(0.18, metal.stops[4]);
+  g.addColorStop(0.46, metal.stops[3]);
+  g.addColorStop(0.72, metal.stops[2]);
+  g.addColorStop(1, metal.stops[0]);
+  return g;
+}
+function updateMaterialButtons() {
+  document.querySelectorAll('.material-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.material === currentMaterial);
+  });
+}
+`;
+    html = html.replace("let currentColor = '#2a2620';", "let currentColor = '#2a2620';\n" + materialEngine);
+
+    html = html.replace(
+      "    currentColor = c;\n    colorPicker.value = c;",
+      "    currentColor = c;\n    currentMaterial = 'ink';\n    updateMaterialButtons();\n    colorPicker.value = c;"
+    );
+    html = html.replace(
+      "  currentColor = colorPicker.value;\n  document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));",
+      "  currentColor = colorPicker.value;\n  currentMaterial = 'ink';\n  updateMaterialButtons();\n  document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));"
+    );
+
+    const materialListeners = `
+document.querySelectorAll('.material-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    currentMaterial = btn.dataset.material;
+    if (currentMaterial !== 'ink') {
+      document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+    }
+    updateMaterialButtons();
+    mode = 'draw';
+    drawModeBtn.classList.add('active');
+    eraseModeBtn.classList.remove('active');
+  });
+});
+updateMaterialButtons();
+`;
+    html = html.replace(
+      "colorPicker.addEventListener('input', () => {\n  currentColor = colorPicker.value;\n  currentMaterial = 'ink';\n  updateMaterialButtons();\n  document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));\n});",
+      "colorPicker.addEventListener('input', () => {\n  currentColor = colorPicker.value;\n  currentMaterial = 'ink';\n  updateMaterialButtons();\n  document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));\n});\n" + materialListeners
+    );
+
+    html = html.replace(
+      '    ctx.strokeStyle = currentColor;',
+      "    ctx.strokeStyle = currentMaterial === 'ink' ? currentColor : createMetallicStrokeStyle(prev.x, prev.y, x, y, smoothedWidth, currentMaterial);"
+    );
+    html = html.replace(
+      '      ctx.fillStyle = currentColor;',
+      "      ctx.fillStyle = currentMaterial === 'ink' ? currentColor : createMetallicDotStyle(p.x, p.y, width, currentMaterial);"
+    );
+
+    const originalStrokeBlock = `  ctx.beginPath();
+  ctx.moveTo(prev.x, prev.y);
+  ctx.lineTo(x, y);
+  ctx.stroke();
+  ctx.globalCompositeOperation = 'source-over'; // always reset immediately after`;
+    const metallicStrokeBlock = `  ctx.beginPath();
+  ctx.moveTo(prev.x, prev.y);
+  ctx.lineTo(x, y);
+  ctx.stroke();
+
+  // A restrained specular ribbon gives the metal a real reflected-light cue.
+  // It follows the pen direction, so curves catch light differently instead of
+  // looking like a flat yellow/pink/grey brush. No glitter or random sparkles.
+  if (mode === 'draw' && currentMaterial !== 'ink' && METAL_MATERIALS[currentMaterial]) {
+    const sdx = x - prev.x, sdy = y - prev.y;
+    const slen = Math.hypot(sdx, sdy) || 1;
+    const snx = -sdy / slen, sny = sdx / slen;
+    const offset = smoothedWidth * 0.16;
+    ctx.save();
+    ctx.strokeStyle = METAL_MATERIALS[currentMaterial].shine;
+    ctx.globalAlpha = 0.48;
+    ctx.lineWidth = Math.max(getDisplayDpr() * 0.55, smoothedWidth * 0.11);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(prev.x + snx * offset, prev.y + sny * offset);
+    ctx.lineTo(x + snx * offset, y + sny * offset);
+    ctx.stroke();
+    ctx.restore();
+  }
+  ctx.globalCompositeOperation = 'source-over'; // always reset immediately after`;
+    html = html.replace(originalStrokeBlock, metallicStrokeBlock);
+
+    // Add a small visual marker so this cannot be confused with the live version.
+    html = html.replace('<title>Ink Sketchbook</title>', '<title>Ink Sketchbook — Metallic Pen Test</title>');
+    html = html.replace('<h1>Ink Sketchbook</h1>', '<h1>Ink Sketchbook <span style="font-weight:400;color:#a89f8c;">· Metallic test</span></h1>');
+
+    document.open();
+    document.write(html);
+    document.close();
+  } catch (err) {
+    document.getElementById('loading').textContent = 'Metallic test could not load: ' + err.message;
+  }
+})();
+</script>
+</body>
+</html>
