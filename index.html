@@ -38,6 +38,22 @@
   #sidePanel input[type=range] { width: 100%; } /* full-length sliders, not shortened */
   #sidePanel .slider-group { flex-direction: column; align-items: stretch; gap: 3px; }
   #sidePanel .row.palette { flex-wrap: wrap; }
+
+  /* floating-settings-live-fix */
+  .main-row { position: relative; }
+  .canvas-wrap { width: 100%; min-width: 0; }
+  #sidePanel {
+    position: absolute; right: 12px; top: 12px; z-index: 50;
+    width: min(320px, calc(100% - 24px));
+    max-height: calc(100% - 24px); overflow-y: auto;
+    border: 1px solid #e5e1d8; border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(42,38,32,.18);
+    background: #fff; padding: 12px;
+  }
+  #sidePanel.collapsed { display: none; }
+  @media (max-width: 700px) {
+    #sidePanel { right: 8px; top: 8px; width: min(310px, calc(100% - 16px)); max-height: calc(100% - 16px); }
+  }
   canvas { position: absolute; touch-action: none; transform-origin: 0 0; box-shadow: 0 0 0 1px #ddd8cc; }
   #refCanvas { z-index: 1; }
   #drawCanvas { z-index: 2; }
