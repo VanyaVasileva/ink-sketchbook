@@ -1,0 +1,155 @@
+name: Apply sharp testing zoom
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Patch testing branch sharpness
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout feature/new-button
+          python - <<'PY'
+          from pathlib import Path
+
+          files = [
+              Path('ink-sketchbook-with-hand.html'),
+              Path('ink-sketchbook-testing-visible.html'),
+          ]
+
+          old_vars = """let currentDpr = 1; // internal print-resolution multiplier
+let canvasBaseCssW = 0;
+let canvasBaseCssH = 0;
+"""
+          new_vars = """let currentDpr = 1; // internal print-resolution multiplier
+let canvasBaseCssW = 0;
+let canvasBaseCssH = 0;
+let canvasDisplayCssW = 0;
+let canvasDisplayCssH = 0;
+let canvasDisplayLeft = EDGE_MARGIN;
+let canvasDisplayTop = EDGE_MARGIN;
+"""
+
+          old_fit = """function fitCanvasDisplay() {
+  if (!canvasBaseCssW || !canvasBaseCssH) return;
+  const rect = wrap.getBoundingClientRect();
+  const availW = Math.max(50, rect.width - EDGE_MARGIN * 2);
+  const availH = Math.max(50, rect.height - EDGE_MARGIN * 2);
+  const fit = Math.min(1, availW / canvasBaseCssW, availH / canvasBaseCssH);
+  const cssW = canvasBaseCssW * fit;
+  const cssH = canvasBaseCssH * fit;
+  const left = EDGE_MARGIN + Math.max(0, (availW - cssW) / 2);
+  const top = EDGE_MARGIN + Math.max(0, (availH - cssH) / 2);
+  [refCanvas, drawCanvas].forEach(c => {
+    c.style.width = cssW + 'px';
+    c.style.height = cssH + 'px';
+    c.style.left = left + 'px';
+    c.style.top = top + 'px';
+  });
+  applyView();
+}
+
+function getDisplayDpr() {
+  const cssW = parseFloat(drawCanvas.style.width) || canvasBaseCssW || 1;
+  return drawCanvas.width / cssW;
+}
+"""
+          new_fit = """function fitCanvasDisplay() {
+  if (!canvasBaseCssW || !canvasBaseCssH) return;
+  const rect = wrap.getBoundingClientRect();
+  const availW = Math.max(50, rect.width - EDGE_MARGIN * 2);
+  const availH = Math.max(50, rect.height - EDGE_MARGIN * 2);
+  const fit = Math.min(1, availW / canvasBaseCssW, availH / canvasBaseCssH);
+  const cssW = canvasBaseCssW * fit;
+  const cssH = canvasBaseCssH * fit;
+  const left = EDGE_MARGIN + Math.max(0, (availW - cssW) / 2);
+  const top = EDGE_MARGIN + Math.max(0, (availH - cssH) / 2);
+  canvasDisplayCssW = cssW;
+  canvasDisplayCssH = cssH;
+  canvasDisplayLeft = left;
+  canvasDisplayTop = top;
+  applyView();
+}
+
+function getDisplayDpr() {
+  // Keep pen geometry tied to the unzoomed display size. Zoom should enlarge
+  // the existing high-resolution canvas visually, not change logical pen size.
+  const cssW = canvasDisplayCssW || canvasBaseCssW || 1;
+  return drawCanvas.width / cssW;
+}
+"""
+
+          old_apply = """function applyView() {
+  const t = `translate(${view.x}px, ${view.y}px) rotate(${view.rotation}deg) scale(${view.scale})`;
+  refCanvas.style.transform = t;
+  drawCanvas.style.transform = t;
+}
+"""
+          new_apply = """function applyView() {
+  // Do not magnify the canvas with CSS transform: scale(). Safari can turn
+  // that into a soft composited texture. Instead give the canvas a larger CSS
+  // box at the requested zoom while keeping its real high-resolution pixels.
+  // This keeps fine ink/reference detail much sharper when zooming in.
+  const baseW = canvasDisplayCssW || canvasBaseCssW || 1;
+  const baseH = canvasDisplayCssH || canvasBaseCssH || 1;
+  const zoomedW = baseW * view.scale;
+  const zoomedH = baseH * view.scale;
+  const t = `translate(${view.x}px, ${view.y}px) rotate(${view.rotation}deg)`;
+  [refCanvas, drawCanvas].forEach(c => {
+    c.style.width = zoomedW + 'px';
+    c.style.height = zoomedH + 'px';
+    c.style.left = canvasDisplayLeft + 'px';
+    c.style.top = canvasDisplayTop + 'px';
+    c.style.transform = t;
+  });
+}
+"""
+
+          for p in files:
+              s = p.read_text()
+              if 'canvasDisplayCssW = 0;' not in s:
+                  if old_vars not in s:
+                      raise SystemExit(f'{p}: canvas variable anchor not found')
+                  s = s.replace(old_vars, new_vars, 1)
+              if old_fit in s:
+                  s = s.replace(old_fit, new_fit, 1)
+              elif 'const cssW = canvasDisplayCssW || canvasBaseCssW || 1;' not in s:
+                  raise SystemExit(f'{p}: fitCanvasDisplay anchor not found')
+              if old_apply in s:
+                  s = s.replace(old_apply, new_apply, 1)
+              elif 'Safari can turn' not in s:
+                  raise SystemExit(f'{p}: applyView anchor not found')
+              p.write_text(s)
+          PY
+      - name: Validate patched testing files
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          for name in ['ink-sketchbook-with-hand.html','ink-sketchbook-testing-visible.html']:
+              s = Path(name).read_text()
+              if 'scale(${view.scale})' in s:
+                  raise SystemExit(name + ': old soft CSS zoom still present')
+              if 'const zoomedW = baseW * view.scale;' not in s:
+                  raise SystemExit(name + ': sharp zoom implementation missing')
+              if 'const MIN_PRINT_LONG_SIDE = 3000;' not in s:
+                  raise SystemExit(name + ': print-resolution floor changed unexpectedly')
+          PY
+      - name: Commit testing sharpness fix
+        run: |
+          if git diff --quiet -- ink-sketchbook-with-hand.html ink-sketchbook-testing-visible.html; then
+            echo "No testing file changes needed"
+            exit 0
+          fi
+          git add ink-sketchbook-with-hand.html ink-sketchbook-testing-visible.html
+          git commit -m "Keep testing canvas sharp while zooming"
+          git push origin feature/new-button
