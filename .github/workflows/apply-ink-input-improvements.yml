@@ -1,0 +1,178 @@
+name: Apply Ink Sketchbook input improvements
+
+on:
+  push:
+    branches: [streamline-sharp-zoom]
+    paths:
+      - '.github/workflows/apply-ink-input-improvements.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply Wobble, Streamline and sharp-zoom changes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('index.html')
+          text = path.read_text()
+
+          def replace_once(old, new, label):
+              global text
+              if old not in text:
+                  raise SystemExit(f'Missing patch point: {label}')
+              text = text.replace(old, new, 1)
+
+          # 1) Wobble is opt-in, and Streamline is a separate optional stabilizer.
+          replace_once(
+              '''      <div class="slider-group"><span data-i18n="wobbleLabel">Wobble</span> <input type="range" id="wobbleSlider" min="0" max="3" value="1" step="0.5"></div>\n      <div class="slider-group"><span data-i18n="thicknessLabel">Thickness</span> <input type="range" id="thicknessSlider" min="0.5" max="3" value="1" step="0.25"></div>''',
+              '''      <div class="slider-group"><span data-i18n="wobbleLabel">Wobble</span> <input type="range" id="wobbleSlider" min="0" max="3" value="0" step="0.5"></div>\n      <div class="slider-group"><span data-i18n="streamlineLabel">Streamline</span> <input type="range" id="streamlineSlider" min="0" max="100" value="0" step="1"></div>\n      <div class="slider-group"><span data-i18n="thicknessLabel">Thickness</span> <input type="range" id="thicknessSlider" min="0.5" max="3" value="1" step="0.25"></div>''',
+              'Wobble/Streamline controls')
+
+          replace_once(
+              "const wobbleSlider = document.getElementById('wobbleSlider');\nconst thicknessSlider = document.getElementById('thicknessSlider');",
+              "const wobbleSlider = document.getElementById('wobbleSlider');\nconst streamlineSlider = document.getElementById('streamlineSlider');\nconst thicknessSlider = document.getElementById('thicknessSlider');",
+              'Streamline JS binding')
+
+          # Slider-label translations.
+          translation_replacements = {
+              '    fadeLabel: "Fade", refSizeLabel: "Reference size", wobbleLabel: "Wobble", thicknessLabel: "Thickness",':
+              '    fadeLabel: "Fade", refSizeLabel: "Reference size", wobbleLabel: "Wobble", streamlineLabel: "Streamline", thicknessLabel: "Thickness",',
+              '    fadeLabel: "Opacidad", refSizeLabel: "Tamaño de referencia", wobbleLabel: "Temblor", thicknessLabel: "Grosor",':
+              '    fadeLabel: "Opacidad", refSizeLabel: "Tamaño de referencia", wobbleLabel: "Temblor", streamlineLabel: "Estabilización", thicknessLabel: "Grosor",',
+              '    fadeLabel: "Opacité", refSizeLabel: "Taille de la référence", wobbleLabel: "Tremblement", thicknessLabel: "Épaisseur",':
+              '    fadeLabel: "Opacité", refSizeLabel: "Taille de la référence", wobbleLabel: "Tremblement", streamlineLabel: "Stabilisation", thicknessLabel: "Épaisseur",',
+              '    fadeLabel: "Deckkraft", refSizeLabel: "Referenzgröße", wobbleLabel: "Zittern", thicknessLabel: "Dicke",':
+              '    fadeLabel: "Deckkraft", refSizeLabel: "Referenzgröße", wobbleLabel: "Zittern", streamlineLabel: "Stabilisierung", thicknessLabel: "Dicke",',
+              '    fadeLabel: "Opacità", refSizeLabel: "Dimensione riferimento", wobbleLabel: "Tremolio", thicknessLabel: "Spessore",':
+              '    fadeLabel: "Opacità", refSizeLabel: "Dimensione riferimento", wobbleLabel: "Tremolio", streamlineLabel: "Stabilizzazione", thicknessLabel: "Spessore",',
+              '    fadeLabel: "Opacidade", refSizeLabel: "Tamanho da referência", wobbleLabel: "Tremor", thicknessLabel: "Espessura",':
+              '    fadeLabel: "Opacidade", refSizeLabel: "Tamanho da referência", wobbleLabel: "Tremor", streamlineLabel: "Estabilização", thicknessLabel: "Espessura",',
+              '    fadeLabel: "Vervaging", refSizeLabel: "Referentiegrootte", wobbleLabel: "Trilling", thicknessLabel: "Dikte",':
+              '    fadeLabel: "Vervaging", refSizeLabel: "Referentiegrootte", wobbleLabel: "Trilling", streamlineLabel: "Stabilisatie", thicknessLabel: "Dikte",',
+              '    fadeLabel: "不透明度", refSizeLabel: "下絵のサイズ", wobbleLabel: "手ブレ", thicknessLabel: "太さ",':
+              '    fadeLabel: "不透明度", refSizeLabel: "下絵のサイズ", wobbleLabel: "手ブレ", streamlineLabel: "手ブレ補正", thicknessLabel: "太さ",',
+              '    fadeLabel: "透明度", refSizeLabel: "参考图大小", wobbleLabel: "手抖效果", thicknessLabel: "粗细",':
+              '    fadeLabel: "透明度", refSizeLabel: "参考图大小", wobbleLabel: "手抖效果", streamlineLabel: "线条稳定", thicknessLabel: "粗细",',
+          }
+          for old, new in translation_replacements.items():
+              replace_once(old, new, 'translation label')
+
+          # 2) Keep a filtered coordinate only when Streamline is above zero.
+          replace_once(
+              'let smoothedWobbleX = 0, smoothedWobbleY = 0;\nlet drawing = false;',
+              'let smoothedWobbleX = 0, smoothedWobbleY = 0;\nlet smoothedInputX = null, smoothedInputY = null;\nlet lastRenderedX = null, lastRenderedY = null;\nlet drawing = false;',
+              'stroke smoothing state')
+
+          replace_once(
+              '''function startStroke(e) {\n  drawing = true;\n  points = [getPos(e)];\n  smoothedWidth = null;\n  smoothedWobbleX = 0;\n  smoothedWobbleY = 0;\n  moved = false;''',
+              '''function startStroke(e) {\n  drawing = true;\n  const start = getPos(e);\n  points = [start];\n  smoothedWidth = null;\n  smoothedWobbleX = 0;\n  smoothedWobbleY = 0;\n  smoothedInputX = start.x;\n  smoothedInputY = start.y;\n  lastRenderedX = start.x;\n  lastRenderedY = start.y;\n  moved = false;''',
+              'stroke initialization')
+
+          replace_once(
+              '''  let x = p.x, y = p.y;\n\n  if (mode === 'draw') {\n    const wobbleIntensity = parseFloat(wobbleSlider.value);''',
+              '''  let x = p.x, y = p.y;\n\n  if (mode === 'draw') {\n    // Streamline changes only the geometry of the path. It never blurs the\n    // canvas or changes export resolution. At 0 the raw hand movement passes\n    // through exactly as before; higher values progressively calm tiny hand\n    // movements while preserving the clean ink edge.\n    const streamline = Math.max(0, Math.min(100, parseFloat(streamlineSlider.value) || 0)) / 100;\n    if (streamline > 0) {\n      const follow = Math.max(0.15, 1 - streamline * 0.85);\n      smoothedInputX += (p.x - smoothedInputX) * follow;\n      smoothedInputY += (p.y - smoothedInputY) * follow;\n      x = smoothedInputX;\n      y = smoothedInputY;\n    } else {\n      smoothedInputX = p.x;\n      smoothedInputY = p.y;\n    }\n\n    const wobbleIntensity = parseFloat(wobbleSlider.value);''',
+              'Streamline path filter')
+
+          replace_once(
+              '''  ctx.beginPath();\n  ctx.moveTo(prev.x, prev.y);\n  ctx.lineTo(x, y);\n  ctx.stroke();\n  ctx.globalCompositeOperation = 'source-over'; // always reset immediately after\n\n  points.push({ x: p.x, y: p.y, t: p.t });''',
+              '''  ctx.beginPath();\n  const fromX = lastRenderedX === null ? prev.x : lastRenderedX;\n  const fromY = lastRenderedY === null ? prev.y : lastRenderedY;\n  ctx.moveTo(fromX, fromY);\n  ctx.lineTo(x, y);\n  ctx.stroke();\n  ctx.globalCompositeOperation = 'source-over'; // always reset immediately after\n\n  // Continue from the point that was actually rendered, not the raw pointer\n  // point. This keeps optional Wobble continuous instead of creating tiny\n  // disconnected-looking stair steps between successive segments.\n  lastRenderedX = x;\n  lastRenderedY = y;\n  points.push({ x: p.x, y: p.y, t: p.t });''',
+              'continuous rendered stroke')
+
+          # 3) Keep the zoomed preview crisp by sizing the canvas at its zoomed
+          # CSS dimensions instead of magnifying it as a compositor texture.
+          # The internal 300-DPI/export pixel grid remains untouched.
+          replace_once(
+              'let canvasBaseCssW = 0;\nlet canvasBaseCssH = 0;',
+              'let canvasBaseCssW = 0;\nlet canvasBaseCssH = 0;\nlet canvasDisplayCssW = 0;\nlet canvasDisplayCssH = 0;\nlet canvasDisplayLeft = EDGE_MARGIN;\nlet canvasDisplayTop = EDGE_MARGIN;',
+              'display-size state')
+
+          replace_once(
+              '''  const left = EDGE_MARGIN + Math.max(0, (availW - cssW) / 2);\n  const top = EDGE_MARGIN + Math.max(0, (availH - cssH) / 2);\n  [refCanvas, drawCanvas].forEach(c => {\n    c.style.width = cssW + 'px';\n    c.style.height = cssH + 'px';\n    c.style.left = left + 'px';\n    c.style.top = top + 'px';\n  });\n  applyView();\n}\n\nfunction getDisplayDpr() {\n  const cssW = parseFloat(drawCanvas.style.width) || canvasBaseCssW || 1;\n  return drawCanvas.width / cssW;\n}''',
+              '''  const left = EDGE_MARGIN + Math.max(0, (availW - cssW) / 2);\n  const top = EDGE_MARGIN + Math.max(0, (availH - cssH) / 2);\n  canvasDisplayCssW = cssW;\n  canvasDisplayCssH = cssH;\n  canvasDisplayLeft = left;\n  canvasDisplayTop = top;\n  applyView();\n}\n\nfunction getDisplayDpr() {\n  // Use the unzoomed display width. Zoom changes only how large the existing\n  // high-resolution canvas is presented, never the logical pen size.\n  const cssW = canvasDisplayCssW || canvasBaseCssW || 1;\n  return drawCanvas.width / cssW;\n}''',
+              'base display sizing')
+
+          replace_once(
+              '''function applyView() {\n  const t = `translate(${view.x}px, ${view.y}px) rotate(${view.rotation}deg) scale(${view.scale})`;\n  refCanvas.style.transform = t;\n  drawCanvas.style.transform = t;\n}''',
+              '''function applyView() {\n  const baseW = canvasDisplayCssW || canvasBaseCssW || 1;\n  const baseH = canvasDisplayCssH || canvasBaseCssH || 1;\n  const zoomedW = baseW * view.scale;\n  const zoomedH = baseH * view.scale;\n  const t = `translate(${view.x}px, ${view.y}px) rotate(${view.rotation}deg)`;\n  [refCanvas, drawCanvas].forEach(c => {\n    c.style.width = zoomedW + 'px';\n    c.style.height = zoomedH + 'px';\n    c.style.left = canvasDisplayLeft + 'px';\n    c.style.top = canvasDisplayTop + 'px';\n    c.style.transform = t;\n  });\n}''',
+              'sharp zoom rendering')
+
+          # Help copy: make the distinction explicit. Streamline stabilizes a
+          # hand path; Wobble is optional character; neither is a texture/blur.
+          help_replacements = {
+              '["Wobble", "Adds a natural hand-tremor effect. Set to 0 for perfectly sharp lines."],':
+              '["Wobble", "Adds optional extra irregular movement to the line. It starts at 0, so your own hand movement is the default."],\n    ["Streamline", "Stabilizes small hand movements. Higher values make the path steadier without blurring the ink or changing export quality."],',
+              '["Temblor", "Añade un temblor natural de mano. Ponlo en 0 para líneas perfectamente nítidas."],':
+              '["Temblor", "Añade movimiento irregular opcional a la línea. Empieza en 0, por lo que el movimiento de tu propia mano es el predeterminado."],\n    ["Estabilización", "Estabiliza pequeños movimientos de la mano. Los valores altos hacen el trazo más estable sin desenfocar la tinta ni cambiar la calidad de exportación."],',
+              '["Tremblement", "Ajoute un tremblement naturel de la main. Réglez sur 0 pour des lignes parfaitement nettes."],':
+              '["Tremblement", "Ajoute un mouvement irrégulier facultatif à la ligne. Il démarre à 0 : le mouvement naturel de votre main reste le réglage par défaut."],\n    ["Stabilisation", "Stabilise les petits mouvements de la main. Les valeurs élevées rendent le tracé plus stable sans flouter l’encre ni modifier la qualité d’export."],',
+              '["Zittern", "Fügt ein natürliches Handzittern hinzu. Auf 0 stellen für perfekt scharfe Linien."],':
+              '["Zittern", "Fügt der Linie optional zusätzliche Unregelmäßigkeit hinzu. Der Standardwert ist 0, damit zunächst nur deine eigene Handbewegung sichtbar ist."],\n    ["Stabilisierung", "Beruhigt kleine Handbewegungen. Höhere Werte machen den Strich stabiler, ohne die Tinte weichzuzeichnen oder die Exportqualität zu verändern."],',
+              '["Tremolio", "Aggiunge un naturale tremolio della mano. Imposta a 0 per linee perfettamente nitide."],':
+              '["Tremolio", "Aggiunge un movimento irregolare opzionale alla linea. Parte da 0, quindi il movimento naturale della tua mano resta l’impostazione predefinita."],\n    ["Stabilizzazione", "Stabilizza i piccoli movimenti della mano. Valori più alti rendono il tratto più stabile senza sfocare l’inchiostro o cambiare la qualità di esportazione."],',
+              '["Tremor", "Adiciona um tremor natural da mão. Defina como 0 para linhas perfeitamente nítidas."],':
+              '["Tremor", "Adiciona movimento irregular opcional à linha. Começa em 0, por isso o movimento natural da sua mão é o padrão."],\n    ["Estabilização", "Estabiliza pequenos movimentos da mão. Valores mais altos deixam o traço mais estável sem desfocar a tinta nem alterar a qualidade de exportação."],',
+              '["Trilling", "Voegt een natuurlijke handtrilling toe. Zet op 0 voor perfect scherpe lijnen."],':
+              '["Trilling", "Voegt optioneel extra onregelmatige beweging aan de lijn toe. De standaardwaarde is 0, zodat je eigen handbeweging het uitgangspunt blijft."],\n    ["Stabilisatie", "Stabiliseert kleine handbewegingen. Hogere waarden maken de lijn rustiger zonder de inkt te vervagen of de exportkwaliteit te veranderen."],',
+              '["手ブレ", "自然な手ブレ効果を加えます。0にすると完全にシャープな線になります。"],':
+              '["手ブレ", "線に追加の不規則な動きを加えるオプションです。初期値は0なので、通常は自分の手の動きがそのまま反映されます。"],\n    ["手ブレ補正", "小さな手の動きを安定させます。値を上げるほど線が安定しますが、インクをぼかしたり書き出し品質を変えたりはしません。"],',
+              '["手抖效果", "增加自然的手抖效果。设为 0 可获得完全清晰的线条。"],':
+              '["手抖效果", "为线条增加可选的额外不规则移动。默认值为 0，因此默认保留你自己的手部运动。"],\n    ["线条稳定", "稳定细小的手部运动。数值越高线条越稳定，但不会模糊墨线，也不会改变导出质量。"],',
+          }
+          for old, new in help_replacements.items():
+              replace_once(old, new, 'help copy')
+
+          # Safety checks: export stays exactly on the high-resolution 300-DPI
+          # path; no texture/blur feature is introduced.
+          required = [
+              'id="wobbleSlider" min="0" max="3" value="0"',
+              'id="streamlineSlider" min="0" max="100" value="0"',
+              "const streamlineSlider = document.getElementById('streamlineSlider');",
+              'const MIN_PRINT_LONG_SIDE = 3000;',
+              "injectPngDpi(rawBytes, 300)",
+              "insertExifSegment(withJfifDpi, 300)",
+              'const follow = Math.max(0.15, 1 - streamline * 0.85);',
+              'c.style.width = zoomedW + \'px\';',
+              'ctx.moveTo(fromX, fromY);',
+          ]
+          for needle in required:
+              if needle not in text:
+                  raise SystemExit('Validation failed: ' + needle)
+
+          if 'scale(${view.scale})' in text:
+              raise SystemExit('Old compositor-scale zoom is still present')
+
+          path.write_text(text)
+          PY
+
+      - name: Check JavaScript syntax
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path('index.html').read_text()
+          start = text.index('<script>') + len('<script>')
+          end = text.rindex('</script>')
+          Path('/tmp/ink-sketchbook.js').write_text(text[start:end])
+          PY
+          node --check /tmp/ink-sketchbook.js
+
+      - name: Commit patched sketchbook
+        run: |
+          if [ -z "$(git status --porcelain -- index.html)" ]; then
+            echo "No index.html changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git commit -m "Add Streamline and preserve sharp zoom preview"
+          git push
