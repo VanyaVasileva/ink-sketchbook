@@ -40,7 +40,6 @@
   #sidePanel .row.palette { flex-wrap: wrap; }
 
   /* floating-settings-live-fix */
-  .main-row { position: relative; }
   .canvas-wrap { width: 100%; min-width: 0; }
   #sidePanel {
     position: absolute; right: 12px; top: 12px; z-index: 50;
@@ -157,8 +156,7 @@
     <div class="canvas-wrap">
       <canvas id="refCanvas"></canvas>
       <canvas id="drawCanvas"></canvas>
-    </div>
-    <div id="sidePanel">
+      <div id="sidePanel">
       <select id="langSelect" style="-webkit-appearance:none; -moz-appearance:none; appearance:none; width:100%; border:1px solid #d8d3c6; border-radius:7px; padding:8px 32px 8px 10px; font-size:13px; background-color:#fff; background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 20 20%22 fill=%22%236b6558%22><path d=%22M5.5 7.5l4.5 5 4.5-5z%22/></svg>'); background-repeat:no-repeat; background-position:right 10px center; background-size:14px;">
         <option value="en">English</option>
         <option value="es">Español</option>
@@ -192,6 +190,7 @@
       <button id="resetZoomBtn" data-i18n="resetViewBtn">Reset View</button>
       <button id="saveBtn">💾 <span data-i18n="saveBtn">Save</span></button>
       <button id="loadBtn">📂 <span data-i18n="loadBtn">My Drawings</span></button>
+    </div>
     </div>
   </div>
   <footer id="hint"><span id="hintText" data-i18n="hintDefault">Upload a reference to trace, or just draw freehand. Pinch to zoom · two-finger tap to undo.</span> <span id="inputMode" style="color:#a89f8c;"></span></footer>
@@ -1612,10 +1611,8 @@ panelToggleBtn.onclick = () => {
                                             // selector) can appear cut off if
                                             // the panel retained a scroll
                                             // position from before
-  // IMPORTANT: do not resize the actual canvas here. Resizing used to
-  // re-center the reference while leaving the existing ink in a different
-  // pixel position. Only fit BOTH layers together visually inside the space.
-  requestAnimationFrame(fitCanvasDisplay);
+  // The panel is an absolute child of canvas-wrap, so opening or closing it
+  // must not resize, refit, recenter, or otherwise touch the canvas at all.
 };
 
 document.getElementById('helpBtn').onclick = () => {
