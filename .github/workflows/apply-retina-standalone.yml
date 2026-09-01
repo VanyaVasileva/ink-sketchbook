@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - 'hand-selector-standalone-test.html'
       - 'scripts/apply-retina-standalone.py'
       - '.github/workflows/apply-retina-standalone.yml'
 
@@ -19,13 +20,8 @@ jobs:
           ref: main
       - name: Patch exact standalone test
         run: |
-          if [ ! -f scripts/apply-retina-standalone.py ]; then
-            echo "Patch script not present yet; nothing to do."
-            exit 0
-          fi
           python3 scripts/apply-retina-standalone.py
       - name: Validate standalone JavaScript
-        if: hashFiles('scripts/apply-retina-standalone.py') != ''
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -46,14 +42,13 @@ jobs:
           PY
           node --check /tmp/standalone.js
       - name: Commit exact standalone test
-        if: hashFiles('scripts/apply-retina-standalone.py') != ''
         run: |
           if git diff --quiet -- hand-selector-standalone-test.html; then
-            echo "Standalone page already up to date."
+            echo "Standalone page already has retina-sharp zoom."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add hand-selector-standalone-test.html
-          git commit -m "Add retina-sharp zoom to standalone hand test"
+          git commit -m "Restore retina-sharp zoom to standalone hand test"
           git push
