@@ -22,98 +22,16 @@ jobs:
           python - <<'PY'
           from pathlib import Path
 
-          files = [
-              Path('ink-sketchbook-with-hand.html'),
-              Path('ink-sketchbook-testing-visible.html'),
-          ]
+          files = [Path('ink-sketchbook-with-hand.html'), Path('ink-sketchbook-testing-visible.html')]
 
-          old_vars = """let currentDpr = 1; // internal print-resolution multiplier
-let canvasBaseCssW = 0;
-let canvasBaseCssH = 0;
-"""
-          new_vars = """let currentDpr = 1; // internal print-resolution multiplier
-let canvasBaseCssW = 0;
-let canvasBaseCssH = 0;
-let canvasDisplayCssW = 0;
-let canvasDisplayCssH = 0;
-let canvasDisplayLeft = EDGE_MARGIN;
-let canvasDisplayTop = EDGE_MARGIN;
-"""
+          old_vars = "let currentDpr = 1; // internal print-resolution multiplier\nlet canvasBaseCssW = 0;\nlet canvasBaseCssH = 0;\n"
+          new_vars = "let currentDpr = 1; // internal print-resolution multiplier\nlet canvasBaseCssW = 0;\nlet canvasBaseCssH = 0;\nlet canvasDisplayCssW = 0;\nlet canvasDisplayCssH = 0;\nlet canvasDisplayLeft = EDGE_MARGIN;\nlet canvasDisplayTop = EDGE_MARGIN;\n"
 
-          old_fit = """function fitCanvasDisplay() {
-  if (!canvasBaseCssW || !canvasBaseCssH) return;
-  const rect = wrap.getBoundingClientRect();
-  const availW = Math.max(50, rect.width - EDGE_MARGIN * 2);
-  const availH = Math.max(50, rect.height - EDGE_MARGIN * 2);
-  const fit = Math.min(1, availW / canvasBaseCssW, availH / canvasBaseCssH);
-  const cssW = canvasBaseCssW * fit;
-  const cssH = canvasBaseCssH * fit;
-  const left = EDGE_MARGIN + Math.max(0, (availW - cssW) / 2);
-  const top = EDGE_MARGIN + Math.max(0, (availH - cssH) / 2);
-  [refCanvas, drawCanvas].forEach(c => {
-    c.style.width = cssW + 'px';
-    c.style.height = cssH + 'px';
-    c.style.left = left + 'px';
-    c.style.top = top + 'px';
-  });
-  applyView();
-}
+          old_fit = "function fitCanvasDisplay() {\n  if (!canvasBaseCssW || !canvasBaseCssH) return;\n  const rect = wrap.getBoundingClientRect();\n  const availW = Math.max(50, rect.width - EDGE_MARGIN * 2);\n  const availH = Math.max(50, rect.height - EDGE_MARGIN * 2);\n  const fit = Math.min(1, availW / canvasBaseCssW, availH / canvasBaseCssH);\n  const cssW = canvasBaseCssW * fit;\n  const cssH = canvasBaseCssH * fit;\n  const left = EDGE_MARGIN + Math.max(0, (availW - cssW) / 2);\n  const top = EDGE_MARGIN + Math.max(0, (availH - cssH) / 2);\n  [refCanvas, drawCanvas].forEach(c => {\n    c.style.width = cssW + 'px';\n    c.style.height = cssH + 'px';\n    c.style.left = left + 'px';\n    c.style.top = top + 'px';\n  });\n  applyView();\n}\n\nfunction getDisplayDpr() {\n  const cssW = parseFloat(drawCanvas.style.width) || canvasBaseCssW || 1;\n  return drawCanvas.width / cssW;\n}\n"
+          new_fit = "function fitCanvasDisplay() {\n  if (!canvasBaseCssW || !canvasBaseCssH) return;\n  const rect = wrap.getBoundingClientRect();\n  const availW = Math.max(50, rect.width - EDGE_MARGIN * 2);\n  const availH = Math.max(50, rect.height - EDGE_MARGIN * 2);\n  const fit = Math.min(1, availW / canvasBaseCssW, availH / canvasBaseCssH);\n  const cssW = canvasBaseCssW * fit;\n  const cssH = canvasBaseCssH * fit;\n  const left = EDGE_MARGIN + Math.max(0, (availW - cssW) / 2);\n  const top = EDGE_MARGIN + Math.max(0, (availH - cssH) / 2);\n  canvasDisplayCssW = cssW;\n  canvasDisplayCssH = cssH;\n  canvasDisplayLeft = left;\n  canvasDisplayTop = top;\n  applyView();\n}\n\nfunction getDisplayDpr() {\n  const cssW = canvasDisplayCssW || canvasBaseCssW || 1;\n  return drawCanvas.width / cssW;\n}\n"
 
-function getDisplayDpr() {
-  const cssW = parseFloat(drawCanvas.style.width) || canvasBaseCssW || 1;
-  return drawCanvas.width / cssW;
-}
-"""
-          new_fit = """function fitCanvasDisplay() {
-  if (!canvasBaseCssW || !canvasBaseCssH) return;
-  const rect = wrap.getBoundingClientRect();
-  const availW = Math.max(50, rect.width - EDGE_MARGIN * 2);
-  const availH = Math.max(50, rect.height - EDGE_MARGIN * 2);
-  const fit = Math.min(1, availW / canvasBaseCssW, availH / canvasBaseCssH);
-  const cssW = canvasBaseCssW * fit;
-  const cssH = canvasBaseCssH * fit;
-  const left = EDGE_MARGIN + Math.max(0, (availW - cssW) / 2);
-  const top = EDGE_MARGIN + Math.max(0, (availH - cssH) / 2);
-  canvasDisplayCssW = cssW;
-  canvasDisplayCssH = cssH;
-  canvasDisplayLeft = left;
-  canvasDisplayTop = top;
-  applyView();
-}
-
-function getDisplayDpr() {
-  // Keep pen geometry tied to the unzoomed display size. Zoom should enlarge
-  // the existing high-resolution canvas visually, not change logical pen size.
-  const cssW = canvasDisplayCssW || canvasBaseCssW || 1;
-  return drawCanvas.width / cssW;
-}
-"""
-
-          old_apply = """function applyView() {
-  const t = `translate(${view.x}px, ${view.y}px) rotate(${view.rotation}deg) scale(${view.scale})`;
-  refCanvas.style.transform = t;
-  drawCanvas.style.transform = t;
-}
-"""
-          new_apply = """function applyView() {
-  // Do not magnify the canvas with CSS transform: scale(). Safari can turn
-  // that into a soft composited texture. Instead give the canvas a larger CSS
-  // box at the requested zoom while keeping its real high-resolution pixels.
-  // This keeps fine ink/reference detail much sharper when zooming in.
-  const baseW = canvasDisplayCssW || canvasBaseCssW || 1;
-  const baseH = canvasDisplayCssH || canvasBaseCssH || 1;
-  const zoomedW = baseW * view.scale;
-  const zoomedH = baseH * view.scale;
-  const t = `translate(${view.x}px, ${view.y}px) rotate(${view.rotation}deg)`;
-  [refCanvas, drawCanvas].forEach(c => {
-    c.style.width = zoomedW + 'px';
-    c.style.height = zoomedH + 'px';
-    c.style.left = canvasDisplayLeft + 'px';
-    c.style.top = canvasDisplayTop + 'px';
-    c.style.transform = t;
-  });
-}
-"""
+          old_apply = "function applyView() {\n  const t = `translate(${view.x}px, ${view.y}px) rotate(${view.rotation}deg) scale(${view.scale})`;\n  refCanvas.style.transform = t;\n  drawCanvas.style.transform = t;\n}\n"
+          new_apply = "function applyView() {\n  const baseW = canvasDisplayCssW || canvasBaseCssW || 1;\n  const baseH = canvasDisplayCssH || canvasBaseCssH || 1;\n  const zoomedW = baseW * view.scale;\n  const zoomedH = baseH * view.scale;\n  const t = `translate(${view.x}px, ${view.y}px) rotate(${view.rotation}deg)`;\n  [refCanvas, drawCanvas].forEach(c => {\n    c.style.width = zoomedW + 'px';\n    c.style.height = zoomedH + 'px';\n    c.style.left = canvasDisplayLeft + 'px';\n    c.style.top = canvasDisplayTop + 'px';\n    c.style.transform = t;\n  });\n}\n"
 
           for p in files:
               s = p.read_text()
@@ -127,7 +45,7 @@ function getDisplayDpr() {
                   raise SystemExit(f'{p}: fitCanvasDisplay anchor not found')
               if old_apply in s:
                   s = s.replace(old_apply, new_apply, 1)
-              elif 'Safari can turn' not in s:
+              elif 'const zoomedW = baseW * view.scale;' not in s:
                   raise SystemExit(f'{p}: applyView anchor not found')
               p.write_text(s)
           PY
@@ -135,7 +53,7 @@ function getDisplayDpr() {
         run: |
           python - <<'PY'
           from pathlib import Path
-          for name in ['ink-sketchbook-with-hand.html','ink-sketchbook-testing-visible.html']:
+          for name in ['ink-sketchbook-with-hand.html', 'ink-sketchbook-testing-visible.html']:
               s = Path(name).read_text()
               if 'scale(${view.scale})' in s:
                   raise SystemExit(name + ': old soft CSS zoom still present')
