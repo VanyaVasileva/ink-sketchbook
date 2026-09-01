@@ -161,7 +161,8 @@
       <button id="removeRefBtn" style="display:none;">✕ <span data-i18n="removeRefBtn">Remove</span></button>
       <div class="slider-group"><span data-i18n="fadeLabel">Fade</span> <input type="range" id="opacitySlider" min="10" max="100" value="70"></div>
       <div class="slider-group"><span data-i18n="refSizeLabel">Reference size</span> <input type="range" id="refSizeSlider" min="25" max="300" value="100"></div>
-      <div class="slider-group"><span data-i18n="wobbleLabel">Wobble</span> <input type="range" id="wobbleSlider" min="0" max="3" value="1" step="0.5"></div>
+      <div class="slider-group"><span data-i18n="wobbleLabel">Wobble</span> <input type="range" id="wobbleSlider" min="0" max="3" value="0" step="0.5"></div>
+      <div class="slider-group"><span data-i18n="streamlineLabel">Streamline</span> <input type="range" id="streamlineSlider" min="0" max="100" value="0" step="1"></div>
       <div class="slider-group"><span data-i18n="thicknessLabel">Thickness</span> <input type="range" id="thicknessSlider" min="0.5" max="3" value="1" step="0.25"></div>
       <div class="slider-group"><span data-i18n="minLabel">Min</span> <input type="range" id="minSlider" min="0.5" max="6" value="1" step="0.5"></div>
       <div class="slider-group"><span data-i18n="maxLabel">Max</span> <input type="range" id="maxSlider" min="2" max="16" value="8" step="0.5"></div>
@@ -246,6 +247,7 @@ const toggleRefBtn = document.getElementById('toggleRefBtn');
 const opacitySlider = document.getElementById('opacitySlider');
 const refSizeSlider = document.getElementById('refSizeSlider');
 const wobbleSlider = document.getElementById('wobbleSlider');
+const streamlineSlider = document.getElementById('streamlineSlider');
 const thicknessSlider = document.getElementById('thicknessSlider');
 const minSlider = document.getElementById('minSlider');
 const maxSlider = document.getElementById('maxSlider');
@@ -274,7 +276,7 @@ const TRANSLATIONS = {
     unlockBtn: "Unlock", passcodePlaceholder: "Access code",
     lockError: "That code isn't right — check your purchase email and try again.",
     drawBtn: "Draw", eraserBtn: "Eraser", eraserSizeLabel: "Eraser size", referenceBtn: "Reference", removeRefBtn: "Remove",
-    fadeLabel: "Fade", refSizeLabel: "Reference size", wobbleLabel: "Wobble", thicknessLabel: "Thickness",
+    fadeLabel: "Fade", refSizeLabel: "Reference size", wobbleLabel: "Wobble", streamlineLabel: "Streamline", thicknessLabel: "Thickness",
     minLabel: "Min", maxLabel: "Max", paperLabel: "Paper color",
     clearBtn: "Clear", resetViewBtn: "Reset View", saveBtn: "Save", moreSettingsBtn: "More settings ▼", lessSettingsBtn: "Less settings ▲",
     loadBtn: "My Drawings", exportBtn: "Export", closeBtn: "Close",
@@ -292,7 +294,7 @@ const TRANSLATIONS = {
     unlockBtn: "Desbloquear", passcodePlaceholder: "Código de acceso",
     lockError: "Ese código no es correcto — revisa tu email de compra e inténtalo de nuevo.",
     drawBtn: "Dibujar", eraserBtn: "Borrador", eraserSizeLabel: "Tamaño del borrador", referenceBtn: "Referencia", removeRefBtn: "Quitar",
-    fadeLabel: "Opacidad", refSizeLabel: "Tamaño de referencia", wobbleLabel: "Temblor", thicknessLabel: "Grosor",
+    fadeLabel: "Opacidad", refSizeLabel: "Tamaño de referencia", wobbleLabel: "Temblor", streamlineLabel: "Estabilización", thicknessLabel: "Grosor",
     minLabel: "Mín", maxLabel: "Máx", paperLabel: "Color del papel",
     clearBtn: "Borrar", resetViewBtn: "Restablecer vista", saveBtn: "Guardar", moreSettingsBtn: "Más ajustes ▼", lessSettingsBtn: "Menos ajustes ▲",
     loadBtn: "Mis dibujos", exportBtn: "Exportar", closeBtn: "Cerrar",
@@ -310,7 +312,7 @@ const TRANSLATIONS = {
     unlockBtn: "Déverrouiller", passcodePlaceholder: "Code d'accès",
     lockError: "Ce code n'est pas correct — vérifiez votre e-mail d'achat et réessayez.",
     drawBtn: "Dessiner", eraserBtn: "Gomme", eraserSizeLabel: "Taille de la gomme", referenceBtn: "Référence", removeRefBtn: "Retirer",
-    fadeLabel: "Opacité", refSizeLabel: "Taille de la référence", wobbleLabel: "Tremblement", thicknessLabel: "Épaisseur",
+    fadeLabel: "Opacité", refSizeLabel: "Taille de la référence", wobbleLabel: "Tremblement", streamlineLabel: "Stabilisation", thicknessLabel: "Épaisseur",
     minLabel: "Min", maxLabel: "Max", paperLabel: "Couleur du papier",
     clearBtn: "Effacer", resetViewBtn: "Réinitialiser la vue", saveBtn: "Enregistrer", moreSettingsBtn: "Plus de réglages ▼", lessSettingsBtn: "Moins de réglages ▲",
     loadBtn: "Mes dessins", exportBtn: "Exporter", closeBtn: "Fermer",
@@ -328,7 +330,7 @@ const TRANSLATIONS = {
     unlockBtn: "Entsperren", passcodePlaceholder: "Zugangscode",
     lockError: "Dieser Code ist nicht richtig — prüfe deine Kauf-E-Mail und versuche es erneut.",
     drawBtn: "Zeichnen", eraserBtn: "Radierer", eraserSizeLabel: "Radierergröße", referenceBtn: "Referenz", removeRefBtn: "Entfernen",
-    fadeLabel: "Deckkraft", refSizeLabel: "Referenzgröße", wobbleLabel: "Zittern", thicknessLabel: "Dicke",
+    fadeLabel: "Deckkraft", refSizeLabel: "Referenzgröße", wobbleLabel: "Zittern", streamlineLabel: "Stabilisierung", thicknessLabel: "Dicke",
     minLabel: "Min", maxLabel: "Max", paperLabel: "Papierfarbe",
     clearBtn: "Leeren", resetViewBtn: "Ansicht zurücksetzen", saveBtn: "Speichern", moreSettingsBtn: "Mehr Einstellungen ▼", lessSettingsBtn: "Weniger Einstellungen ▲",
     loadBtn: "Meine Zeichnungen", exportBtn: "Exportieren", closeBtn: "Schließen",
@@ -346,7 +348,7 @@ const TRANSLATIONS = {
     unlockBtn: "Sblocca", passcodePlaceholder: "Codice di accesso",
     lockError: "Quel codice non è corretto — controlla la tua email d'acquisto e riprova.",
     drawBtn: "Disegna", eraserBtn: "Gomma", eraserSizeLabel: "Dimensione gomma", referenceBtn: "Riferimento", removeRefBtn: "Rimuovi",
-    fadeLabel: "Opacità", refSizeLabel: "Dimensione riferimento", wobbleLabel: "Tremolio", thicknessLabel: "Spessore",
+    fadeLabel: "Opacità", refSizeLabel: "Dimensione riferimento", wobbleLabel: "Tremolio", streamlineLabel: "Stabilizzazione", thicknessLabel: "Spessore",
     minLabel: "Min", maxLabel: "Max", paperLabel: "Colore carta",
     clearBtn: "Cancella", resetViewBtn: "Reimposta vista", saveBtn: "Salva", moreSettingsBtn: "Altre impostazioni ▼", lessSettingsBtn: "Meno impostazioni ▲",
     loadBtn: "I miei disegni", exportBtn: "Esporta", closeBtn: "Chiudi",
@@ -364,7 +366,7 @@ const TRANSLATIONS = {
     unlockBtn: "Desbloquear", passcodePlaceholder: "Código de acesso",
     lockError: "Esse código não está certo — verifique o seu email de compra e tente novamente.",
     drawBtn: "Desenhar", eraserBtn: "Borracha", eraserSizeLabel: "Tamanho da borracha", referenceBtn: "Referência", removeRefBtn: "Remover",
-    fadeLabel: "Opacidade", refSizeLabel: "Tamanho da referência", wobbleLabel: "Tremor", thicknessLabel: "Espessura",
+    fadeLabel: "Opacidade", refSizeLabel: "Tamanho da referência", wobbleLabel: "Tremor", streamlineLabel: "Estabilização", thicknessLabel: "Espessura",
     minLabel: "Mín", maxLabel: "Máx", paperLabel: "Cor do papel",
     clearBtn: "Limpar", resetViewBtn: "Repor vista", saveBtn: "Guardar", moreSettingsBtn: "Mais definições ▼", lessSettingsBtn: "Menos definições ▲",
     loadBtn: "Os meus desenhos", exportBtn: "Exportar", closeBtn: "Fechar",
@@ -382,7 +384,7 @@ const TRANSLATIONS = {
     unlockBtn: "Ontgrendelen", passcodePlaceholder: "Toegangscode",
     lockError: "Die code klopt niet — controleer je aankoopmail en probeer het opnieuw.",
     drawBtn: "Tekenen", eraserBtn: "Gum", eraserSizeLabel: "Gumgrootte", referenceBtn: "Referentie", removeRefBtn: "Verwijderen",
-    fadeLabel: "Vervaging", refSizeLabel: "Referentiegrootte", wobbleLabel: "Trilling", thicknessLabel: "Dikte",
+    fadeLabel: "Vervaging", refSizeLabel: "Referentiegrootte", wobbleLabel: "Trilling", streamlineLabel: "Stabilisatie", thicknessLabel: "Dikte",
     minLabel: "Min", maxLabel: "Max", paperLabel: "Papierkleur",
     clearBtn: "Wissen", resetViewBtn: "Weergave resetten", saveBtn: "Opslaan", moreSettingsBtn: "Meer instellingen ▼", lessSettingsBtn: "Minder instellingen ▲",
     loadBtn: "Mijn tekeningen", exportBtn: "Exporteren", closeBtn: "Sluiten",
@@ -400,7 +402,7 @@ const TRANSLATIONS = {
     unlockBtn: "ロック解除", passcodePlaceholder: "アクセスコード",
     lockError: "コードが正しくありません。購入時のメールを確認して再度お試しください。",
     drawBtn: "描く", eraserBtn: "消しゴム", eraserSizeLabel: "消しゴムのサイズ", referenceBtn: "下絵", removeRefBtn: "削除",
-    fadeLabel: "不透明度", refSizeLabel: "下絵のサイズ", wobbleLabel: "手ブレ", thicknessLabel: "太さ",
+    fadeLabel: "不透明度", refSizeLabel: "下絵のサイズ", wobbleLabel: "手ブレ", streamlineLabel: "手ブレ補正", thicknessLabel: "太さ",
     minLabel: "最小", maxLabel: "最大", paperLabel: "紙の色",
     clearBtn: "消去", resetViewBtn: "表示をリセット", saveBtn: "保存", moreSettingsBtn: "詳細設定 ▼", lessSettingsBtn: "設定を閉じる ▲",
     loadBtn: "作品一覧", exportBtn: "書き出し", closeBtn: "閉じる",
@@ -418,7 +420,7 @@ const TRANSLATIONS = {
     unlockBtn: "解锁", passcodePlaceholder: "访问码",
     lockError: "访问码不正确，请检查您的购买邮件后重试。",
     drawBtn: "画笔", eraserBtn: "橡皮擦", eraserSizeLabel: "橡皮擦大小", referenceBtn: "参考图", removeRefBtn: "移除",
-    fadeLabel: "透明度", refSizeLabel: "参考图大小", wobbleLabel: "手抖效果", thicknessLabel: "粗细",
+    fadeLabel: "透明度", refSizeLabel: "参考图大小", wobbleLabel: "手抖效果", streamlineLabel: "线条稳定", thicknessLabel: "粗细",
     minLabel: "最小", maxLabel: "最大", paperLabel: "纸张颜色",
     clearBtn: "清除", resetViewBtn: "重置视图", saveBtn: "保存", moreSettingsBtn: "更多设置 ▼", lessSettingsBtn: "收起设置 ▲",
     loadBtn: "我的作品", exportBtn: "导出", closeBtn: "关闭",
@@ -468,6 +470,8 @@ applyTranslations();
 let refImage = null;
 let refVisible = true;
 let smoothedWobbleX = 0, smoothedWobbleY = 0;
+let smoothedInputX = null, smoothedInputY = null;
+let lastRenderedX = null, lastRenderedY = null;
 let drawing = false;
 let points = [];
 let history = [];
@@ -520,6 +524,10 @@ const MIN_PRINT_LONG_SIDE = 3000; // ~10in at 300dpi — a real device's natural
 let currentDpr = 1; // internal print-resolution multiplier
 let canvasBaseCssW = 0;
 let canvasBaseCssH = 0;
+let canvasDisplayCssW = 0;
+let canvasDisplayCssH = 0;
+let canvasDisplayLeft = EDGE_MARGIN;
+let canvasDisplayTop = EDGE_MARGIN;
 
 // The drawing/reference canvas has ONE stable logical size. Opening the settings
 // panel must never resize its pixel grid, because that would re-center the
@@ -535,17 +543,17 @@ function fitCanvasDisplay() {
   const cssH = canvasBaseCssH * fit;
   const left = EDGE_MARGIN + Math.max(0, (availW - cssW) / 2);
   const top = EDGE_MARGIN + Math.max(0, (availH - cssH) / 2);
-  [refCanvas, drawCanvas].forEach(c => {
-    c.style.width = cssW + 'px';
-    c.style.height = cssH + 'px';
-    c.style.left = left + 'px';
-    c.style.top = top + 'px';
-  });
+  canvasDisplayCssW = cssW;
+  canvasDisplayCssH = cssH;
+  canvasDisplayLeft = left;
+  canvasDisplayTop = top;
   applyView();
 }
 
 function getDisplayDpr() {
-  const cssW = parseFloat(drawCanvas.style.width) || canvasBaseCssW || 1;
+  // Use the unzoomed display width. Zoom changes only how large the existing
+  // high-resolution canvas is presented, never the logical pen size.
+  const cssW = canvasDisplayCssW || canvasBaseCssW || 1;
   return drawCanvas.width / cssW;
 }
 
@@ -697,9 +705,18 @@ function updateRefResolutionForZoom() {
 }
 
 function applyView() {
-  const t = `translate(${view.x}px, ${view.y}px) rotate(${view.rotation}deg) scale(${view.scale})`;
-  refCanvas.style.transform = t;
-  drawCanvas.style.transform = t;
+  const baseW = canvasDisplayCssW || canvasBaseCssW || 1;
+  const baseH = canvasDisplayCssH || canvasBaseCssH || 1;
+  const zoomedW = baseW * view.scale;
+  const zoomedH = baseH * view.scale;
+  const t = `translate(${view.x}px, ${view.y}px) rotate(${view.rotation}deg)`;
+  [refCanvas, drawCanvas].forEach(c => {
+    c.style.width = zoomedW + 'px';
+    c.style.height = zoomedH + 'px';
+    c.style.left = canvasDisplayLeft + 'px';
+    c.style.top = canvasDisplayTop + 'px';
+    c.style.transform = t;
+  });
 }
 
 drawModeBtn.onclick = () => {
@@ -715,10 +732,15 @@ eraseModeBtn.onclick = () => {
 
 function startStroke(e) {
   drawing = true;
-  points = [getPos(e)];
+  const start = getPos(e);
+  points = [start];
   smoothedWidth = null;
   smoothedWobbleX = 0;
   smoothedWobbleY = 0;
+  smoothedInputX = start.x;
+  smoothedInputY = start.y;
+  lastRenderedX = start.x;
+  lastRenderedY = start.y;
   moved = false;
   lastPressure = e.pressure;
   usingPressure = e.pointerType === 'pen';
@@ -762,6 +784,22 @@ function continueStroke(e) {
   let x = p.x, y = p.y;
 
   if (mode === 'draw') {
+    // Streamline changes only the geometry of the path. It never blurs the
+    // canvas or changes export resolution. At 0 the raw hand movement passes
+    // through exactly as before; higher values progressively calm tiny hand
+    // movements while preserving the clean ink edge.
+    const streamline = Math.max(0, Math.min(100, parseFloat(streamlineSlider.value) || 0)) / 100;
+    if (streamline > 0) {
+      const follow = Math.max(0.15, 1 - streamline * 0.85);
+      smoothedInputX += (p.x - smoothedInputX) * follow;
+      smoothedInputY += (p.y - smoothedInputY) * follow;
+      x = smoothedInputX;
+      y = smoothedInputY;
+    } else {
+      smoothedInputX = p.x;
+      smoothedInputY = p.y;
+    }
+
     const wobbleIntensity = parseFloat(wobbleSlider.value);
     if (wobbleIntensity > 0) {
       // a fresh random target each move, but the applied offset only drifts
@@ -787,11 +825,18 @@ function continueStroke(e) {
   ctx.lineCap = 'round';
   ctx.lineWidth = smoothedWidth;
   ctx.beginPath();
-  ctx.moveTo(prev.x, prev.y);
+  const fromX = lastRenderedX === null ? prev.x : lastRenderedX;
+  const fromY = lastRenderedY === null ? prev.y : lastRenderedY;
+  ctx.moveTo(fromX, fromY);
   ctx.lineTo(x, y);
   ctx.stroke();
   ctx.globalCompositeOperation = 'source-over'; // always reset immediately after
 
+  // Continue from the point that was actually rendered, not the raw pointer
+  // point. This keeps optional Wobble continuous instead of creating tiny
+  // disconnected-looking stair steps between successive segments.
+  lastRenderedX = x;
+  lastRenderedY = y;
   points.push({ x: p.x, y: p.y, t: p.t });
 }
 
@@ -1336,7 +1381,8 @@ const HELP_CONTENT = {
     ["Remove", "Deletes the reference photo completely — the eye icon only hides it, this removes it for good."],
     ["Reference size", "Resize just the reference photo — separate from zooming your whole canvas."],
     ["Fade", "How visible the reference image is while you trace."],
-    ["Wobble", "Adds a natural hand-tremor effect. Set to 0 for perfectly sharp lines."],
+    ["Wobble", "Adds optional extra irregular movement to the line. It starts at 0, so your own hand movement is the default."],
+    ["Streamline", "Stabilizes small hand movements. Higher values make the path steadier without blurring the ink or changing export quality."],
     ["Thickness", "Scales your whole pen size up or down at once."],
     ["Min / Max", "The thinnest and thickest your pen line can get, based on pressure or speed."],
     ["Paper color", "Changes the background you see while drawing — never affects your exported artwork."],
@@ -1356,7 +1402,8 @@ const HELP_CONTENT = {
     ["Quitar", "Elimina la foto de referencia por completo — el icono del ojo solo la oculta, esto la borra definitivamente."],
     ["Tamaño de referencia", "Cambia el tamaño solo de la foto de referencia, sin afectar al zoom de todo el lienzo."],
     ["Opacidad", "Cuánto se ve la imagen de referencia mientras calcas."],
-    ["Temblor", "Añade un temblor natural de mano. Ponlo en 0 para líneas perfectamente nítidas."],
+    ["Temblor", "Añade movimiento irregular opcional a la línea. Empieza en 0, por lo que el movimiento de tu propia mano es el predeterminado."],
+    ["Estabilización", "Estabiliza pequeños movimientos de la mano. Los valores altos hacen el trazo más estable sin desenfocar la tinta ni cambiar la calidad de exportación."],
     ["Grosor", "Escala todo el grosor del pincel a la vez."],
     ["Mín / Máx", "El grosor más fino y más grueso que puede alcanzar tu línea, según presión o velocidad."],
     ["Color del papel", "Cambia el fondo que ves mientras dibujas — nunca afecta a tu obra exportada."],
@@ -1376,7 +1423,8 @@ const HELP_CONTENT = {
     ["Retirer", "Supprime complètement la photo de référence — l'icône œil ne fait que la masquer, ceci la supprime pour de bon."],
     ["Taille de la référence", "Redimensionne uniquement la photo de référence — indépendamment du zoom global du canevas."],
     ["Opacité", "À quel point l'image de référence est visible pendant que vous calquez."],
-    ["Tremblement", "Ajoute un tremblement naturel de la main. Réglez sur 0 pour des lignes parfaitement nettes."],
+    ["Tremblement", "Ajoute un mouvement irrégulier facultatif à la ligne. Il démarre à 0 : le mouvement naturel de votre main reste le réglage par défaut."],
+    ["Stabilisation", "Stabilise les petits mouvements de la main. Les valeurs élevées rendent le tracé plus stable sans flouter l’encre ni modifier la qualité d’export."],
     ["Épaisseur", "Ajuste toute l'épaisseur du pinceau en une fois."],
     ["Min / Max", "L'épaisseur la plus fine et la plus épaisse possible, selon la pression ou la vitesse."],
     ["Couleur du papier", "Change le fond que vous voyez en dessinant — n'affecte jamais votre œuvre exportée."],
@@ -1396,7 +1444,8 @@ const HELP_CONTENT = {
     ["Entfernen", "Löscht das Referenzfoto vollständig — das Augen-Symbol blendet es nur aus, das entfernt es endgültig."],
     ["Referenzgröße", "Ändert nur die Größe des Referenzfotos — unabhängig vom Zoom der ganzen Zeichenfläche."],
     ["Deckkraft", "Wie sichtbar das Referenzbild beim Nachzeichnen ist."],
-    ["Zittern", "Fügt ein natürliches Handzittern hinzu. Auf 0 stellen für perfekt scharfe Linien."],
+    ["Zittern", "Fügt der Linie optional zusätzliche Unregelmäßigkeit hinzu. Der Standardwert ist 0, damit zunächst nur deine eigene Handbewegung sichtbar ist."],
+    ["Stabilisierung", "Beruhigt kleine Handbewegungen. Höhere Werte machen den Strich stabiler, ohne die Tinte weichzuzeichnen oder die Exportqualität zu verändern."],
     ["Dicke", "Skaliert die gesamte Stiftdicke auf einmal."],
     ["Min / Max", "Die dünnste und dickste Linie, je nach Druck oder Geschwindigkeit."],
     ["Papierfarbe", "Ändert nur den sichtbaren Hintergrund beim Zeichnen — hat keinen Einfluss auf die exportierte Zeichnung."],
@@ -1416,7 +1465,8 @@ const HELP_CONTENT = {
     ["Rimuovi", "Elimina completamente la foto di riferimento — l'icona dell'occhio la nasconde soltanto, questo la rimuove definitivamente."],
     ["Dimensione riferimento", "Ridimensiona solo la foto di riferimento, separatamente dallo zoom di tutta la tela."],
     ["Opacità", "Quanto è visibile l'immagine di riferimento mentre ricalchi."],
-    ["Tremolio", "Aggiunge un naturale tremolio della mano. Imposta a 0 per linee perfettamente nitide."],
+    ["Tremolio", "Aggiunge un movimento irregolare opzionale alla linea. Parte da 0, quindi il movimento naturale della tua mano resta l’impostazione predefinita."],
+    ["Stabilizzazione", "Stabilizza i piccoli movimenti della mano. Valori più alti rendono il tratto più stabile senza sfocare l’inchiostro o cambiare la qualità di esportazione."],
     ["Spessore", "Scala tutto lo spessore del pennino in una volta."],
     ["Min / Max", "Lo spessore più sottile e più spesso possibile, in base a pressione o velocità."],
     ["Colore carta", "Cambia solo lo sfondo visibile mentre disegni — non influisce mai sull'opera esportata."],
@@ -1436,7 +1486,8 @@ const HELP_CONTENT = {
     ["Remover", "Apaga completamente a foto de referência — o ícone do olho só a oculta, isto remove-a definitivamente."],
     ["Tamanho da referência", "Redimensiona apenas a foto de referência — separado do zoom de toda a tela."],
     ["Opacidade", "Quão visível está a imagem de referência enquanto decalca."],
-    ["Tremor", "Adiciona um tremor natural da mão. Defina como 0 para linhas perfeitamente nítidas."],
+    ["Tremor", "Adiciona movimento irregular opcional à linha. Começa em 0, por isso o movimento natural da sua mão é o padrão."],
+    ["Estabilização", "Estabiliza pequenos movimentos da mão. Valores mais altos deixam o traço mais estável sem desfocar a tinta nem alterar a qualidade de exportação."],
     ["Espessura", "Ajusta toda a espessura da caneta de uma vez."],
     ["Mín / Máx", "A espessura mais fina e mais grossa possível, consoante a pressão ou velocidade."],
     ["Cor do papel", "Muda apenas o fundo que vê enquanto desenha — nunca afeta a obra exportada."],
@@ -1456,7 +1507,8 @@ const HELP_CONTENT = {
     ["Verwijderen", "Verwijdert de referentiefoto volledig — het oog-icoon verbergt hem alleen, dit verwijdert hem definitief."],
     ["Referentiegrootte", "Verandert alleen de grootte van de referentiefoto — los van het zoomen op het hele canvas."],
     ["Vervaging", "Hoe zichtbaar de referentieafbeelding is terwijl je overtrekt."],
-    ["Trilling", "Voegt een natuurlijke handtrilling toe. Zet op 0 voor perfect scherpe lijnen."],
+    ["Trilling", "Voegt optioneel extra onregelmatige beweging aan de lijn toe. De standaardwaarde is 0, zodat je eigen handbeweging het uitgangspunt blijft."],
+    ["Stabilisatie", "Stabiliseert kleine handbewegingen. Hogere waarden maken de lijn rustiger zonder de inkt te vervagen of de exportkwaliteit te veranderen."],
     ["Dikte", "Schaalt de hele pendikte in één keer."],
     ["Min / Max", "De dunste en dikste lijn die je pen kan maken, afhankelijk van druk of snelheid."],
     ["Papierkleur", "Verandert alleen de achtergrond die je ziet tijdens het tekenen — heeft geen invloed op je geëxporteerde werk."],
@@ -1476,7 +1528,8 @@ const HELP_CONTENT = {
     ["削除", "下絵を完全に削除します。目のアイコンは非表示にするだけですが、これは完全に削除します。"],
     ["下絵のサイズ", "下絵の写真だけを拡大・縮小します。キャンバス全体のズームとは別に調整できます。"],
     ["不透明度", "なぞっている間、下絵がどれくらい見えるかを調整します。"],
-    ["手ブレ", "自然な手ブレ効果を加えます。0にすると完全にシャープな線になります。"],
+    ["手ブレ", "線に追加の不規則な動きを加えるオプションです。初期値は0なので、通常は自分の手の動きがそのまま反映されます。"],
+    ["手ブレ補正", "小さな手の動きを安定させます。値を上げるほど線が安定しますが、インクをぼかしたり書き出し品質を変えたりはしません。"],
     ["太さ", "ペンの太さ全体を一括で調整します。"],
     ["最小 / 最大", "筆圧や速度に応じた、線の最も細い太さと最も太い太さです。"],
     ["紙の色", "描画中に見える背景色を変えるだけで、書き出した作品には影響しません。"],
@@ -1496,7 +1549,8 @@ const HELP_CONTENT = {
     ["移除", "彻底删除参考图。眼睛图标只是隐藏，而这个操作会永久移除。"],
     ["参考图大小", "仅调整参考图片的大小，与整个画布的缩放无关。"],
     ["透明度", "描摹时参考图的可见程度。"],
-    ["手抖效果", "增加自然的手抖效果。设为 0 可获得完全清晰的线条。"],
+    ["手抖效果", "为线条增加可选的额外不规则移动。默认值为 0，因此默认保留你自己的手部运动。"],
+    ["线条稳定", "稳定细小的手部运动。数值越高线条越稳定，但不会模糊墨线，也不会改变导出质量。"],
     ["粗细", "一次性调整整体笔画粗细。"],
     ["最小 / 最大", "根据压力或速度，笔画能达到的最细和最粗程度。"],
     ["纸张颜色", "仅更改绘画时看到的背景颜色，不会影响导出的作品。"],
