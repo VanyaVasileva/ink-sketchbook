@@ -244,6 +244,15 @@ const drawCanvas = document.getElementById('drawCanvas');
 const refCtx = refCanvas.getContext('2d');
 const ctx = drawCanvas.getContext('2d', { willReadFrequently: true });
 const wrap = document.querySelector('.canvas-wrap');
+
+// retina-detail-display-v1: screen-resolution ink replay used only while zoomed.
+// The real/export canvas stays unchanged; this is display-only.
+const detailCanvas = document.createElement('canvas');
+detailCanvas.id = 'detailCanvas';
+detailCanvas.setAttribute('aria-hidden', 'true');
+detailCanvas.style.cssText = 'position:absolute;left:0;top:0;z-index:4;pointer-events:none;display:none;';
+wrap.appendChild(detailCanvas);
+const detailCtx = detailCanvas.getContext('2d');
 const fileInput = document.getElementById('fileInput');
 const toggleRefBtn = document.getElementById('toggleRefBtn');
 const opacitySlider = document.getElementById('opacitySlider');
@@ -486,6 +495,16 @@ let smoothedWidth = null;
 let currentColor = '#2a2620';
 let view = { scale: 1, x: 0, y: 0, rotation: 0 }; // rotation in degrees
 
+let detailStrokes = [];
+let detailVisibleCount = 0;
+let activeDetailStroke = null;
+let detailHistory = [];
+let detailRedoCounts = [];
+let detailVectorValid = true;
+let detailRenderRAF = null;
+let detailPixelRatio = 1;
+const DETAIL_ZOOM_THRESHOLD = 1.12;
+
 const colors = ['#2a2620', '#8a3b2e', '#3b5c48', '#3a5578', '#7a5230'];
 colors.forEach((c, i) => {
   const sw = document.createElement('div');
@@ -554,6 +573,146 @@ function fitCanvasDisplay() {
 function getDisplayDpr() {
   const cssW = canvasDisplayCssW || canvasBaseCssW || 1;
   return drawCanvas.width / cssW;
+}
+
+function detailZoomIsActive() {
+  return detailVectorValid && view.scale >= DETAIL_ZOOM_THRESHOLD;
+}
+
+function ensureDetailCanvasSize() {
+  const rect = wrap.getBoundingClientRect();
+  detailPixelRatio = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+  const w = Math.max(2, Math.round(rect.width * detailPixelRatio));
+  const h = Math.max(2, Math.round(rect.height * detailPixelRatio));
+  if (detailCanvas.width !== w || detailCanvas.height !== h) {
+    detailCanvas.width = w;
+    detailCanvas.height = h;
+  }
+  detailCanvas.style.width = rect.width + 'px';
+  detailCanvas.style.height = rect.height + 'px';
+}
+
+function setDetailTransform() {
+  const baseW = canvasDisplayCssW || canvasBaseCssW || 1;
+  const baseH = canvasDisplayCssH || canvasBaseCssH || 1;
+  const zoomedW = baseW * view.scale;
+  const zoomedH = baseH * view.scale;
+  const sx = zoomedW / Math.max(1, drawCanvas.width);
+  const sy = zoomedH / Math.max(1, drawCanvas.height);
+  const rad = view.rotation * Math.PI / 180;
+  detailCtx.setTransform(detailPixelRatio, 0, 0, detailPixelRatio, 0, 0);
+  detailCtx.translate(canvasDisplayLeft + view.x, canvasDisplayTop + view.y);
+  detailCtx.rotate(rad);
+  detailCtx.scale(sx, sy);
+}
+
+function paintDetailOp(op) {
+  if (!op) return;
+  detailCtx.save();
+  detailCtx.globalCompositeOperation = op.mode === 'erase' ? 'destination-out' : 'source-over';
+  detailCtx.lineJoin = 'round';
+  detailCtx.lineCap = 'round';
+  detailCtx.lineWidth = op.width;
+  if (op.kind === 'dot') {
+    detailCtx.fillStyle = op.mode === 'erase' ? 'rgba(0,0,0,1)' : op.color;
+    detailCtx.beginPath();
+    detailCtx.arc(op.x, op.y, op.width / 2, 0, Math.PI * 2);
+    detailCtx.fill();
+  } else {
+    detailCtx.strokeStyle = op.mode === 'erase' ? 'rgba(0,0,0,1)' : op.color;
+    detailCtx.beginPath();
+    detailCtx.moveTo(op.x1, op.y1);
+    detailCtx.lineTo(op.x2, op.y2);
+    detailCtx.stroke();
+  }
+  detailCtx.restore();
+}
+
+function renderDetailView() {
+  detailRenderRAF = null;
+  if (!detailZoomIsActive()) {
+    detailCanvas.style.display = 'none';
+    drawCanvas.style.opacity = '';
+    return;
+  }
+  ensureDetailCanvasSize();
+  detailCtx.setTransform(1, 0, 0, 1, 0, 0);
+  detailCtx.globalCompositeOperation = 'source-over';
+  detailCtx.clearRect(0, 0, detailCanvas.width, detailCanvas.height);
+  detailCanvas.style.display = 'block';
+  drawCanvas.style.opacity = '0';
+  setDetailTransform();
+  for (let i = 0; i < detailVisibleCount; i++) {
+    const stroke = detailStrokes[i];
+    if (!stroke) continue;
+    for (const op of stroke.ops) paintDetailOp(op);
+  }
+  if (activeDetailStroke) {
+    for (const op of activeDetailStroke.ops) paintDetailOp(op);
+  }
+  detailCtx.setTransform(1, 0, 0, 1, 0, 0);
+  detailCtx.globalCompositeOperation = 'source-over';
+}
+
+function scheduleDetailRender() {
+  if (detailRenderRAF !== null) return;
+  detailRenderRAF = requestAnimationFrame(renderDetailView);
+}
+
+function beginDetailStroke() {
+  if (detailVectorValid) activeDetailStroke = { ops: [] };
+}
+
+function drawDetailOpLive(op) {
+  if (!detailZoomIsActive()) return;
+  if (detailCanvas.style.display === 'none') {
+    scheduleDetailRender();
+    return;
+  }
+  setDetailTransform();
+  paintDetailOp(op);
+  detailCtx.setTransform(1, 0, 0, 1, 0, 0);
+  detailCtx.globalCompositeOperation = 'source-over';
+}
+
+function recordDetailSegment(x1, y1, x2, y2, width, strokeMode, color) {
+  if (!detailVectorValid || !activeDetailStroke) return;
+  const op = { kind: 'segment', x1, y1, x2, y2, width, mode: strokeMode, color };
+  activeDetailStroke.ops.push(op);
+  drawDetailOpLive(op);
+}
+
+function recordDetailDot(x, y, width, strokeMode, color) {
+  if (!detailVectorValid || !activeDetailStroke) return;
+  const op = { kind: 'dot', x, y, width, mode: strokeMode, color };
+  activeDetailStroke.ops.push(op);
+  drawDetailOpLive(op);
+}
+
+function commitDetailStroke() {
+  if (!detailVectorValid) {
+    activeDetailStroke = null;
+    return;
+  }
+  if (!activeDetailStroke || activeDetailStroke.ops.length === 0) {
+    activeDetailStroke = null;
+    return;
+  }
+  if (detailVisibleCount < detailStrokes.length) detailStrokes.splice(detailVisibleCount);
+  detailStrokes.push(activeDetailStroke);
+  detailVisibleCount = detailStrokes.length;
+  activeDetailStroke = null;
+  scheduleDetailRender();
+}
+
+function resetDetailVectors(valid = true) {
+  detailStrokes = [];
+  detailVisibleCount = 0;
+  activeDetailStroke = null;
+  detailHistory = [];
+  detailRedoCounts = [];
+  detailVectorValid = valid;
+  scheduleDetailRender();
 }
 
 function resize() {
@@ -794,8 +953,14 @@ recordBtn.onclick = () => {
 
 function saveHistory() {
   history.push(ctx.getImageData(0,0,drawCanvas.width,drawCanvas.height));
-  if (history.length > 30) history.shift();
-  redoStack = []; // a new stroke invalidates whatever redo could have restored
+  detailHistory.push(detailVisibleCount);
+  if (history.length > 30) {
+    history.shift();
+    detailHistory.shift();
+  }
+  redoStack = [];
+  detailRedoCounts = [];
+  scheduleDetailRender();
 }
 saveHistory();
 
@@ -855,6 +1020,7 @@ function applyView() {
     c.style.top = canvasDisplayTop + 'px';
     c.style.transform = t;
   });
+  scheduleDetailRender();
 }
 
 drawModeBtn.onclick = () => {
@@ -870,6 +1036,7 @@ eraseModeBtn.onclick = () => {
 
 function startStroke(e) {
   drawing = true;
+  beginDetailStroke();
   points = [getPos(e)];
   smoothedWidth = null;
   smoothedWobbleX = 0;
@@ -946,6 +1113,8 @@ function continueStroke(e) {
   ctx.moveTo(prev.x, prev.y);
   ctx.lineTo(x, y);
   ctx.stroke();
+  const detailPrev = (typeof renderPrev !== 'undefined' && renderPrev) ? renderPrev : prev;
+  recordDetailSegment(detailPrev.x, detailPrev.y, x, y, smoothedWidth, mode, currentColor);
   ctx.globalCompositeOperation = 'source-over'; // always reset immediately after
 
   points.push({ x: p.x, y: p.y, t: p.t });
@@ -975,8 +1144,10 @@ function endStroke() {
     ctx.beginPath();
     ctx.arc(p.x, p.y, width / 2, 0, Math.PI * 2);
     ctx.fill();
+    recordDetailDot(p.x, p.y, width, mode, currentColor);
     ctx.globalCompositeOperation = 'source-over';
   }
+  commitDetailStroke();
   saveHistory();
 }
 
@@ -1119,19 +1290,30 @@ document.getElementById('zoomOutBtn').onclick = () => zoomByButton(1 / 1.25);
 undoBtn.onclick = () => {
   if (history.length > 1) {
     redoStack.push(history.pop());
+    if (detailHistory.length > 1) detailRedoCounts.push(detailHistory.pop());
+    detailVisibleCount = detailHistory.length ? detailHistory[detailHistory.length - 1] : 0;
+    activeDetailStroke = null;
     ctx.putImageData(history[history.length - 1], 0, 0);
+    scheduleDetailRender();
   }
 };
 redoBtn.onclick = () => {
   if (redoStack.length > 0) {
     const state = redoStack.pop();
     history.push(state);
+    if (detailRedoCounts.length > 0) {
+      const detailCount = detailRedoCounts.pop();
+      detailHistory.push(detailCount);
+      detailVisibleCount = detailCount;
+    }
     ctx.putImageData(state, 0, 0);
+    scheduleDetailRender();
   }
 };
 clearBtn.onclick = () => {
   ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
   history = [];
+  resetDetailVectors(true);
   saveHistory();
 };
 function flattenOntoBackground(bgColor) {
@@ -1463,6 +1645,8 @@ function renderDrawingsList() {
       loadImg.onload = () => {
         ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
         ctx.drawImage(loadImg, 0, 0, drawCanvas.width, drawCanvas.height);
+        resetDetailVectors(false);
+        history = [];
         saveHistory();
         document.getElementById('loadOverlay').classList.remove('show');
         hintText.textContent = t('drawingLoadedMsg');
