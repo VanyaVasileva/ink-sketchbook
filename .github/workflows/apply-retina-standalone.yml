@@ -1,0 +1,424 @@
+name: Apply standalone retina zoom
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Patch exact standalone test
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('hand-selector-standalone-test.html')
+          s = p.read_text()
+          marker = 'retina-detail-display-v2-standalone'
+          if marker in s:
+              raise SystemExit('Standalone retina layer already present')
+
+          anchor = "const wrap = document.querySelector('.canvas-wrap');\n"
+          insert = """const wrap = document.querySelector('.canvas-wrap');
+
+// retina-detail-display-v2-standalone: screen-resolution ink replay used only
+// while zoomed. The real drawCanvas remains authoritative for save/export/
+// recording; this transparent layer only improves what the artist sees.
+const detailCanvas = document.createElement('canvas');
+detailCanvas.id = 'detailCanvas';
+detailCanvas.setAttribute('aria-hidden', 'true');
+detailCanvas.style.cssText = 'position:absolute;left:0;top:0;z-index:4;pointer-events:none;display:none;box-shadow:none;';
+wrap.appendChild(detailCanvas);
+const detailCtx = detailCanvas.getContext('2d');
+"""
+          if anchor not in s:
+              raise SystemExit('wrap binding anchor not found')
+          s = s.replace(anchor, insert, 1)
+
+          state_anchor = "let view = { scale: 1, x: 0, y: 0, rotation: 0 }; // rotation in degrees\n"
+          state_insert = """let view = { scale: 1, x: 0, y: 0, rotation: 0 }; // rotation in degrees
+
+let detailStrokes = [];
+let detailVisibleCount = 0;
+let activeDetailStroke = null;
+let detailHistory = [];
+let detailRedoCounts = [];
+let detailVectorValid = true;
+let detailRenderRAF = null;
+let detailPixelRatio = 1;
+const DETAIL_ZOOM_THRESHOLD = 1.12;
+"""
+          if state_anchor not in s:
+              raise SystemExit('view state anchor not found')
+          s = s.replace(state_anchor, state_insert, 1)
+
+          helper_anchor = "function resize() {\n"
+          helpers = r'''function detailZoomIsActive() {
+  return detailVectorValid && view.scale >= DETAIL_ZOOM_THRESHOLD;
+}
+
+function ensureDetailCanvasSize() {
+  const rect = wrap.getBoundingClientRect();
+  // Match the physical screen density, capped to keep iPad memory stable.
+  detailPixelRatio = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+  const w = Math.max(2, Math.round(rect.width * detailPixelRatio));
+  const h = Math.max(2, Math.round(rect.height * detailPixelRatio));
+  if (detailCanvas.width !== w || detailCanvas.height !== h) {
+    detailCanvas.width = w;
+    detailCanvas.height = h;
+  }
+  detailCanvas.style.width = rect.width + 'px';
+  detailCanvas.style.height = rect.height + 'px';
+}
+
+function setDetailTransform() {
+  const baseW = parseFloat(drawCanvas.style.width) || canvasBaseCssW || 1;
+  const baseH = parseFloat(drawCanvas.style.height) || canvasBaseCssH || 1;
+  const left = parseFloat(drawCanvas.style.left) || EDGE_MARGIN;
+  const top = parseFloat(drawCanvas.style.top) || EDGE_MARGIN;
+  const sx = (baseW * view.scale) / Math.max(1, drawCanvas.width);
+  const sy = (baseH * view.scale) / Math.max(1, drawCanvas.height);
+  const rad = view.rotation * Math.PI / 180;
+  detailCtx.setTransform(detailPixelRatio, 0, 0, detailPixelRatio, 0, 0);
+  detailCtx.translate(left + view.x, top + view.y);
+  detailCtx.rotate(rad);
+  detailCtx.scale(sx, sy);
+}
+
+function paintDetailOp(op) {
+  if (!op) return;
+  detailCtx.save();
+  detailCtx.globalCompositeOperation = op.mode === 'erase' ? 'destination-out' : 'source-over';
+  detailCtx.lineJoin = 'round';
+  detailCtx.lineCap = 'round';
+  detailCtx.lineWidth = op.width;
+  if (op.kind === 'dot') {
+    detailCtx.fillStyle = op.mode === 'erase' ? 'rgba(0,0,0,1)' : op.color;
+    detailCtx.beginPath();
+    detailCtx.arc(op.x, op.y, op.width / 2, 0, Math.PI * 2);
+    detailCtx.fill();
+  } else {
+    detailCtx.strokeStyle = op.mode === 'erase' ? 'rgba(0,0,0,1)' : op.color;
+    detailCtx.beginPath();
+    detailCtx.moveTo(op.x1, op.y1);
+    detailCtx.lineTo(op.x2, op.y2);
+    detailCtx.stroke();
+  }
+  detailCtx.restore();
+}
+
+function renderDetailView() {
+  detailRenderRAF = null;
+  if (!detailZoomIsActive()) {
+    detailCanvas.style.display = 'none';
+    drawCanvas.style.opacity = '';
+    return;
+  }
+  ensureDetailCanvasSize();
+  detailCtx.setTransform(1, 0, 0, 1, 0, 0);
+  detailCtx.globalCompositeOperation = 'source-over';
+  detailCtx.clearRect(0, 0, detailCanvas.width, detailCanvas.height);
+  detailCanvas.style.display = 'block';
+  drawCanvas.style.opacity = '0';
+  setDetailTransform();
+  for (let i = 0; i < detailVisibleCount; i++) {
+    const stroke = detailStrokes[i];
+    if (!stroke) continue;
+    for (const op of stroke.ops) paintDetailOp(op);
+  }
+  if (activeDetailStroke) {
+    for (const op of activeDetailStroke.ops) paintDetailOp(op);
+  }
+  detailCtx.setTransform(1, 0, 0, 1, 0, 0);
+  detailCtx.globalCompositeOperation = 'source-over';
+}
+
+function scheduleDetailRender() {
+  if (detailRenderRAF !== null) return;
+  detailRenderRAF = requestAnimationFrame(renderDetailView);
+}
+
+function beginDetailStroke() {
+  if (detailVectorValid) activeDetailStroke = { ops: [] };
+}
+
+function drawDetailOpLive(op) {
+  if (!detailZoomIsActive()) return;
+  if (detailCanvas.style.display === 'none') {
+    scheduleDetailRender();
+    return;
+  }
+  setDetailTransform();
+  paintDetailOp(op);
+  detailCtx.setTransform(1, 0, 0, 1, 0, 0);
+  detailCtx.globalCompositeOperation = 'source-over';
+}
+
+function recordDetailSegment(x1, y1, x2, y2, width, strokeMode, color) {
+  if (!detailVectorValid || !activeDetailStroke) return;
+  const op = { kind: 'segment', x1, y1, x2, y2, width, mode: strokeMode, color };
+  activeDetailStroke.ops.push(op);
+  drawDetailOpLive(op);
+}
+
+function recordDetailDot(x, y, width, strokeMode, color) {
+  if (!detailVectorValid || !activeDetailStroke) return;
+  const op = { kind: 'dot', x, y, width, mode: strokeMode, color };
+  activeDetailStroke.ops.push(op);
+  drawDetailOpLive(op);
+}
+
+function commitDetailStroke() {
+  if (!detailVectorValid) {
+    activeDetailStroke = null;
+    return;
+  }
+  if (!activeDetailStroke || activeDetailStroke.ops.length === 0) {
+    activeDetailStroke = null;
+    return;
+  }
+  if (detailVisibleCount < detailStrokes.length) detailStrokes.splice(detailVisibleCount);
+  detailStrokes.push(activeDetailStroke);
+  detailVisibleCount = detailStrokes.length;
+  activeDetailStroke = null;
+  scheduleDetailRender();
+}
+
+function resetDetailVectors(valid = true) {
+  detailStrokes = [];
+  detailVisibleCount = 0;
+  activeDetailStroke = null;
+  detailHistory = [];
+  detailRedoCounts = [];
+  detailVectorValid = valid;
+  scheduleDetailRender();
+}
+
+function resize() {
+'''
+          if helper_anchor not in s:
+              raise SystemExit('resize anchor not found')
+          s = s.replace(helper_anchor, helpers, 1)
+
+          save_old = """function saveHistory() {
+  history.push(ctx.getImageData(0,0,drawCanvas.width,drawCanvas.height));
+  if (history.length > 30) history.shift();
+  redoStack = []; // a new stroke invalidates whatever redo could have restored
+}
+"""
+          save_new = """function saveHistory() {
+  history.push(ctx.getImageData(0,0,drawCanvas.width,drawCanvas.height));
+  detailHistory.push(detailVisibleCount);
+  if (history.length > 30) {
+    history.shift();
+    detailHistory.shift();
+  }
+  redoStack = []; // a new stroke invalidates whatever redo could have restored
+  detailRedoCounts = [];
+  scheduleDetailRender();
+}
+"""
+          if save_old not in s:
+              raise SystemExit('saveHistory anchor not found')
+          s = s.replace(save_old, save_new, 1)
+
+          start_old = """function startStroke(e) {
+  drawing = true;
+  points = [getPos(e)];
+"""
+          start_new = """function startStroke(e) {
+  drawing = true;
+  beginDetailStroke();
+  points = [getPos(e)];
+"""
+          if start_old not in s:
+              raise SystemExit('startStroke anchor not found')
+          s = s.replace(start_old, start_new, 1)
+
+          seg_old = """  ctx.moveTo(renderPrev.x, renderPrev.y);
+  ctx.lineTo(x, y);
+  ctx.stroke();
+  ctx.globalCompositeOperation = 'source-over'; // always reset immediately after
+"""
+          seg_new = """  ctx.moveTo(renderPrev.x, renderPrev.y);
+  ctx.lineTo(x, y);
+  ctx.stroke();
+  recordDetailSegment(renderPrev.x, renderPrev.y, x, y, smoothedWidth, mode, currentColor);
+  ctx.globalCompositeOperation = 'source-over'; // always reset immediately after
+"""
+          if seg_old not in s:
+              raise SystemExit('stroke segment anchor not found')
+          s = s.replace(seg_old, seg_new, 1)
+
+          dot_old = """    ctx.beginPath();
+    ctx.arc(p.x, p.y, width / 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+  }
+  saveHistory();
+}
+"""
+          dot_new = """    ctx.beginPath();
+    ctx.arc(p.x, p.y, width / 2, 0, Math.PI * 2);
+    ctx.fill();
+    recordDetailDot(p.x, p.y, width, mode, currentColor);
+    ctx.globalCompositeOperation = 'source-over';
+  }
+  commitDetailStroke();
+  saveHistory();
+}
+"""
+          if dot_old not in s:
+              raise SystemExit('stroke end anchor not found')
+          s = s.replace(dot_old, dot_new, 1)
+
+          apply_old = """function applyView() {
+  const t = `translate(${view.x}px, ${view.y}px) rotate(${view.rotation}deg) scale(${view.scale})`;
+  refCanvas.style.transform = t;
+  if (refDomLayer) refDomLayer.style.transform = t;
+  guideCanvas.style.transform = t;
+  drawCanvas.style.transform = t;
+  if (guideHandleLayer) guideHandleLayer.style.transform = t;
+}
+"""
+          apply_new = """function applyView() {
+  const t = `translate(${view.x}px, ${view.y}px) rotate(${view.rotation}deg) scale(${view.scale})`;
+  refCanvas.style.transform = t;
+  if (refDomLayer) refDomLayer.style.transform = t;
+  guideCanvas.style.transform = t;
+  drawCanvas.style.transform = t;
+  if (guideHandleLayer) guideHandleLayer.style.transform = t;
+  scheduleDetailRender();
+}
+"""
+          if apply_old not in s:
+              raise SystemExit('applyView anchor not found')
+          s = s.replace(apply_old, apply_new, 1)
+
+          gesture_old = """  } else if (activePointers.size === 2) {
+    drawing = false;
+    const pts = [...activePointers.values()];
+"""
+          gesture_new = """  } else if (activePointers.size === 2) {
+    if (drawing && activeDetailStroke && activeDetailStroke.ops.length) {
+      commitDetailStroke();
+      saveHistory();
+    } else {
+      activeDetailStroke = null;
+    }
+    drawing = false;
+    const pts = [...activePointers.values()];
+"""
+          if gesture_old not in s:
+              raise SystemExit('two-finger gesture anchor not found')
+          s = s.replace(gesture_old, gesture_new, 1)
+
+          undo_old = """undoBtn.onclick = () => {
+  if (history.length > 1) {
+    redoStack.push(history.pop());
+    ctx.putImageData(history[history.length - 1], 0, 0);
+  }
+};
+redoBtn.onclick = () => {
+  if (redoStack.length > 0) {
+    const state = redoStack.pop();
+    history.push(state);
+    ctx.putImageData(state, 0, 0);
+  }
+};
+clearBtn.onclick = () => {
+  ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+  history = [];
+  saveHistory();
+};
+"""
+          undo_new = """undoBtn.onclick = () => {
+  if (history.length > 1) {
+    redoStack.push(history.pop());
+    if (detailHistory.length > 1) detailRedoCounts.push(detailHistory.pop());
+    detailVisibleCount = detailHistory.length ? detailHistory[detailHistory.length - 1] : 0;
+    activeDetailStroke = null;
+    ctx.putImageData(history[history.length - 1], 0, 0);
+    scheduleDetailRender();
+  }
+};
+redoBtn.onclick = () => {
+  if (redoStack.length > 0) {
+    const state = redoStack.pop();
+    history.push(state);
+    if (detailRedoCounts.length > 0) {
+      const detailCount = detailRedoCounts.pop();
+      detailHistory.push(detailCount);
+      detailVisibleCount = detailCount;
+    }
+    ctx.putImageData(state, 0, 0);
+    scheduleDetailRender();
+  }
+};
+clearBtn.onclick = () => {
+  ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+  history = [];
+  resetDetailVectors(true);
+  saveHistory();
+};
+"""
+          if undo_old not in s:
+              raise SystemExit('undo/redo/clear anchor not found')
+          s = s.replace(undo_old, undo_new, 1)
+
+          load_old = """        ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+        ctx.drawImage(loadImg, 0, 0, drawCanvas.width, drawCanvas.height);
+        saveHistory();
+"""
+          load_new = """        ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+        ctx.drawImage(loadImg, 0, 0, drawCanvas.width, drawCanvas.height);
+        // Older saved PNGs have no stroke geometry to replay at retina detail.
+        resetDetailVectors(false);
+        history = [];
+        saveHistory();
+"""
+          if load_old not in s:
+              raise SystemExit('saved drawing load anchor not found')
+          s = s.replace(load_old, load_new, 1)
+
+          p.write_text(s)
+          PY
+      - name: Validate standalone JavaScript and retina hooks
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          s = Path('hand-selector-standalone-test.html').read_text()
+          required = [
+            'retina-detail-display-v2-standalone',
+            "detailCanvas.id = 'detailCanvas'",
+            'const DETAIL_ZOOM_THRESHOLD = 1.12;',
+            'recordDetailSegment(renderPrev.x, renderPrev.y, x, y, smoothedWidth, mode, currentColor);',
+            "drawCanvas.style.opacity = '0';",
+            'scheduleDetailRender();'
+          ]
+          for item in required:
+            if item not in s:
+              raise SystemExit('Missing retina hook: ' + item)
+          start = s.index('<script>') + len('<script>')
+          end = s.rindex('</script>')
+          Path('/tmp/standalone.js').write_text(s[start:end])
+          PY
+          node --check /tmp/standalone.js
+      - name: Commit exact standalone test
+        run: |
+          if git diff --quiet -- hand-selector-standalone-test.html; then
+            echo "No standalone changes needed"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add hand-selector-standalone-test.html
+          git commit -m "Add retina-sharp zoom to standalone hand test"
+          git push
