@@ -1,0 +1,95 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Ink Sketchbook — Shopping Sketch Playback</title><body><p>Loading shopping sketch playback…</p><script>
+(async function(){
+  try {
+    let html = await fetch('./hand-selector-standalone-test.html', {cache:'no-store'}).then(r=>{if(!r.ok)throw Error('Sketchbook could not load');return r.text()});
+    html = html.replace('const recordTargetLongSide = isPhoneRecording ? 1920 : 2160;', 'const recordTargetLongSide = 1280;').replace('const recordMinShortSide = 1080;', 'const recordMinShortSide = 720;');
+    html=html.replace('  smoothedWidth = smoothedWidth === null ? targetWidth', '  if (Number.isFinite(e.playbackWidth)) targetWidth=e.playbackWidth*getDisplayDpr();\n  smoothedWidth = smoothedWidth === null ? targetWidth');
+    html=html.replace('  const isPhoneRecording = /iPhone|iPod/i.test(navigator.userAgent) || Math.min(screen.width, screen.height) < 600;', '  const portraitWidth=Math.min(recordSourceRect.width,recordSourceRect.height*.84); recordSourceRect.x+=(recordSourceRect.width-portraitWidth)/2; recordSourceRect.width=portraitWidth;\n  const isPhoneRecording = /iPhone|iPod/i.test(navigator.userAgent) || Math.min(screen.width, screen.height) < 600;');
+    html = html.replace('if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {', 'if (false) {');
+
+    html=html.replace('function endStroke() {','function endStroke(playbackDotWidth) {').replace(': minW + pressure * (maxW - minW);', ': Number.isFinite(playbackDotWidth) ? playbackDotWidth * getDisplayDpr() : minW + pressure * (maxW - minW);');
+    const packed='nwKJA5MCBQAcAT0AAvkM9wf/CAQFACYBKwD++Qf1Cv4IBAUAPQEcAP4EAQYFBgQBAgA+ARwABgUCAEQBIgACCgMATQEjAP8EBQQFAE4BHgD++Ab5CP0HAwIAVQEcAPoCAgBTASQAA/kCAFQBKQAHBgMAWAEaAAD+BP0DAFkBGwADAAH8BABpAR4A+wH7BfwLAgBcARUABfwCAGsBFQDzAQMAbAEUAPz8+gADAGYBLgAA/AP7AgBxARkA+gUDAHYBKQAAAvYIAgB2ASAA/foCAHcBJwD/+gUAdwEYAAP9BgAEAwADAgB3ARkACAIEAIQBHwD+AgADBQYDAIUBHwADBv8FBACNAS8AAv4A9/37AwD4AEMA/vwC+QMAAgFXAP0D/gcCAP4ASAAKAgMAAwFWAAH7BPoDAAYBYQD+/v/5AgAJAUoACP0EABIBSAAAA/wH/wgCAA4BWwAG/gIAHAE/APYIAwAZAU4A/QP+BwIAIAFRAPsHAwAvATkA+AH2BAMAIAFRAP/7EO8CACABUQAM+gIAIAFbAAr7AwArAVUAAP0D/gMAPQFGAPoC9wgCADkBWgD1/AMAQAFHAP0E8wcCADkBMQD7BAMAOwE0APwD/f8CADsBPwD5AAIAPAE+AAX3AwA+AT8AB/8EBAMAQQFGAAQAA/0CAEIBNAAG/AIATwEwAPoAAwBKAUEAAPkG+gMATQFEAAUGBwIDAE0BQwAG/AP2BABYATYABgcEAAMEAgBcATMACgACAF0BVwD/FAMAXAFNAAIDAAYCAGQBQwD6BwIAZAFLAPr/AwBkAXQAAPD78wIAZQFDAAAHAwBqAVkA/v799QIAbQFBAPkAAwBpATQAAggCAgQAcwFQAP0EAAj8AwMAbAE0AAQDBf8CAHkBPAD2AgIAcwFHAAEIAwB0AVAABAMCBQIAdAFGAA39AgCDAT0A9v8CAHkBPAAN9AQAewFYAAQBAgIAAwQAjAE6AAAE/QX4AAIAhwE5AP/3AgCNAS8A/wkFAI0BbAAKAQj7AvX8+QcAqwCSAP36APgD/QMCAgj8BwUA5QB8APv7//gH9gb+AwDoAJAA//AF+AQA9wCKAPn2APcE+gIA+ABjAP0HAwD2AGsABf8F/AQA/QB5APv9AP3+/gMABAGEAPkG+gACAP0AbwD6AQMACAFuAPj//gICAP4AegAGCgIA/gB4AAD4AgAHAWQABwQCAAcBYQAG+gUACQGEAAL+AP39/AH6AgAJAY4AAPcCAA0BcgAA+gMAHAFhAPwA+AcDABkBaAD7Avz+AwAqAXAA+vj7AQQAUgGFAP37+wD+AgIAWwFsAPr/AgBcAW0ABQgDAGEBdgD/DwICAgBnAYMA/vICAG4BlgD67gMAdAF/APr6/e0CAHQBgAABCAMAdgF+AAL1Av4CAHkBXQACEwIAgAFfAPr9AgB8AYAAAAYCAHwBfgAC+gMAfwF2AP/8/v8CAIQBgAD89wMAgAGSAAP6APoCAIEBXwAGCAQAiAFtAAEM/wX9AgYArACrAPsA+vr/+gX+BgQCAKwAoQAA8gIArQCqAAD6BQCwAKsACPwC9vz/+AcDAK8ArAABDAICBgCzALoAB/kEAf4K+QT9/wYA1AC1AAD4+vz9AwAHBAMEAPcAigD0DwAHBgYEAAYBoAD9+wD6BfoEABYBogD//fj4/PgDABIBuwAE8gD3AwAXAaMAAwADAwIAJwGQAPr4AwApAa0ABQADAgMAMwGWAAcCBf8EADMBrwAE/gwAB/4CAFMBjgD++gIAUQGqAAIJAgBTAagABgEEAGIBlgD7AwEH+wEDAFoBqQAM+wX4AwBaAaoABAUFAQIAYwGVAADzAgBsAZcA+P8EAGoBugAJBQb8A/YDAGwBnAAGBwYDAgBtAZkABwUDAG8BlwAFAQEFAwB7AZYA+vgA/AIAfAGlAPr5AgB5AacAAwoDAIMBnAD+APv7AwB+AacAAAj+AgIAfwGmAA0FAgCAAZMABggEAIQBnQAAAwgHAQMCAIYBmwALBAQAjgHRAAn2APT28AQAmAGjAAYHAQr+AwYARQD3APntAvcG+wYADQoFAH8A3AD5Avv9APwH+gYAhwDFAPn8+AD8BAAFBgYCAIEA0gD6/wIAigDNAPYPBACAAN0AAgQGAAj4AwCKAM0A/v4A+wYAlgDFAAH6/Pn9APkH/wUDAJMA2gAABQIDAgCZANEA/QYDAJkA0AAB+f39AgCaANEACQIFALAAxAD4//v3Bf4JBwMAsgDMAPb/+wgCALAA3wD2AwIAsQDEAAIHAgC7ANwA+QECALwA2AD6+QUAvADYAAT9AvX7//kIBQDQANoA+Pn9A/4G+wQCAM8A3gD3BQcA1ADHAP0D+v78/AD7A/8GBAIAzwDeAAUEAgDRAMEA//YCANQA0wD9BgIA1gDKAP8IAgDVALYABgACANYA0wAGBgIA1gDeAAb7BADZAMkAAgIEAAn9BQDZAMgACvQG/wMG/AcCAOIA2QD6AAMA5wDhAP/8/f0FAOMA2AAB/gb/BPv/+gQA7gDJAAn+DvMMAQMA/gDxAAHxAv0CAAIB1QD/CQQAEgG8AP8F8gv/CAUAAgHfAA0LEAIO+Qn3AgAxAbYA/woDADABwgABBAYDAwAxAcEADP8KDwMAOAHKAAEN/gQEAEcB0AD5Dv0N/AMDAEIB+wAK4gj2BABUAdIAAP78/vgBBABUAbQAAgf8Bv0ABABVAdMACAMJCCA9AwBPAAgB/f/58gUAWADjAPgB/QP+CQMFAgBQAAcB/fkEAFkA4wABBPkF+wkDAFwAGgH79/n4AwBcAPkA/QYBBQQAWgDhAAUBDQ0KEgIAXwD+APwFAwBbAAUBAQUE/wIAZAAQAQD6BABlABABBvgH/gP9AgB0AAIB+f8CAHcAAwEFBgIAggAMAQcQBACDAAsBBP4FBQUBBQCEAOwAAgAFBQEE/gIFAIoA/QD+AgEDBQEC/gUAmgDsAPr//f0A/gT8AgCYAPUA+fwCAJIADgEA8wIAnwDiAPYAAwCXAPsACQQD/wIApQDyAPr/AwCkAP4ABQQJAQIArgDwAAIIAgCuAO4ABfwCALYA8AD9+gIAvADmAPcEAwCzAAQBBAYHAgIAtQD3AAQFAgC+AOkA+QcDAMQA9wD8APoFAwC9AAAB/wMDCAIAvQAAAQYDAgC+AOIABwEDAMYA8wD8/P77AgDFAPgA/wkEAMUADQEBBAQEBQECAMUA6QAICQIAxwAGAQb+AwDQAA0B+QD+/gMAygD1AP8GBQcCANgA8gD1AAIAzwAEAQMGAwDbAPAA+/n/+gIA1gAKAQUFAgDgAAAB9wMCAOEA/wD99AIA3gDxAAb7AgDlAOoAAvkDAOcADwH+/QH2AwDtAPkAAAT6BAQA8wD0AAL4/vb1AAIA7QD4AAb+BAD0APcAAAMDAwUAAwD8APIA/QD8AwIA/QD+AP0NAwD/APMAAgEBBQIADAEIAfv6AwAHAREBAP0F+wYADQEIAQb/AwMBBf4D/QADAB0BfAEOuQ65AwA3AeIAAAoCAgIAOwEZAQfjAwBkATIB8dj/9wMAZAESAf/5AvMCAGAAHwEMEAMAaAA/AQD7A/wCAG0ALwEMDAIAcgA9Afv4AwByACMB//kC+gIAewAPAf0GAwB6ADsBEPMKAgMAfAAyAQPzCfkCAH8AHAEIAQIAjwAdAQPzAwCQACQBBQUCBQMAlAAxAQADBwQEAJgALwERAwcHAQUCAKIARwH58wMA0AAWAQoHA/8CANIAEwEI/gIA2wASAQIJAgDcABABCQADAOcAIwH7//37AgDmABEB/QkCAO0AGgH3AQMA5gBCAQT9A/oDAOgAJAECAwQBAgDvABAB+QACAO4AGwH9BgMA+gAxAfz///0DAPgAPAEE+P/9AgD6ACsB//gCAPkADwEDBgIA+gAiAQYBAwD8ABwBBAMBAwIA/AAWAQUEAwD9ABUBAv4H/wQACAEeAQIG/QP6/QYAEQETAQIE/wX6APz8APsCABABEgH5AAMAJgF3AQbWDs0DAEoBSwH32vv1AgBkARMBAR8CAGUBMwEMIQMAhgEcAf4CAwMEAKUBTwH6+ADx6ekDAGMAZwHVNtQ1AwBjAGcB++IK+AMAYwBnAQL/CQQCAGgAUQEF+gIAaQBAAQj+AgB2AG0B+/gEAHEAZAEC9QP7CPoCAHMAPwEG/QMAcwBIAQoCAQMEAHcAbgEIABP2CAIDAKIARwHzBeoCBACaAGYBA/4HAAwJAwCiAEcBCvwD/AIApwA8AQgCAwDCAEwB9v/4/AQAwgBMAQD79P37+wIAuQBlAfn/AgC3AF4BBwEDALoAZQEE/gD8AgDBAFYB+v8DAMIAVwEBBPsEAgDCAEwBBwYCAMMAVgEG/gQA3QBSAfz/+gL3AAIA3QBaAfoHAgDmAEIB+wsCAOIATgEI/wMA5wBqAf38//kDAOYAQgH//gL7AwDoAGoBAfr++wMA9gBpAfn1++8CAOoATQEI9QIA9wA9AfsFAwD0AEkBAPv+/gIA+ABPAf8ZAgD5AE0B//EFABABfgH2+wHy9+b8/QQAQgFiAQT0APsD+wIAUwFnAfflBAByAVQBBAEAA/4CAgB0AVsBECgFAJcBcwH3Awzw//78AQQAlQFRAfwA//4J9AQApwFPAQwDBAT+DgMAtAFlAf0A+wQFALkBggEH8v35+v7++wMANQD0ASPHJMcDAG8AawECAwQAAwCFAHgB+Qb+BAIAggCFAfr9AgCGAHcBCPYCAIYAhAED9wIAigDJARi/AwCTAIgB/QH6/QIAigCFAQX1AwCPAHYBAP4E/QIAkAB3AQT7AwCTAIcBAP0D/AIAlABwAQX6AgCXAIcBAPkEAJcAfwEF8QD8/v4DAJgAiAEG/gMBAwC2AJEB9kb2RQIApQCBAQP6AwCwAIUB+wD//gIAqgCBAQH6AgCyAHQB/xACALEAbQEG/wMAsgCFAQQBAQUCALMAcwEGAAIAvwCBAfvzAwC7AG4BBAIIEQIAzAC9AfnGAgDOAI4B+vQDAOgAawECAgAIBAD3AGoBAQkFCgEGAgD8AJkBAusEAAUBkwEB/Pv2/v8CAAsBlgEF9AIAEAF/AQAJAgAcAX0B9QECAB0BfgH6GgMAIgGJAf4C/hECACMBiAEB9QMAJQF9AQcABvwFACsBdgEF+Qn8CAP/BQIAKwF2AQcCAgA/AXQB9QUCADoBmAH97QMAOAF9AQICA/0DAD0BfAH+/v0CAwBGAYEB+wIGJwMAQQF0AQf/Bf0DAFIBfgH+Avv/AgBSAXwB/PQCAFkBfAH6AQIAWgF7AfvyAgBbAYUB/PsCAFwBhAH++AMAXAGGAQYLBBECAIQBbAEI/AQAjAGUAf75+/oA/QMAjQGVAQ4CBP0EAJ8BkwH9+g3yCf0FAKABlAEjJQYMAg4MEwQAuAGDAR42GhT/CQMAzAC/Af8LAxEDAM0AvgEh9h/zBAD3ANQBFvYE/AL3AwAHAaAB/fgB/QIACgGXAQIJAgANAaABCfkCAA4BpwEH/wMAFAG7AQDxAv4DABUBvAEEHv0VAgAXAZ8B/wYEABcB8AEM/gb7+cUDAB8BtgH7AAL3AgA8AaIBAQcDAFsBuwHuEf8DAwBaAakBCPoDAAMAiAECAu/R79ACAIwBlgEVLQIADADTARYRAwA1APQB+v329wIAzgDcAQEeBgDPANsBCAER/AYIBvwC+QUA8wDNAf79/QD7BAACAwAgAV0CE70TvQIALwHKAQ0IAgA6Ad0B9wACAEIByAEBCgIAqgHiAfjoAwDKARYC8t7p1QIA1gH9AQPvAgDcAdwB+woFAOAB2wH//Pz+/gQDAwMA4gH2Af72/v4CAOEB5AH/+QIA5gHqAfv7AgDnAfUB//YCAOcB6gEG/wQA7AEDAgT8/e4B/QMA8AHoAf7yAf0DAPkB8QH8+vz+AgARAgYCIecDADMC7QEqOTJUBAA1APQB+A4AAgIBAgAwAAYCBgUDADAABQIh/hIFAwB8ACoC6wbQ2wMAZgAJAi8LDAgGAH0AKwL8DAIGRQgQ//64AwDcAAEC+wD4+gQA7AAUAuxD/BkgAAMA3AABAgP9AwECANwAAQIGAAIA7wABAvUAAgDvAAgCAfoDAPUAAAIABf0EAwAGAfoB9QL6AwYAAQF0AgP//toF1//2Av4DAAMB8wEH/QcBAwAIARgC/v4B+QIACAENAv/uAgARAfMB9gYDAAoBFwIB+/78BAAeAV0C9uX53P37AgA5AfIB/AkCAHwBFAL8DgIAfAEkAgvfAgB9ARICBeoDAIoBEgL/Mv8yAwCwAWYC7M/szgMAywEXAgAH/QoDANEBBAL9Df0FAwDRASEC//sE/QMA0QEDAgD+BP0CANYBBQL+FAIA1AEZAgEHAgDWAQQCAPoCAOIB9wECDwIA6wEFAvkBAgDmAR8C/ucCAOsBAwL88wIA7gELAv76AgDtAQwCAA8DAO4BDAIFBAIJAwDuARwCBQAC/gMABQIOAvwG9QYDAAUCDQL59P33AwAAAvUB/vz9AAMADAIKAv0D/QAFACsCAwIHAf8H/AH8/QMAfQAqAiP4AvsDAG4BOwL8A/sJAgB7ASwC7EgCAGkBTQIG7wIAdgEsAvkPBQCxAWYCBesC3QP9Df8CANEBIgL/BgIA1QEhAgEGAwDXASgCAwAJ+wMA3AFkAgjI//cCAOcBHwIG/QIA+wEoAgQRAwAFAicC/v75AgQA/gEgAgf+AwP/BgQAJAK8AvL19Mf1xwIABgIoAggkBAAUAkkCAP4F/gIDBQAjAiQC+wQCBgj+APsCACcCRgL6AwIAKwJAAvwFAwBHApIC6rP9/wUAPgJGAgQF/Ab6/AP5BQBMAiMC+v79BwMDBQACAPUAcQIDBwMAAQF0Avz9+f8CAAEBdAL4BAQAHwFeAgAG9hAADAMAKQGEAhTwG+ICAEMBYgL0CQIARgFgAgv4AwBZAZkCA/IK6gIAaAF1AgQJAgCxAWcC/w8CAA8CTQIBBgMAJQK8AgDv7KkDABICUwID/wP8AwAgAkoC/QT9AAUAUAJ4Av36BvsEB/0EBQBdAkkC/AYDBAQAA/oGAHUCawL+//sGAwUEAAP8AwAUAYEC8//x+QUAFAGRAvsM8RX/CQMQAgAVAYICAAcDABYBigIBBP4CAgBaAX0C6i0CAFMBxgIG1QMAUwGlAgL3A/4EAIcBdwL4APkG9AEEAGwBfgIBCwcSARIEAIgBeAICCAcAHvcFALABeAL7LwEi/gwCAgIASQKcAv73BQBIApICAwACAgAG/QICAEoCnQIEFgIAaQKbAuYYBABSAsECHOsX5AL6BwBoApoC/P4A+wP9AwACAgAGAwCBAooC/QTvCwQAgQKIAgL8AwACAgQAiQKGAgT+BfsA/gIAEQG5AvUSAwAzAdYC7/jlAAMASgHXAgH6B/YCAGEBxgLzAQMAdAHPAvMJ7wICAGgBwAIC+AIAcgG6AvcHBQB1Ac4CCvP8+AH5+vwCANIByAI86QMA3wHaAkjn/vwDADYC+gIj9PjUAgBOArQCAw0GAAYB9QL2/Pn4A/j99gf7AwAHAfYC+B/4DwMA/QDTAv8PAgUCAAcB7QL5/gIABwH1AgH5BQAvAfYC/frw+PT/+AUCAC8B9wL6BwMAKgH/AhL+A/YCAEIB3wLz9wMAPwHyAv39BfgDAEMB4AIDDPoGAgBJAdgC+gcCAFQB2gL3/gMAZgEIAwH17t4EAH8B+QL7+v30/ukDAH8B+gIABAQFBACEAQIDAfv9/P4AAgCyAdUCCPwDALMB2gITCRj3BADfAdsCADgDAgj+BAA2AvoC9wDgCd4PBQA2AvoC+gXbEOcH+f0FAO4AKAP++/z//gIBCAIA9gAlA/oDBAAIATED//z7+/b9AwAPATYDCOcO6AUAZgEXA/sA+AgBAwgABABuASkD/AL9BfsBBABlAQkD/gEABAQIAgBjASIDBPgCAGoBJQP6AAMAbQETA/z8//wEAH0BCgP6/PsA9wQCAHUBHwP3AAMAbgETAwP9BAICAHQBFAP6AQIAfQELA/gHAgCHARwD9v0CAH4BCgME+wIAhwERA/r/AwCIARAD//n9+wMAiAEdA/8NAgQCAIsBFQP+BgUAigEcAwMAAv4A/fz+AwCKAS4DA/0A/QQA2ABJA/cD+QcAAwUA5gAtA/f/9AgBBAoBAwDxAFAD+fv1/QMA5gBDA/0C/f8CAOkANAP3BAIA6QA5A/wFAgDnAEMDBwIDAOoAOQMFAQgFAwDvADADBAQGAAIA9ABLA/v7AgD2AEUD+QADAPoAMwP9+/kBAgD5AFYD+fsDAPcARgMABP4BAgD4AD4DAvoDAAABPQME/AD+BAAMAUYD/P/8+/4AAwAFAW4DAe8G6gIABgE2AwYEAgAIATMDBgMEAA8BOQMDB/8D/AMDAFgBQAP/BQMFAwBZAUADBgQc/wMAYgExA/kH/gcFAF0BTAMUARP7Bvb/8QIAYQErAwEGBQDVAGoD8Pz8/AD4Bv0CAM8AWAP5/wMA1QBZAwYADgcDANYAawMABAQDBADaAHMDAAIEAwX+AwDkAGwD/v36AQIA6wB2A/kAAwDlAG0DBgMBBQUABQFvAwEG+wf6APL6';
+    const code = `
+(() => {
+  function unpack(s){const b=Uint8Array.from(atob(s),c=>c.charCodeAt(0)),d=new DataView(b.buffer);let o=0;const W=d.getUint16(o,true);o+=2;const H=d.getUint16(o,true);o+=2;const n=d.getUint16(o,true);o+=2;const paths=[];for(let k=0;k<n;k++){const len=d.getUint16(o,true);o+=2;let x=d.getUint16(o,true);o+=2;let y=d.getUint16(o,true);o+=2;const p=[[x,y,5]];for(let i=1;i<len;i++){x+=d.getInt8(o++);y+=d.getInt8(o++);p.push([x,y,5]);}paths.push(p)}return {W,H,paths}}
+  const art=unpack('${packed}');
+  paperColorPicker.value='#ffffff';
+  paperColorPicker.dispatchEvent(new Event('input',{bubbles:true}));
+  paperColorPicker.dispatchEvent(new Event('change',{bubbles:true}));
+  colorPicker.value='#000000';
+  colorPicker.dispatchEvent(new Event('input',{bubbles:true}));
+  colorPicker.dispatchEvent(new Event('change',{bubbles:true}));
+  function preparePlaybackPaths(paths){
+    const prepared=paths.map((source,index)=>{
+      let path=source.slice();
+      let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity,length=0;
+      for(let i=0;i<path.length;i++){
+        const p=path[i]; minX=Math.min(minX,p[0]);maxX=Math.max(maxX,p[0]);minY=Math.min(minY,p[1]);maxY=Math.max(maxY,p[1]);
+        if(i)length+=Math.hypot(p[0]-path[i-1][0],p[1]-path[i-1][1]);
+      }
+      if(path.length>1){
+        const first=path[0],last=path[path.length-1];
+        const verticalSpan=maxY-minY,horizontalSpan=maxX-minX;
+        const chord=Math.max(1,Math.hypot(last[0]-first[0],last[1]-first[1]));
+        const curveRatio=length/chord;
+        const naturalDownStroke=verticalSpan>18 && verticalSpan>horizontalSpan*1.15 && curveRatio<1.75;
+        if(naturalDownStroke && first[1]>last[1]) path.reverse();
+      }
+      const startY=path[0]?.[1]??minY;
+      return {path,index,minX,minY,startY};
+    });
+    prepared.sort((a,b)=>{
+      const bandA=Math.floor(Math.min(a.minY,a.startY)/52),bandB=Math.floor(Math.min(b.minY,b.startY)/52);
+      if(bandA!==bandB)return bandA-bandB;
+      return bandA%2===0 ? a.minX-b.minX : b.minX-a.minX;
+    });
+    return prepared.map(item=>item.path);
+  }
+  const playbackPaths=preparePlaybackPaths(art.paths);
+  const bar=document.createElement('div');
+  bar.style.cssText='position:fixed;bottom:12px;left:12px;z-index:2000;background:white;border:1px solid #d8d3c6;border-radius:10px;padding:10px;box-shadow:0 3px 14px #0001;font:13px system-ui;display:flex;align-items:center;gap:10px';
+  bar.innerHTML='<button id="playShoppingSketch" style="padding:9px 14px">Draw & record shopping sketch</button><span id="shoppingStatus" role="status">Ink playback · white canvas · reference hidden</span>';
+  document.body.appendChild(bar);
+  const play=document.getElementById('playShoppingSketch'),status=document.getElementById('shoppingStatus');
+  const sleep=ms=>new Promise(r=>setTimeout(r,ms)),frame=()=>new Promise(r=>requestAnimationFrame(r));
+  function eventAt(p,phase,index){
+    const rect=drawCanvas.getBoundingClientRect(),source=recordSourceRect||{x:0,y:0,width:drawCanvas.width,height:drawCanvas.height};
+    const ps=Math.min(source.width*.78/art.W,source.height*.86/art.H);
+    const inkX=source.x+(source.width-art.W*ps)/2+p[0]*ps,inkY=source.y+(source.height-art.H*ps)/2+p[1]*ps;
+    const width=Math.max(.7,Math.min(5.2,5*ps/getDisplayDpr()*(.96+.08*Math.sin(phase*10+index))));
+    return {clientX:rect.left+(inkX/drawCanvas.width)*rect.width,clientY:rect.top+(inkY/drawCanvas.height)*rect.height,pointerType:'pen',pressure:.55,playbackWidth:width,pointerId:988};
+  }
+  async function stroke(path,index){
+    startStroke(eventAt(path[0],0,index));
+    if(path.length===1){endStroke(eventAt(path[0],0,index).playbackWidth);await sleep(55);return}
+    const length=path.slice(1).reduce((v,p,i)=>v+Math.hypot(p[0]-path[i][0],p[1]-path[i][1]),0),seconds=Math.max(.10,Math.min(1.8,length/650)),begin=performance.now();let last=0;
+    while(true){const progress=Math.min(1,(performance.now()-begin)/(seconds*1000)),end=Math.min(path.length-1,Math.floor(progress*(path.length-1)));for(let i=last+1;i<=end;i++)continueStroke(eventAt(path[i],i/(path.length-1),index));last=end;if(progress===1)break;await frame()}
+    endStroke();await sleep(35);
+  }
+  play.onclick=async()=>{
+    if(play.disabled)return;
+    if(getComputedStyle(document.getElementById('lockScreen')).display!=='none'){status.textContent='Unlock Ink Sketchbook first.';return}
+    if(mediaRecorder&&mediaRecorder.state!=='inactive'){status.textContent='Stop the current recording first.';return}
+    play.disabled=true;status.textContent='Preparing silent recording…';
+    const settings=[colorPicker,paperColorPicker,thicknessSlider,minSlider,maxSlider,wobbleSlider,streamlineSlider,recordingHandSelect,recordingHandSize],saved=settings.map(el=>el.value);
+    try{
+      document.getElementById('recordingResultPanel')?.remove();clearBtn.click();resetZoomBtn.click();drawModeBtn.click();
+      const values=['#000000','#ffffff','1','0.8','7','0.22','10','cream','110'];
+      settings.forEach((el,i)=>{el.value=values[i];el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}))});
+      await frame();
+      refImage=null;refVisible=false;clearBackgroundVideo(false);recordReferenceInVideo=false;drawRef();
+      const hand=recordingHands.cream;if(!hand.ready)await hand.img.decode();
+      await recordBtn.onclick();if(!mediaRecorder||mediaRecorder.state!=='recording')throw Error('Video recorder did not start.');
+      status.textContent='Drawing shopping sketch · reference stays hidden';
+      for(let i=0;i<playbackPaths.length;i++)await stroke(playbackPaths[i],i);
+      await sleep(700);stopRecording();status.textContent='Shopping sketch finished · play or download your recording';
+    }catch(error){if(drawing)endStroke();stopRecording();status.textContent='Playback stopped: '+error.message}
+    finally{settings.forEach((el,i)=>{el.value=saved[i];el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}))});play.disabled=false}
+  };
+})();
+`;
+    html=html.replace('</body>', '<script>'+code+'<\/script></body>');
+    document.open();document.write(html);document.close();
+  } catch(error){document.body.textContent='Could not load girl playback: '+error.message}
+})();
+</script></body></html>
