@@ -1,0 +1,60 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Ink Sketchbook — Girl Sketch Playback</title><body><p>Loading girl sketch playback…</p><script>
+(async function(){
+  try {
+    let html = await fetch('./hand-selector-standalone-test.html', {cache:'no-store'}).then(r=>{if(!r.ok)throw Error('Sketchbook could not load');return r.text()});
+    html = html.replace('const recordTargetLongSide = isPhoneRecording ? 1920 : 2160;', 'const recordTargetLongSide = 1280;').replace('const recordMinShortSide = 1080;', 'const recordMinShortSide = 720;');
+    html=html.replace('  smoothedWidth = smoothedWidth === null ? targetWidth', '  if (Number.isFinite(e.playbackWidth)) targetWidth=e.playbackWidth*getDisplayDpr();\n  smoothedWidth = smoothedWidth === null ? targetWidth');
+    html=html.replace('  const isPhoneRecording = /iPhone|iPod/i.test(navigator.userAgent) || Math.min(screen.width, screen.height) < 600;', '  const portraitWidth=Math.min(recordSourceRect.width,recordSourceRect.height*.66); recordSourceRect.x+=(recordSourceRect.width-portraitWidth)/2; recordSourceRect.width=portraitWidth;\n  const isPhoneRecording = /iPhone|iPod/i.test(navigator.userAgent) || Math.min(screen.width, screen.height) < 600;');
+    html = html.replace('if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {', 'if (false) {');
+    html=html.replace('function endStroke() {','function endStroke(playbackDotWidth) {').replace(': minW + pressure * (maxW - minW);', ': Number.isFinite(playbackDotWidth) ? playbackDotWidth * getDisplayDpr() : minW + pressure * (maxW - minW);');
+    const packed='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';
+    const code = `
+(() => {
+  function unpack(s){const b=Uint8Array.from(atob(s),c=>c.charCodeAt(0)),d=new DataView(b.buffer);let o=0;const W=d.getUint16(o,true);o+=2;const H=d.getUint16(o,true);o+=2;const n=d.getUint16(o,true);o+=2;const paths=[];for(let k=0;k<n;k++){const len=d.getUint16(o,true);o+=2;let x=d.getUint16(o,true);o+=2;let y=d.getUint16(o,true);o+=2;const p=[[x,y,5]];for(let i=1;i<len;i++){x+=d.getInt8(o++);y+=d.getInt8(o++);p.push([x,y,5]);}paths.push(p)}return {W,H,paths}}
+  const art=unpack('${packed}');
+  const bar=document.createElement('div');
+  bar.style.cssText='position:fixed;bottom:12px;left:12px;z-index:2000;background:white;border:1px solid #d8d3c6;border-radius:10px;padding:10px;box-shadow:0 3px 14px #0001;font:13px system-ui;display:flex;align-items:center;gap:10px';
+  bar.innerHTML='<button id="playGirlSketch" style="padding:9px 14px">Draw & record girl</button><span id="girlStatus" role="status">Ink playback · reference hidden from recording</span>';
+  document.body.appendChild(bar);
+  const play=document.getElementById('playGirlSketch'),status=document.getElementById('girlStatus');
+  const sleep=ms=>new Promise(r=>setTimeout(r,ms)),frame=()=>new Promise(r=>requestAnimationFrame(r));
+  function eventAt(p,phase,index){
+    const rect=drawCanvas.getBoundingClientRect(),source=recordSourceRect||{x:0,y:0,width:drawCanvas.width,height:drawCanvas.height};
+    const ps=Math.min(source.width*.78/art.W,source.height*.86/art.H);
+    const inkX=source.x+(source.width-art.W*ps)/2+p[0]*ps,inkY=source.y+(source.height-art.H*ps)/2+p[1]*ps;
+    const width=Math.max(.7,Math.min(5.2,5*ps/getDisplayDpr()*(.96+.08*Math.sin(phase*10+index))));
+    return {clientX:rect.left+(inkX/drawCanvas.width)*rect.width,clientY:rect.top+(inkY/drawCanvas.height)*rect.height,pointerType:'pen',pressure:.55,playbackWidth:width,pointerId:988};
+  }
+  async function stroke(path,index){
+    startStroke(eventAt(path[0],0,index));
+    if(path.length===1){endStroke(eventAt(path[0],0,index).playbackWidth);lastPenPos=null;await sleep(55);return}
+    const length=path.slice(1).reduce((v,p,i)=>v+Math.hypot(p[0]-path[i][0],p[1]-path[i][1]),0),seconds=Math.max(.10,Math.min(1.8,length/650)),begin=performance.now();let last=0;
+    while(true){const progress=Math.min(1,(performance.now()-begin)/(seconds*1000)),end=Math.min(path.length-1,Math.floor(progress*(path.length-1)));for(let i=last+1;i<=end;i++)continueStroke(eventAt(path[i],i/(path.length-1),index));last=end;if(progress===1)break;await frame()}
+    endStroke();lastPenPos=null;await sleep(35);
+  }
+  play.onclick=async()=>{
+    if(play.disabled)return;
+    if(getComputedStyle(document.getElementById('lockScreen')).display!=='none'){status.textContent='Unlock Ink Sketchbook first.';return}
+    if(mediaRecorder&&mediaRecorder.state!=='inactive'){status.textContent='Stop the current recording first.';return}
+    play.disabled=true;status.textContent='Preparing silent recording…';
+    const settings=[colorPicker,thicknessSlider,minSlider,maxSlider,wobbleSlider,streamlineSlider,recordingHandSelect,recordingHandSize],saved=settings.map(el=>el.value);
+    try{
+      document.getElementById('recordingResultPanel')?.remove();clearBtn.click();resetZoomBtn.click();drawModeBtn.click();
+      const values=['#000000','1','0.8','7','0.22','10','cream','80'];
+      settings.forEach((el,i)=>{el.value=values[i];el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}))});
+      refImage=null;refVisible=false;clearBackgroundVideo(false);recordReferenceInVideo=false;drawRef();
+      const hand=recordingHands.cream;if(!hand.ready)await hand.img.decode();
+      await recordBtn.onclick();if(!mediaRecorder||mediaRecorder.state!=='recording')throw Error('Video recorder did not start.');
+      status.textContent='Drawing the girl · reference stays hidden';
+      for(let i=0;i<art.paths.length;i++)await stroke(art.paths[i],i);
+      await sleep(700);stopRecording();status.textContent='Girl sketch finished · play or download your recording';
+    }catch(error){if(drawing)endStroke();stopRecording();status.textContent='Playback stopped: '+error.message}
+    finally{settings.forEach((el,i)=>{el.value=saved[i];el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}))});play.disabled=false}
+  };
+})();
+`;
+    html=html.replace('</body>', '<script>'+code+'<\/script></body>');
+    document.open();document.write(html);document.close();
+  } catch(error){document.body.textContent='Could not load girl playback: '+error.message}
+})();
+</script></body></html>
