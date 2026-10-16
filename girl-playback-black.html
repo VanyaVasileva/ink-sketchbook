@@ -61,10 +61,10 @@
   }
   async function stroke(path,index){
     startStroke(eventAt(path[0],0,index));
-    if(path.length===1){endStroke(eventAt(path[0],0,index).playbackWidth);lastPenPos=null;await sleep(55);return}
+    if(path.length===1){endStroke(eventAt(path[0],0,index).playbackWidth);await sleep(55);return}
     const length=path.slice(1).reduce((v,p,i)=>v+Math.hypot(p[0]-path[i][0],p[1]-path[i][1]),0),seconds=Math.max(.10,Math.min(1.8,length/650)),begin=performance.now();let last=0;
     while(true){const progress=Math.min(1,(performance.now()-begin)/(seconds*1000)),end=Math.min(path.length-1,Math.floor(progress*(path.length-1)));for(let i=last+1;i<=end;i++)continueStroke(eventAt(path[i],i/(path.length-1),index));last=end;if(progress===1)break;await frame()}
-    endStroke();lastPenPos=null;await sleep(35);
+    endStroke();await sleep(35);
   }
   play.onclick=async()=>{
     if(play.disabled)return;
