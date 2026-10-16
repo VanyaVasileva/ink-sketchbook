@@ -1,0 +1,95 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Ink Sketchbook — Walk Sketch Playback</title><body><p>Loading walk sketch playback…</p><script>
+(async function(){
+  try {
+    let html = await fetch('./hand-selector-standalone-test.html', {cache:'no-store'}).then(r=>{if(!r.ok)throw Error('Sketchbook could not load');return r.text()});
+    html = html.replace('const recordTargetLongSide = isPhoneRecording ? 1920 : 2160;', 'const recordTargetLongSide = 1280;').replace('const recordMinShortSide = 1080;', 'const recordMinShortSide = 720;');
+    html=html.replace('  smoothedWidth = smoothedWidth === null ? targetWidth', '  if (Number.isFinite(e.playbackWidth)) targetWidth=e.playbackWidth*getDisplayDpr();\n  smoothedWidth = smoothedWidth === null ? targetWidth');
+    html=html.replace('  const isPhoneRecording = /iPhone|iPod/i.test(navigator.userAgent) || Math.min(screen.width, screen.height) < 600;', '  const portraitWidth=Math.min(recordSourceRect.width,recordSourceRect.height*.84); recordSourceRect.x+=(recordSourceRect.width-portraitWidth)/2; recordSourceRect.width=portraitWidth;\n  const isPhoneRecording = /iPhone|iPod/i.test(navigator.userAgent) || Math.min(screen.width, screen.height) < 600;');
+    html = html.replace('if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {', 'if (false) {');
+
+    html=html.replace('function endStroke() {','function endStroke(playbackDotWidth) {').replace(': minW + pressure * (maxW - minW);', ': Number.isFinite(playbackDotWidth) ? playbackDotWidth * getDisplayDpr() : minW + pressure * (maxW - minW);');
+    const packed="hAOyBGsBAgA7AuUA/AICAD0C5AAE/gMAXwLPAPkD7g0CAGcC0QD6/QIAbwLaABUTAgDHAQUB+gcCAM0B/wD7BQIA0gEXAfoHAgDdAfYABP8CAOcBEgH6BAIA5AH0AAn/AgD9AfYA/P4CAAkCFQH4AAIAEgIFAfsHAgAOAhUBCggCABgC/wD7BQIAaAIBAQQEBAB+AvQA/AQCB/8EAgAaAh4BCAQDAC4COQEBAvwHAgA6Ah8BA/wCAFYCMwED+gIAYwIpAQb+AgATAmIBA/0CABgCXQEFAQIAHwJTAfsGAgAiAk8BCPgCADICSgEKAAIAOAJgARIBAwBZAk8B+/j2AwMAVAJgAQUAA/4CAF0CWQEABAIAXwJgAQMEAgD0AY4BA/0DAAMCiwH8AP7+BAAFAnUBA/0EAwkBAgALAmwBA/0DAEQCjwHfAfH+AgAYAnYBCgECACsCdwESAAIARgJ4AQn/AgBXAo4B8AICAFUCdgEEAAIAXwKNAfoAAgBdAnUBBAACAGwCeQH8+gIAdQKPAQMGAgDdAbcB/AUCAOIBrQH/BQIA6gGhAfsGAgDrAZwBA/0CAPoBogH5/gIAAQKjAfsAAgA9AqkB8AACAFACqAH1AAIAVwKnAQYAAgCAAq8B/fcCAIQCtQH9/AIA3gHLAfz+AgD1AboBBQEDAC4CyAH7/f0BAwBAAsIBDAEG/gIASALaAQYAAgBSAtkBBgACAFQCwgEE/gIAWgLBAQT/AgBiAtgB+QACAHECvgHxAQMAhgLLAQL+/v0DAIcC1gEFCfwKAgCRAsIB+PcCAKMC1gEICAIAvQH6Af4FAwDAAfQB//8C/QIA3wEDAvf8AgDrAe0BBAICAA8C/AEI+AMAMgL1AekB/f4DAB0C5wEC/v//AgA0AvUBBAECAEMC9QEGAAIAcALwAQQAAgB7Au4B/AEDAIYC9wEC+/79AgCaAgcCAwUCAKIC6wH6BgIApwIDAgT8AgCxAvgB/AQCALQC9AEF+wIAvgIJAgP9AgDBAvYBBgYCAMMCAwIE/AIAzwIGAgMDAgCoATUCAvoCAK8BHQL9CQIAsAEbAgL6AwCzARMCA/wEAwIA6gEmAgYCAwAOAg4C+v35BwIAEAINAhcBAgA0Ag0C+wACAGMCCAIEAAIAcwIfAgX/AgCDAhYC/QYCAIMCDgIC/AIAjgIvAvr7AgCIAioCBfsCAKICCgL9AwIAnwIZAgUKAgCnAiYCBPwCALICGQID/AIAtgITAgP9AgC6Ag4CA/0CALsCMgID/QIA0wILAgMDAgDYAhICBQUCANkCNAIJ9gIAogFMAgP8AgCxAUwC/P0CAMwBVwL7/QIAywE5Avz+AgDYAU8CCPYDAOIBRAIDBQAIAgDrAUECEP8DAPYBVQIFAwb9AgAIAj8CBgACACMCPQIKAAQAJgJTAgQDBvwDAAIAOQI7AgQAAgBpAjUCDv8CAG8CSQL8AgIAjQJEAvn+AgCWAjMCBQECAJwCWwL++QIAwwI/Avb9AgDRAj8CCgwCANcCNwL8BQIA5gI+AgQDAgDxAkcC//wCAPECSQIDAwIA9wJUAv4FAgD2AjsCAgUCAP0CTAL9+gIAkAGAAgX6AgCdAWQCA/kCAKsBcwIIAwMAtQF3AgMCBfsCALgBfQL+BAIAwQFrAvn8AgDJAWQC/AQCAMoBYgIF+QIA8gF+Av4EAgD0AXcCAvwCACkCXALzDQIAcgJjAvz3AgB2AmkC/fwCAHcCagIE/gIAegJ3AgEEAwCfAl8C/f/8AwIAoQJfAgT/AgCtAmkC/vkEALwCXQL9/fwD/f0CAL8CYgIJDwIA7gJZAv0FAgCHAaMC/gcDAJYBoQL+Av//AwCZAbcCBfP9+wIAngGiAv0DAgCrAY0C/QMCAK8BkwIDBAIAtgGFAgANAgDsAY0C/QcCAEACqQIC/AIASgKSAgP7AgCCAo4C/voCAIwCpQIBBAIA2wKZAv37AgDbAqUCAvwFABgBvwL5B/oL+wUBAQIAJwG0AvYHAgAhAbsCBAYCACsBqAL4AQIALgGzAvwCAgAtAakCBQMCAD4BxwL2/gIANgGyAgkEAgBDAbgCBAMCAEsBvwIDAwMAUgHYAgL+/vkCAHYBxgL7CAQAhAGzAv7//AT9BwIAiwG2Avv+AgCWAbkC+/4CAJcBzgIB/AMAmQG7AgID/gMCANMByQIG8wIA2wG3AgL7AgA4AroCAvsCADsCswIE+AIAQQLTAvz3AgCQArEC/voDAJcCwAIB//38AgCeAtMC/vsCAOMA2wIEAAIA6gDbAgj8AgD/AOgCBfcCAA4B9wL3+gMAGQH4AgIBAv4CAEsB9wIG/AIAUAHkAvwHAgBmAd0CA/0CAIsB8QL+BQIAlAHXAvoTAgC+AfUCBvUCAM0B1gL8CQIARALYAgIGAgBHAuACCBMCAKYC6AL89AIAqQLwAv76AgCqAvICAQQCAA8BEQMEBAIAFgEMA/0DAgAXAf8CA/0CACAB+QIECQIAPwH/AvcDAgBLAQMDAwMCAFEBDAMDBAIAVwEZAwIEAgB0ARsDBvgCAIIBBAMC/AIA+gEhAwP9AgBVAgID/voCAGECHwP9+AIArAL4AgIGAgC1AhED/fcCALYCEwMCBwIAvgBJAwX7AgDNADwD+AcCANoAMgP2CAIA8QAjA/sEAgAPAUMD9QgCABcBMgP+BQMAXgEzAwL8/PsCAGcBKgP7BQIAcQEgA/oGAgBsAWIDHuECAJEBOwP9AwIAnQEqAwT7AgDdAUgDCvQCAHACRAP89gIAcAJHAwMIAgC+Ai8D/PQDAKAAaAP5BwIDAgCqAGAD/QMDAK4AWgP//wL+AgCzAF8DBAQCALwASgP6BgIAuwBmAwUFAgDPAGMD+wMCANMAYQME/gIA8gBSA/wCAgD3AFwD/goCAPYAaQP/BQMAaAFfAwID/gQCANIBVQME/AIA3AFKA/sFAwB8AmwD//n9+wIAygJVAwIGAgDSAnED+/ECAKMAewP8/QIAswB5AwT7AwDyAIMDAwQKAwIA8wB3AwAIAgD8AJgDAvoCAAkBiAP8AQIACwGIAwUBAgAmAYkD9AACAC4BiAMGAAIASgGEAwQAAwBgAYAD+wP+/wIAXgGJA/78AgBnAZcDBAQCAGkBegMA+wIAlQGYAwX7AgCnAYcD/AQCAKoBgwMF+wIAugFyA/wEAgB/AnUDAggCAIcCjwMFFQIA1AJ9AwIEAwDZApgDAfz+/QIA2gDBAwv3AgD1AKUDBvUCACMBvwP2CgIAKQG3AwP9AgAzAakD/QQCADABswMEBAIAPQHCA/j3AgA4AaEDA/sCAHABogP8+wIAdQGqAwUHAgB+AbgDBAYCAIgBpgMG+gIAlAGaA/wEAgCZArcDBP4CANQCnAP3BgIA0gKzA//8AgAGA7wDBf0CAMUA1gP4BQIAywDJA/oDAwDLAN8DBQj/AQIA8wDoAwX8AgD/AOADBvsCABAB0gMD/QIASQHVAwMEAwBPAeADAf/9/AMATgHkA/8BAgMCAJAB0wP49QMAjQHgA/8BAwQCALsCywP9+QIA6QLHA/oDAgDzAsQDB/0CALsABAT69AMA1ADvAwMDBf8CAOEA7wMG/gIA6gDsAwb9AgBhAeoDCAgCAHcB7gMH/AIAhAH5A/z8AgCkAfUDCPsCAPoCDwT7AAIABwMMBPkBAgAWAwgE9wMCAGUANgQD/QIAaQAyBAQAAgCMAC8E+gEDAJ4ALgT///0CAgDBACwEBP8DANcAKgT5Av3/AgDZACoEDAACAPQAKgT3AAIACwEqBAT/AgBUASkECAACAHMBKAT6AAIAfwEnBAf/AgCIAScEBP8DAJwBIgQI/goBAgDDASAE9gACAMgBHwQIAAIABwIdBAX+AwAfAhsE+//+AgIAKgIcBPwAAgBdAhsEBAADAHcCHAT+/vsBAgB/AhoECAACAIkCGgQGAAIAlgIbBAT+AgCcAhkECQACAKkCGgQF/gIAsQIYBAoAAgDJAhcEEv4CAOoCEgT5AQIA7gIRBAX/";
+    const code = `
+(() => {
+  function unpack(s){const b=Uint8Array.from(atob(s),c=>c.charCodeAt(0)),d=new DataView(b.buffer);let o=0;const W=d.getUint16(o,true);o+=2;const H=d.getUint16(o,true);o+=2;const n=d.getUint16(o,true);o+=2;const paths=[];for(let k=0;k<n;k++){const len=d.getUint16(o,true);o+=2;let x=d.getUint16(o,true);o+=2;let y=d.getUint16(o,true);o+=2;const p=[[x,y,5]];for(let i=1;i<len;i++){x+=d.getInt8(o++);y+=d.getInt8(o++);p.push([x,y,5]);}paths.push(p)}return {W,H,paths}}
+  const art=unpack(packed);
+  paperColorPicker.value='#ffffff';
+  paperColorPicker.dispatchEvent(new Event('input',{bubbles:true}));
+  paperColorPicker.dispatchEvent(new Event('change',{bubbles:true}));
+  colorPicker.value='#000000';
+  colorPicker.dispatchEvent(new Event('input',{bubbles:true}));
+  colorPicker.dispatchEvent(new Event('change',{bubbles:true}));
+  function preparePlaybackPaths(paths){
+    const prepared=paths.map((source,index)=>{
+      let path=source.slice();
+      let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity,length=0;
+      for(let i=0;i<path.length;i++) {
+        const p=path[i]; minX=Math.min(minX,p[0]);maxX=Math.max(maxX,p[0]);minY=Math.min(minY,p[1]);maxY=Math.max(maxY,p[1]);
+        if(i) length += Math.hypot(p[0]-path[i-1][0],p[1]-path[i-1][1]);
+      }
+      if(path.length>1){
+        const first=path[0], last=path[path.length-1];
+        const verticalSpan=maxY-minY, horizontalSpan=maxX-minX;
+        const chord=Math.max(1,Math.hypot(last[0]-first[0],last[1]-first[1]));
+        const curveRatio=length/chord;
+        const naturalDownStroke=verticalSpan>18 && verticalSpan>horizontalSpan*1.15 && curveRatio<1.75;
+        if(naturalDownStroke && first[1]>last[1]) path.reverse();
+      }
+      const startY=path[0]?.[1]??minY;
+      return {path,index,minX,minY,startY};
+    });
+    prepared.sort((a,b)=>{
+      const bandA=Math.floor(Math.min(a.minY,a.startY)/52),bandB=Math.floor(Math.min(b.minY,b.startY)/52);
+      if(bandA!==bandB)return bandA-bandB;
+      return bandA%2===0 ? a.minX-b.minX : b.minX-a.minX;
+    });
+    return prepared.map(item=>item.path);
+  }
+  const playbackPaths=preparePlaybackPaths(art.paths);
+  const bar=document.createElement('div');
+  bar.style.cssText='position:fixed;bottom:12px;left:12px;z-index:2000;background:white;border:1px solid #d8d3c6;border-radius:10px;padding:10px;box-shadow:0 3px 14px #0001;font:13px system-ui;display:flex;align-items:center;gap:10px';
+  bar.innerHTML='<button id="playWalkSketch" style="padding:9px 14px">Draw & record walk sketch</button><span id="walkStatus" role="status">Ink playback · white canvas · reference hidden</span>';
+  document.body.appendChild(bar);
+  const play=document.getElementById('playWalkSketch'),status=document.getElementById('walkStatus');
+  const sleep=ms=>new Promise(r=>setTimeout(r,ms)),frame=()=>new Promise(r=>requestAnimationFrame(r));
+  function eventAt(p,phase,index){
+    const rect=drawCanvas.getBoundingClientRect(),source=recordSourceRect||{x:0,y:0,width:drawCanvas.width,height:drawCanvas.height};
+    const ps=Math.min(source.width*.78/art.W,source.height*.86/art.H);
+    const inkX=source.x+(source.width-art.W*ps)/2+p[0]*ps,inkY=source.y+(source.height-art.H*ps)/2+p[1]*ps;
+    const width=Math.max(.7,Math.min(5.2,5*ps/getDisplayDpr()*(.96+.08*Math.sin(phase*10+index))));
+    return {clientX:rect.left+(inkX/drawCanvas.width)*rect.width,clientY:rect.top+(inkY/drawCanvas.height)*rect.height,pointerType:'pen',pressure:.55,playbackWidth:width,pointerId:988};
+  }
+  async function stroke(path,index){
+    startStroke(eventAt(path[0],0,index));
+    if(path.length===1){endStroke(eventAt(path[0],0,index).playbackWidth);await sleep(55);return}
+    const length=path.slice(1).reduce((v,p,i)=>v+Math.hypot(p[0]-path[i][0],p[1]-path[i][1]),0),seconds=Math.max(.10,Math.min(1.8,length/650)),begin=performance.now();let last=0;
+    while(true){const progress=Math.min(1,(performance.now()-begin)/(seconds*1000)),end=Math.min(path.length-1,Math.floor(progress*(path.length-1)));for(let i=last+1;i<=end;i++)continueStroke(eventAt(path[i],i/(path.length-1),index));last=end;if(progress===1)break;await frame()}
+    endStroke();await sleep(35);
+  }
+  play.onclick=async()=>{
+    if(play.disabled)return;
+    if(getComputedStyle(document.getElementById('lockScreen')).display!=='none'){status.textContent='Unlock Ink Sketchbook first.';return}
+    if(mediaRecorder&&mediaRecorder.state!=='inactive'){status.textContent='Stop the current recording first.';return}
+    play.disabled=true;status.textContent='Preparing silent recording…';
+    const settings=[colorPicker,paperColorPicker,thicknessSlider,minSlider,maxSlider,wobbleSlider,streamlineSlider,recordingHandSelect,recordingHandSize],saved=settings.map(el=>el.value);
+    try{
+      document.getElementById('recordingResultPanel')?.remove();clearBtn.click();resetZoomBtn.click();drawModeBtn.click();
+      const values=['#000000','#ffffff','1','0.8','7','0.22','10','cream','110'];
+      settings.forEach((el,i)=>{el.value=values[i];el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}))});
+      await frame();
+      refImage=null;refVisible=false;clearBackgroundVideo(false);recordReferenceInVideo=false;drawRef();
+      const hand=recordingHands.cream;if(!hand.ready)await hand.img.decode();
+      await recordBtn.onclick();if(!mediaRecorder||mediaRecorder.state!=='recording')throw Error('Video recorder did not start.');
+      status.textContent='Drawing walk sketch · reference stays hidden';
+      for(let i=0;i<playbackPaths.length;i++) await stroke(playbackPaths[i],i);
+      await sleep(700);stopRecording();status.textContent='Walk sketch finished · play or download your recording';
+    }catch(error){if(drawing)endStroke();stopRecording();status.textContent='Playback stopped: '+error.message}
+    finally{settings.forEach((el,i)=>{el.value=saved[i];el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}))});play.disabled=false}
+  };
+})();
+`;
+    html=html.replace('</body>', '<script>'+code+'<\/script></body>');
+    document.open();document.write(html);document.close();
+  } catch(error) {document.body.textContent='Could not load walk playback: '+error.message}
+})();
+</script></body></html>
