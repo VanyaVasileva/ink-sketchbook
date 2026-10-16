@@ -7,6 +7,7 @@
     html=html.replace('  smoothedWidth = smoothedWidth === null ? targetWidth', '  if (Number.isFinite(e.playbackWidth)) targetWidth=e.playbackWidth*getDisplayDpr();\n  smoothedWidth = smoothedWidth === null ? targetWidth');
     html=html.replace('  const isPhoneRecording = /iPhone|iPod/i.test(navigator.userAgent) || Math.min(screen.width, screen.height) < 600;', '  const portraitWidth=Math.min(recordSourceRect.width,recordSourceRect.height*.66); recordSourceRect.x+=(recordSourceRect.width-portraitWidth)/2; recordSourceRect.width=portraitWidth;\n  const isPhoneRecording = /iPhone|iPod/i.test(navigator.userAgent) || Math.min(screen.width, screen.height) < 600;');
     html = html.replace('if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {', 'if (false) {');
+    html=html.replace('function endStroke() {','function endStroke(playbackDotWidth) {').replace(': minW + pressure * (maxW - minW);', ': Number.isFinite(playbackDotWidth) ? playbackDotWidth * getDisplayDpr() : minW + pressure * (maxW - minW);');
     const code = `
 (() => {
   const bar=document.createElement('div');
@@ -20,12 +21,13 @@
 
   function eventAt(p,phase,index){
     const rect=drawCanvas.getBoundingClientRect(),scale=rect.height*.86/1797;
-    const width=Math.max(.7,Math.min(5.5,p[2]*scale));
+    const isEye=p[0]>235 && p[0]<285 && p[1]>510 && p[1]<545;
+    const width=isEye?Math.max(.65,Math.min(1.3,p[2]*scale*.48)):Math.max(.7,Math.min(5.5,p[2]*scale));
     return {clientX:rect.left+rect.width/2+(p[0]-275)*scale,clientY:rect.top+rect.height*.06+p[1]*scale,pointerType:'pen',pressure:.1+.7*Math.min(1,p[2]/9),playbackWidth:width*(.9+.12*Math.sin(phase*11+index)),pointerId:987};
   }
   async function stroke(path,index){
     startStroke(eventAt(path[0],0,index));
-    if(path.length===1){endStroke();lastPenPos=null;await sleep(85);return;}
+    if(path.length===1){endStroke(eventAt(path[0],0,index).playbackWidth);lastPenPos=null;await sleep(85);return;}
     const length=path.slice(1).reduce((v,p,i)=>v+Math.hypot(p[0]-path[i][0],p[1]-path[i][1]),0);
     const seconds=Math.max(.18,Math.min(3.0,length/420)),begin=performance.now();let last=0;
     while(true){
