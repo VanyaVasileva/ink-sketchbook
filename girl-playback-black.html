@@ -64,13 +64,13 @@
     if(getComputedStyle(document.getElementById('lockScreen')).display!=='none'){status.textContent='Unlock Ink Sketchbook first.';return}
     if(mediaRecorder&&mediaRecorder.state!=='inactive'){status.textContent='Stop the current recording first.';return}
     play.disabled=true;status.textContent='Preparing silent recording…';
-    const settings=[colorPicker,thicknessSlider,minSlider,maxSlider,wobbleSlider,streamlineSlider,recordingHandSelect,recordingHandSize],saved=settings.map(el=>el.value);
+    const settings=[colorPicker,paperColorPicker,thicknessSlider,minSlider,maxSlider,wobbleSlider,streamlineSlider,recordingHandSelect,recordingHandSize],saved=settings.map(el=>el.value);
     try{
       document.getElementById('recordingResultPanel')?.remove();clearBtn.click();resetZoomBtn.click();drawModeBtn.click();
-      const values=['#ffffff','1','0.8','7','0.22','10','cream','80'];
+      const values=['#ffffff','#000000','1','0.8','7','0.22','10','cream','80'];
       settings.forEach((el,i)=>{el.value=values[i];el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}))});
+      await frame();
       refImage=null;refVisible=false;clearBackgroundVideo(false);recordReferenceInVideo=false;drawRef();
-      const blackCtx=drawCanvas.getContext('2d');blackCtx.save();blackCtx.globalCompositeOperation='destination-over';blackCtx.fillStyle='#000000';blackCtx.fillRect(0,0,drawCanvas.width,drawCanvas.height);blackCtx.restore();
       const hand=recordingHands.cream;if(!hand.ready)await hand.img.decode();
       await recordBtn.onclick();if(!mediaRecorder||mediaRecorder.state!=='recording')throw Error('Video recorder did not start.');
       status.textContent='Drawing the girl in white ink · black canvas · reference stays hidden';
