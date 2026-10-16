@@ -12,6 +12,33 @@
 (() => {
   function unpack(s){const b=Uint8Array.from(atob(s),c=>c.charCodeAt(0)),d=new DataView(b.buffer);let o=0;const W=d.getUint16(o,true);o+=2;const H=d.getUint16(o,true);o+=2;const n=d.getUint16(o,true);o+=2;const paths=[];for(let k=0;k<n;k++){const len=d.getUint16(o,true);o+=2;let x=d.getUint16(o,true);o+=2;let y=d.getUint16(o,true);o+=2;const p=[[x,y,5]];for(let i=1;i<len;i++){x+=d.getInt8(o++);y+=d.getInt8(o++);p.push([x,y,5]);}paths.push(p)}return {W,H,paths}}
   const art=unpack('${packed}');
+  function preparePlaybackPaths(paths){
+    const prepared=paths.map((source,index)=>{
+      let path=source.slice();
+      let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity,length=0;
+      for(let i=0;i<path.length;i++){
+        const p=path[i]; minX=Math.min(minX,p[0]);maxX=Math.max(maxX,p[0]);minY=Math.min(minY,p[1]);maxY=Math.max(maxY,p[1]);
+        if(i)length+=Math.hypot(p[0]-path[i-1][0],p[1]-path[i-1][1]);
+      }
+      if(path.length>1){
+        const first=path[0],last=path[path.length-1];
+        const verticalSpan=maxY-minY,horizontalSpan=maxX-minX;
+        const chord=Math.max(1,Math.hypot(last[0]-first[0],last[1]-first[1]));
+        const curveRatio=length/chord;
+        const naturalDownStroke=verticalSpan>18 && verticalSpan>horizontalSpan*1.15 && curveRatio<1.75;
+        if(naturalDownStroke && first[1]>last[1]) path.reverse();
+      }
+      const startY=path[0]?.[1]??minY;
+      return {path,index,minX,minY,startY};
+    });
+    prepared.sort((a,b)=>{
+      const bandA=Math.floor(Math.min(a.minY,a.startY)/52),bandB=Math.floor(Math.min(b.minY,b.startY)/52);
+      if(bandA!==bandB)return bandA-bandB;
+      return bandA%2===0 ? a.minX-b.minX : b.minX-a.minX;
+    });
+    return prepared.map(item=>item.path);
+  }
+  const playbackPaths=preparePlaybackPaths(art.paths);
   const bar=document.createElement('div');
   bar.style.cssText='position:fixed;bottom:12px;left:12px;z-index:2000;background:white;border:1px solid #d8d3c6;border-radius:10px;padding:10px;box-shadow:0 3px 14px #0001;font:13px system-ui;display:flex;align-items:center;gap:10px';
   bar.innerHTML='<button id="playGirlSketch" style="padding:9px 14px">Draw & record girl</button><span id="girlStatus" role="status">Ink playback · reference hidden from recording</span>';
@@ -46,7 +73,7 @@
       const hand=recordingHands.cream;if(!hand.ready)await hand.img.decode();
       await recordBtn.onclick();if(!mediaRecorder||mediaRecorder.state!=='recording')throw Error('Video recorder did not start.');
       status.textContent='Drawing the girl · reference stays hidden';
-      for(let i=0;i<art.paths.length;i++)await stroke(art.paths[i],i);
+      for(let i=0;i<playbackPaths.length;i++)await stroke(playbackPaths[i],i);
       await sleep(700);stopRecording();status.textContent='Girl sketch finished · play or download your recording';
     }catch(error){if(drawing)endStroke();stopRecording();status.textContent='Playback stopped: '+error.message}
     finally{settings.forEach((el,i)=>{el.value=saved[i];el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}))});play.disabled=false}
