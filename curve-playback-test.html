@@ -1,0 +1,66 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Ink Sketchbook — Curve Playback Test</title><body><p>Loading curve playback test…</p><script>
+(async function(){
+  try {
+    let html = await fetch('./hand-selector-standalone-test.html', {cache:'no-store'}).then(r=>{if(!r.ok)throw Error('Sketchbook could not load');return r.text()});
+    // This test records silently; it does not request microphone access.
+    html = html.replace('if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {', 'if (false) {');
+    const code = `
+(() => {
+  const bar=document.createElement('div');
+  bar.style.cssText='position:fixed;bottom:12px;left:12px;z-index:2000;background:white;border:1px solid #d8d3c6;border-radius:10px;padding:10px;box-shadow:0 3px 14px #0001;font:13px system-ui;display:flex;align-items:center;gap:10px';
+  bar.innerHTML='<button id="playCurveTest" style="padding:9px 14px">Play & record curve test</button><span id="curveStatus" role="status">Separate test · uses the existing ink brush and recording hand</span>';
+  document.body.appendChild(bar);
+  const play=document.getElementById('playCurveTest'),status=document.getElementById('curveStatus');
+  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+  const frame=()=>new Promise(r=>requestAnimationFrame(r));
+  function cubic(p,t){const s=1-t;return [s*s*s*p[0][0]+3*s*s*t*p[1][0]+3*s*t*t*p[2][0]+t*t*t*p[3][0],s*s*s*p[0][1]+3*s*s*t*p[1][1]+3*s*t*t*p[2][1]+t*t*t*p[3][1]];}
+  function eventAt(p,t){const rect=drawCanvas.getBoundingClientRect();return {clientX:rect.left+p[0]*rect.width,clientY:rect.top+p[1]*rect.height,pointerType:'pen',pressure:.32+.10*Math.sin(t*Math.PI),pointerId:987};}
+  async function stroke(segments,seconds){
+    startStroke(eventAt(segments[0][0],0));
+    const begin=performance.now();
+    while(true){
+      const progress=Math.min(1,(performance.now()-begin)/(seconds*1000));
+      const n=progress*segments.length,i=Math.min(segments.length-1,Math.floor(n)),t=progress===1?1:n-i;
+      const p=cubic(segments[i],t);
+      // Gentle intentional asymmetry, in addition to the brush's own wobble.
+      p[0]+=.0006*Math.sin(progress*31);p[1]+=.0005*Math.sin(progress*23);
+      continueStroke(eventAt(p,progress));
+      if(progress===1)break;
+      await frame();
+    }
+    endStroke();lastPenPos=null;await sleep(220);
+  }
+  const curves=[
+    [[ [.22,.35],[.26,.10],[.42,.13],[.44,.35] ],[ [.44,.35],[.47,.56],[.22,.62],[.22,.35] ]],
+    [[ [.53,.24],[.77,.05],[.36,.68],[.76,.50] ]],
+    [[ [.29,.74],[.36,.56],[.39,.87],[.46,.71] ],[ [.46,.71],[.53,.55],[.56,.86],[.64,.70] ]]
+  ];
+  play.onclick=async()=>{
+    if(play.disabled)return;
+    if(document.getElementById('lockScreen')?.offsetParent!==null){status.textContent='Unlock Ink Sketchbook first.';return;}
+    if(mediaRecorder && mediaRecorder.state!=='inactive'){status.textContent='Stop the current recording first.';return;}
+    play.disabled=true;status.textContent='Preparing silent recording…';
+    const settings=[colorPicker,thicknessSlider,minSlider,maxSlider,wobbleSlider,streamlineSlider,recordingHandSelect,recordingHandSize];
+    const saved=settings.map(el=>el.value);
+    try {
+      document.getElementById('recordingResultPanel')?.remove();
+      clearBtn.click();resetZoomBtn.click();drawModeBtn.click();
+      const values=['#000000','1','1','2.5','0.5','15','cream','85'];
+      settings.forEach((el,i)=>{el.value=values[i];el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));});
+      const hand=recordingHands.cream;
+      if(!hand.ready)await hand.img.decode();
+      await recordBtn.onclick();
+      if(!mediaRecorder || mediaRecorder.state!=='recording')throw Error('Video recorder did not start.');
+      status.textContent='Recording three loose curves…';
+      for(let i=0;i<curves.length;i++)await stroke(curves[i],i===0?3.6:3.0);
+      await sleep(700);stopRecording();
+      status.textContent='Curve test finished · preview and download the recording';
+    }catch(error){if(drawing)endStroke();stopRecording();status.textContent='Test stopped: '+error.message;}
+    finally{settings.forEach((el,i)=>{el.value=saved[i];el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));});play.disabled=false;}
+  };
+})();`;
+    html=html.replace('</body>', '<script>'+code+'<\/script></body>');
+    document.open();document.write(html);document.close();
+  }catch(error){document.body.textContent='Could not load curve test: '+error.message;}
+})();
+</script></body></html>
