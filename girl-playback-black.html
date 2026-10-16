@@ -13,6 +13,12 @@
 (() => {
   function unpack(s){const b=Uint8Array.from(atob(s),c=>c.charCodeAt(0)),d=new DataView(b.buffer);let o=0;const W=d.getUint16(o,true);o+=2;const H=d.getUint16(o,true);o+=2;const n=d.getUint16(o,true);o+=2;const paths=[];for(let k=0;k<n;k++){const len=d.getUint16(o,true);o+=2;let x=d.getUint16(o,true);o+=2;let y=d.getUint16(o,true);o+=2;const p=[[x,y,5]];for(let i=1;i<len;i++){x+=d.getInt8(o++);y+=d.getInt8(o++);p.push([x,y,5]);}paths.push(p)}return {W,H,paths}}
   const art=unpack('${packed}');
+  paperColorPicker.value='#000000';
+  paperColorPicker.dispatchEvent(new Event('input',{bubbles:true}));
+  paperColorPicker.dispatchEvent(new Event('change',{bubbles:true}));
+  colorPicker.value='#ffffff';
+  colorPicker.dispatchEvent(new Event('input',{bubbles:true}));
+  colorPicker.dispatchEvent(new Event('change',{bubbles:true}));
   function preparePlaybackPaths(paths){
     const prepared=paths.map((source,index)=>{
       let path=source.slice();
