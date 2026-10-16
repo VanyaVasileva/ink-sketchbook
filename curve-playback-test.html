@@ -3,6 +3,7 @@
   try {
     let html = await fetch('./hand-selector-standalone-test.html', {cache:'no-store'}).then(r=>{if(!r.ok)throw Error('Sketchbook could not load');return r.text()});
     // This test records silently; it does not request microphone access.
+    html = html.replace('const recordTargetLongSide = isPhoneRecording ? 1920 : 2160;', 'const recordTargetLongSide = 1280;').replace('const recordMinShortSide = 1080;', 'const recordMinShortSide = 720;');
     html = html.replace('if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {', 'if (false) {');
     const code = `
 (() => {
@@ -17,14 +18,18 @@
   function eventAt(p,t){const rect=drawCanvas.getBoundingClientRect();return {clientX:rect.left+p[0]*rect.width,clientY:rect.top+p[1]*rect.height,pointerType:'pen',pressure:.08+.44*Math.pow(Math.sin(t*Math.PI),.7),pointerId:987};}
   async function stroke(segments,seconds){
     startStroke(eventAt(segments[0][0],0));
-    const begin=performance.now();
+    const begin=performance.now();let lastSample=0;const samples=360;
     while(true){
       const progress=Math.min(1,(performance.now()-begin)/(seconds*1000));
-      const pace=progress-.035*Math.sin(progress*Math.PI*2);const n=pace*segments.length,i=Math.min(segments.length-1,Math.floor(n)),t=progress===1?1:n-i;
-      const p=cubic(segments[i],t);
-      // Gentle intentional asymmetry, in addition to the brush's own wobble.
-      p[0]+=.0006*Math.sin(progress*31);p[1]+=.0005*Math.sin(progress*23);
-      continueStroke(eventAt(p,progress));
+      const sampleEnd=Math.floor(progress*samples);
+      for(let sample=lastSample+1;sample<=sampleEnd;sample++){
+        const q=sample/samples,pace=q-.035*Math.sin(q*Math.PI*2);
+        const n=pace*segments.length,i=Math.min(segments.length-1,Math.floor(n)),t=q===1?1:n-i;
+        const p=cubic(segments[i],t);
+        p[0]+=.0006*Math.sin(q*31);p[1]+=.0005*Math.sin(q*23);
+        continueStroke(eventAt(p,q));
+      }
+      lastSample=sampleEnd;
       if(progress===1)break;
       await frame();
     }
