@@ -28,8 +28,8 @@
     return {W,H,paths};
   }
   const art=unpackArt();
-  // Remove tracing artifacts: one false long vertical path and isolated single-point dots.
-  art.paths = art.paths.filter((p, originalIndex) => originalIndex !== 9 && p.length > 1);
+  // Remove only the false long vertical tracing artifact. Keep the tiny single-point facial details (eyes/nose).
+  art.paths = art.paths.filter((p, originalIndex) => originalIndex !== 9);
 
   function preparePlaybackPaths(paths){
     const prepared=paths.map((source,index)=>{
