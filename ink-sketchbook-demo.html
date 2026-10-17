@@ -2,7 +2,7 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ink Sketchbook — Five-minute demo</title>
+<title>Ink Sketchbook — Free demo</title>
 <body style="margin:0;background:#f6f4f0;font:16px system-ui;color:#292620">
 <p id="loading" style="padding:24px">Loading Ink Sketchbook demo…</p>
 <script>
@@ -62,10 +62,10 @@ function demoExportCanvas() {
   replaceOnce('  fctx.drawImage(drawCanvas, 0, 0);\n  return flat;', '  fctx.drawImage(drawCanvas, 0, 0);\n  demoStamp(fctx, w, h);\n  return flat;');
   replaceOnce("const rawBytes = dataUrlToBytes(drawCanvas.toDataURL('image/png'));", "const rawBytes = dataUrlToBytes(demoExportCanvas().toDataURL('image/png'));");
   replaceOnce("const dataUrl = drawCanvas.toDataURL('image/png');", "const dataUrl = demoExportCanvas().toDataURL('image/png');");
-  // Preserve Save and My Drawings, but keep trial drawings apart from paid ones.
+  // Preserve Save and My Drawings, but keep demo drawings apart from paid ones.
   html = html.replaceAll("'drawings_index'", "'demo_drawings_index'")
              .replaceAll("'drawing_'", "'demo_drawing_'");
-  replaceOnce('<title>Ink Sketchbook</title>', '<title>Ink Sketchbook — Five-minute demo</title>');
+  replaceOnce('<title>Ink Sketchbook</title>', '<title>Ink Sketchbook — Free demo</title>');
 
   const ui = `
 <style>
@@ -75,37 +75,13 @@ function demoExportCanvas() {
     box-shadow:0 3px 18px #0002;padding:7px 12px;display:flex;gap:12px;align-items:center;
     font:600 13px system-ui;color:#342d29;max-width:96vw}
   #demoTop a {color:#874d3c;white-space:nowrap}
-  #demoTimer {font-variant-numeric:tabular-nums;font-weight:800;font-size:17px}
-  .demoCurtain {position:fixed;inset:0;z-index:2147483647;background:rgba(246,244,240,.97);
-    display:flex;align-items:center;justify-content:center;padding:20px;font:16px system-ui;color:#292620}
-  .demoCard {background:white;border-radius:18px;padding:26px;max-width:480px;text-align:center;
-    box-shadow:0 12px 40px #0002;line-height:1.5}
-  .demoCard h2 {font-size:24px;margin:0 0 10px}
-  .demoCard button,.demoCard a {display:inline-block;background:#87523f;color:white;border:0;
-    padding:12px 18px;border-radius:9px;font:700 15px system-ui;text-decoration:none;cursor:pointer;margin:7px}
 </style>
 <canvas id="demoWatermark" aria-hidden="true"></canvas>
-<div id="demoTop"><span>INK SKETCHBOOK · DEMO</span><span id="demoTimer">05:00</span><a href="${etsy}" target="_blank" rel="noopener">Full version</a></div>
-<div class="demoCurtain" id="demoWelcome"><div class="demoCard">
-  <h2>Try Ink Sketchbook</h2><p>Draw, trace your own reference, and try all the ink controls.
-  Save drawings on this device or export full-resolution PNG, JPEG and PDF files.
-  Every demo result has a visible watermark.</p>
-  <button id="demoStart" type="button">Start five-minute demo</button>
-</div></div>
-<div class="demoCurtain" id="demoFinished" style="display:none"><div class="demoCard">
-  <h2>Five minutes are up</h2><p>Thank you for trying Ink Sketchbook. Your demo downloads keep the watermark.
-  The full version has no watermark or time limit.</p>
-  <a href="${etsy}" target="_blank" rel="noopener">Get the full version on Etsy</a>
-  <button id="demoAgain" type="button">Try another five minutes</button>
-</div></div>
+<div id="demoTop"><span>INK SKETCHBOOK · DEMO</span><span>Watermarked exports</span><a href="${etsy}" target="_blank" rel="noopener">Full version</a></div>
 <script>
 (() => {
-  const welcome = document.getElementById('demoWelcome');
-  const finished = document.getElementById('demoFinished');
-  const display = document.getElementById('demoTimer');
   const mark = document.getElementById('demoWatermark');
   const markCtx = mark.getContext('2d');
-  let deadline = 0;
   let markedW = 0, markedH = 0;
   function syncMark() {
     const r = drawCanvas.getBoundingClientRect();
@@ -121,28 +97,6 @@ function demoExportCanvas() {
     requestAnimationFrame(syncMark);
   }
   syncMark();
-  function tick() {
-    if (!deadline) return;
-    const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
-    display.textContent = String(Math.floor(remaining / 60)).padStart(2,'0') + ':' +
-      String(remaining % 60).padStart(2,'0');
-    if (!remaining) {
-      deadline = 0;
-      sessionStorage.removeItem('ink_demo_deadline');
-      finished.style.display = 'flex';
-    }
-  }
-  function begin() {
-    deadline = Date.now() + 5 * 60 * 1000;
-    sessionStorage.setItem('ink_demo_deadline', String(deadline));
-    welcome.style.display = 'none'; finished.style.display = 'none'; tick();
-  }
-  document.getElementById('demoStart').onclick = begin;
-  document.getElementById('demoAgain').onclick = begin;
-  const old = Number(sessionStorage.getItem('ink_demo_deadline'));
-  if (old && old > Date.now()) { deadline = old; welcome.style.display = 'none'; tick(); }
-  else sessionStorage.removeItem('ink_demo_deadline');
-  setInterval(tick, 250);
 })();
 <\/script>`;
   html = html.replace('</body>', ui + '</body>');
