@@ -1,0 +1,133 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Ink Sketchbook — Stubborn Dog Playback FIXED</title><body><p>Loading stubborn dog playback…</p><script>
+(async function(){
+  try {
+    let html = await fetch('./hand-selector-standalone-test.html', {cache:'no-store'}).then(r=>{if(!r.ok)throw Error('Sketchbook could not load');return r.text()});
+    html = html.replace('const recordTargetLongSide = isPhoneRecording ? 1920 : 2160;', 'const recordTargetLongSide = 1280;').replace('const recordMinShortSide = 1080;', 'const recordMinShortSide = 720;');
+    html=html.replace('  smoothedWidth = smoothedWidth === null ? targetWidth', '  if (Number.isFinite(e.playbackWidth)) targetWidth=e.playbackWidth*getDisplayDpr();\n  smoothedWidth = smoothedWidth === null ? targetWidth');
+    html=html.replace('  const isPhoneRecording = /iPhone|iPod/i.test(navigator.userAgent) || Math.min(screen.width, screen.height) < 600;', '  const portraitWidth=Math.min(recordSourceRect.width,recordSourceRect.height*.84); recordSourceRect.x+=(recordSourceRect.width-portraitWidth)/2; recordSourceRect.width=portraitWidth;\n  const isPhoneRecording = /iPhone|iPod/i.test(navigator.userAgent) || Math.min(screen.width, screen.height) < 600;');
+    html=html.replace('id="recordingHandSize" min="60" max="140"', 'id="recordingHandSize" min="60" max="180"').replace('Math.min(1.4, parseFloat(recordingHandSize.value', 'Math.min(1.8, parseFloat(recordingHandSize.value');
+    html=html.replace('function compositeRecordFrame() {','function compositeRecordFrame() {\n  recordCtx.setTransform(1,0,0,1,0,0); recordCtx.globalAlpha=1; recordCtx.globalCompositeOperation="source-over";');
+    html = html.replace('if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {', 'if (false) {');
+
+    html=html.replace('function endStroke() {','function endStroke(playbackDotWidth) {').replace(': minW + pressure * (maxW - minW);', ': Number.isFinite(playbackDotWidth) ? playbackDotWidth * getDisplayDpr() : minW + pressure * (maxW - minW);');
+    // The playback uses vector paths, so it must not keep dozens of full-size
+    // canvas undo snapshots in memory while encoding a video on mobile Safari.
+    html=html.replace('let lastPenPos = null;', 'let automatedPlaybackRecording = false;\nlet lastPenPos = null;');
+    html=html.replace('function saveHistory() {', 'function saveHistory() {\n  if (automatedPlaybackRecording) return;');
+    html=html.replace('const MIN_PRINT_LONG_SIDE = 3000;', 'const MIN_PRINT_LONG_SIDE = 1920;');
+    html=html.replace('const dpr = Math.max(rawDpr, MIN_PRINT_LONG_SIDE / longSideCss);', 'const dpr = Math.max(1, MIN_PRINT_LONG_SIDE / longSideCss);');
+    const code = `
+(() => {
+
+  function unpackArt(){
+    const bin=atob("+gFYApYABgAbAUQAFgAaAUMAFgAaATwAFgAcATUAFgAiAS4AFgAkAS4AFgACABsBRAAWACEBPgAWAA0AGwFEABYAGwFJABYAHgFMABYAIQFWABYAJAFhABYAKAFqABYALAFyABYAMwF6ABYAOAF8ABYAQAF8ABYARgF6ABYATAF4ABYATwF4ABYAAgByANwBFgB0ANkBFgADAHIA3AEWAHAA3gEWAHAA4AEWAAIAcgDcARYAdQDeARYAEwCgATABFgCfATEBFgCWATIBFgCTATQBFgCMATYBFgCGATcBFgB/AToBFgB7AToBFgBzATwBFgBrAT4BFgBiAUIBFgBYAUUBFgBPAUcBFgBMAUkBFgBFAUoBFgA+AUwBFgA3AU8BFgAyAU8BFgAuAVEBFgADAOEASwEWAN8AUQEWANoAVAEWAAIAWQEcABYAVgEaABYAAwBdARsAFgBiASAAFgBoASQBFgAFAHQBVwAWAHQBWQAWAHIBWwAWAHIBXwAWAG4BYwAWABIAFgEeAhYAFgEhAhYAGgEoAhYAHwEwAhYAKAEzAhYALAEzAhYAMQE4AhYALQE6AhYAJAE6AhYAGwE6AhYAFwE5AhYAEAEyAhYACgEsAhYABAElAhYA/wAeAhYA/wAbAhYABAEWAhYACAERAhYAAgBPAS8AFgBSATMAFgAFACwBMAAWACoBMgAWACgBOQAWACYBQAAWACQBQgAWABgAQQF2ARYAPwF4ARYAPgGCARYAPQGDARYAPQGHARYAOwGMARYAOwGRARYAOQGZARYANwGhARYANgGsARYANAGzARYAMgG6ARYALQHEARYAKAHNARYAKAHPARYAJgHRARYAIwHYARYAIAHgARYAHAHmARYAGAHtARYAGAHvARYAEgH4ARYADAECAhYABgELAhYAAgARABMCFgAQABECFgACAHgA2gEWAHUA2AEWABAAeADaARYAfQDVARYAgwDMARYAigDDARYAkAC6ARYAlwCxARYAngCoARYApQCfARYArACWARYAsQCOARYAtgCFARYAvAB8ARYAwQB0ARYAxgBuARYAygBoARYAygBmARYAAgB4ANoBFgB1AN4BFgACAEcBOgAWAEgBPwAWAA0ALQFMARYALAFGARYAKgFAARYAKgE1ARYAKwE0ARYAKwEtARYALQElARYALQEaARYALAEPARYALAEEARYALQEDARYALQH5ABYALwHzABYACQDyAFUBFgD1AF4BFgD1AGkBFgD0AGoBFgD0AG4BFgDyAHEBFgDvAHEBFgDtAG4BFgDtAGQBFgAGAGkBJQAWAHEBLAAWAHUBNQAWAHYBPAAWAHcBQwAWAHQBRgAWAAMA5QBDARYA6ABFARYA6QBJARYACAAzAPYBFgAwAPoBFgAuAPoBFgAsAPgBFgAqAPEBFgAqAOoBFgAtAOcBFgA0AOcBFgACAD4AAgIWAEMAAgIWAAIAcQDhARYAdQDeARYADQDHAGUBFgDAAG4BFgC5AHgBFgCyAIIBFgCsAIsBFgClAJQBFgCeAJ4BFgCXAKgBFgCQALEBFgCKALoBFgCDAMQBFgB8AM4BFgB1ANcBFgADAHgBTwAWAHgBTAAWAHQBSQAWAAQARAFnABYAQAFqABYAPAFqABYAOwFrABYAIACTAUEBFgCWAUoBFgCZAVMBFgCbAV4BFgCeAWgBFgCiAXIBFgCkAXoBFgCmAYMBFgCpAY0BFgCtAZcBFgCwAaEBFgCyAakBFgC0AbEBFgC2AbkBFgC2AcEBFgC3AcIBFgC4AcsBFgC6Ac8BFgC6AdMBFgC9AdwBFgC9AeABFgC/AeQBFgDAAeoBFgDBAfEBFgDDAfcBFgDFAf0BFgDFAQMCFgDHAQkCFgDHARECFgDIARICFgDJARwCFgDDASECFgAEAOwASgEWAO0ASQEWAOwAPgEWAO8AOQEWAAQA7gBcARYA7wBdARYA7wBiARYA7QBkARYAAgCpAU4BFgCoAVABFgACAGMBTgAWAGYBTQAWAAQARAA9AhYAQQA9AhYAPAA5AhYAOAA1AhYAAgBDANoBFgA+ANwBFgACAEEBdAEWAEEBbwEWAAIARwDPARYARQDRARYABQA2AVUBFgA4AVwBFgA6AWMBFgA+AWwBFgBAAW4BFgAEAKsBTQEWAK4BTwEWAK4BVgEWAK8BXAEWAAYAeQA+AhYAcQA3AhYAawAuAhYAZQAmAhYAZgAgAhYAagAZAhYAAgAIAQ8CFgAGAQ0CFgAGAOQAMAEWAN8ANwEWANoAPQEWANUARAEWANUASwEWANUAUgEWAAcAKwEgABYAKwEeABYALQEcABYANwEWABYAOgEVABYAQAEWABYARgEWABYAAgBZAXIAFgBQAXgAFgADAD0ABQIWAEMABwIWAEQABgIWAAMAWAEPABYAVQEPABYATgEVABYADABQAYUAFgBWAYgAFgBcAYoAFgBlAYoAFgBqAYcAFgBsAYEAFgBpAXsAFgBoAXQAFgBoAW4AFgBnAW0AFgBnAWYAFgBpAWQAFgADAFYBOgAWAFIBNwAWAFIBNQAWAAQAVgE6ABYAVwE3ABYAVQE0ABYAUwE0ABYAAgB8AEACFgB6AD8CFgADAG0BbQAWAGwBaQAWAG0BZgAWABIA5gAvARYA6QAwARYA8gA3ARYA+QA6ARYAAAExARYABgEpARYADQEgARYADgEcARYAEwEVARYAFwENARYAHAEGARYAIwH+ABYAJwH4ABYAKwHxABYAMAHsABYAMQHpABYANQHlABYAOgHdABYAAwAhAT4AFgAjATYAFgAlAS8AFgACACEBPgAWACMBQgAWAAQA7QBcARYA6wBgARYA6wBiARYA7QBkARYAAgA1AOMBFgA+ANwBFgADAE0BFwAWAEgBFwAWAEcBFgAWAAcAewAtAhYAfgAyAhYAggA1AhYAiQAwAhYAhgAsAhYAgQAtAhYAfgArAhYAAwCqAUsBFgCnAUgBFgCnATwBFgADAKoBSwEWAKwBSQEWAKwBRQEWAAIANADuARYAMwD1ARYABQC1AVoBFgCzAVgBFgCzAVABFgCzAUgBFgCyAUUBFgAHALUBWgEWALgBVgEWALgBTgEWALgBRQEWALgBPQEWALcBPAEWALcBNgEWAAIAtQFaARYAswFhARYAAwBiAOABFgBgAOABFgBbAOYBFgADALEBKgIWALoBJgIWAMMBIQIWAAIAJAFDABYAIwFGABYACQASABMCFgAUABMCFgAZABcCFgAfABgCFgAmABECFgAwAAsCFgAzAAgCFgA5AAUCFgA8AAUCFgACAO4AWwEWAO0AVQEWABIAsQEsAhYAswE3AhYAtQE5AhYAuQE5AhYAwwE0AhYAygEyAhYA0QEvAhYA2AErAhYA4AEnAhYA6QEhAhYA6wEcAhYA6gEbAhYA5AEbAhYA2gEeAhYA0AEgAhYAyQEjAhYAxQEjAhYAwwEhAhYAAwBFAAYCFgBHAAYCFgBJAAQCFgAKAH0AKgIWAHwAJwIWAHcAIQIWAHIAGgIWAG0AFAIWAG0ADwIWAGoACgIWAGYABQIWAGQAAAIWAF8A/AEWAAQAPgDcARYAPADVARYAQADRARYAQwDRARYABQBiAPEBFgBhAPABFgBhAOsBFgBiAOoBFgBjAOEBFgACAMsAZQEWAMwAYwEWAAUA4gBJARYA4gBGARYA3wBDARYA3QBFARYA3ABJARYAAgB+AXMAFgB+AWsAFgACAOMASgEWAOgASgEWAAMARADaARYARwDaARYASgDcARYAAgB0AVUAFgB0AVEAFgACAEoA3gEWAEoA4QEWAAIAdQFWABYAeAFWABYAAwBaAR0AFgBhASUAFgBoAS0AFgACAO4AVAEWAPEAVAEWAAIA8gBTARYA7QBOARYAAgDIAGMBFgDKAGEBFgAEACABbgAWAB8BbQAWAB8BYwAWAB4BYQAWAAIAIAFuABYAIwFqABYAHgDlAC4BFgDjACwBFgDjACgBFgDnAB4BFgDsABcBFgDsABUBFgDyAAoBFgD3AAABFgD5AP4AFgD5APwAFgD9APgAFgAAAfIAFgAEAewAFgAFAegAFgAKAd4AFgAPAdQAFgAPAdIAFgAUAckAFgAYAcAAFgAcAbgAFgAhAa8AFgAlAaUAFgAoAaIAFgArAZwAFgAuAZYAFgAyAZIAFgA4AY0AFgA/AYgAFgBJAYMAFgBLAYMAFgACAEUAOAIWAEAAMgIWAAUARgA9AhYASAA9AhYASgA7AhYASAA4AhYARgA4AhYAAwBgAUIAFgBbAT0AFgBYATwAFgAFACwBKQAWADEBMQAWADgBOQAWAEABPgAWAEcBQAAWAAMA1ABTARYA0ABXARYAygBhARYABAB0AXEAFgByAW4AFgBxAWgAFgBuAWUAFgADAOEAVQEWAOMAVQEWAOsAUAEWAAQAZADxARYAaADuARYAbADoARYAcADiARYAAgCwASsCFgCrASwCFgACACUBLgAWACsBKQAWAAwAQAAxAhYASAAsAhYATgAtAhYAVQAqAhYAVwAoAhYAWgAoAhYAXQAtAhYAZAA0AhYAagA6AhYAcQBBAhYAdgBCAhYAeABAAhYABABOARUAFgBJAQ8AFgBGARAAFgBHARUAFgACAEUAPAIWAEUAOQIWAAMAIwElABYAJgElABYAKgEhABYABAB5AVcAFgB6AWAAFgB7AWgAFgB9AWoAFgADANwASwEWANoATQEWANkAUwEWAAQAOQFgABYANQFgABYANAFfABYANAFWABYAAwBjAPIBFgBhAPQBFgBfAPwBFgADAGsAHwIWAHMAJwIWAHoALAIWAAQA1gBVARYA1gBXARYA0wBcARYAzQBiARYAAgA4ADUCFgA5ADICFgASADgANQIWADIAOwIWADkARAIWAD0AQwIWAD8ARQIWAD4ASAIWADoASQIWADQASAIWAC0AQQIWACYAOgIWACgANwIWACgAMwIWACEALgIWAB0AJQIWAB0AHgIWABUAGgIWABEAFgIWABEAFAIWAAMAPwAxAhYAOgAxAhYAOQAyAhYAAwBsAVYAFgBtAV8AFgBqAWIAFgACAEQA0gEWAEMA2QEWAAMAUwGBABYAUQF+ABYAUAF5ABYABQBhAUIAFgBmAUAAFgBpAUMAFgBqAUcAFgBnAUwAFgADAHQBUAAWAHMBTwAWAHMBSgAWAAkAGgFPABYAGAFPABYAFQFLABYAFAFHABYAFAFAABYAFAE6ABYAFwEwABYAHAEqABYAHgEqABYAGAAJARACFgAQARUCFgAYARoCFgAfAR8CFgAiAR8CFgAoARcCFgAoARUCFgAsAQ8CFgAxAQkCFgAxAQcCFgA2AQACFgA7AfkBFgBAAfIBFgBAAfABFgBGAekBFgBGAecBFgBMAd8BFgBNAdsBFgBSAdQBFgBYAcwBFgBYAcoBFgBcAcIBFgBhAbkBFgBlAbEBFgAVAKIBKgEWAKABIgEWAJ8BGwEWAJsBEAEWAJsBDAEWAJgBBAEWAJYB+wAWAJUB8wAWAJMB7wAWAJIB6AAWAJEB4AAWAJAB3wAWAJAB2AAWAJAB0gAWAJIBzQAWAJMBxAAWAJABvAAWAJABuQAWAIwBsgAWAIgBqgAWAIcBpgAWAAQALAEhABYAMgEeABYAOQEbABYAPAEbABYAAgBPARcAFgBVARkAFgAGAH4BagAWAH8BaQAWAH8BXgAWAH4BXQAWAH4BWQAWAHsBVQAWABgAQgF1ARYARgF7ARYASwGBARYAUAGLARYAVgGUARYAXAGcARYAYgGlARYAaAGtARYAbgG2ARYAdAG+ARYAegHHARYAfgHQARYAgwHZARYAhwHiARYAiwHoARYAjwHyARYAkwH5ARYAlwEAAhYAlwECAhYAmgEIAhYAngEPAhYAoQEXAhYApAEfAhYAqwEnAhYAAwBFAAICFgBHAAICFgBJAAQCFgACAGkBLAAWAGgBJgAWAAIA7ABOARYA6wBQARYAAwBcARoAFgBaARgAFgBXARkAFgACAOsAUAEWAO0AUwEWAAQAXwD8ARYAWAAAAhYAUQADAhYASQAEAhYABQBzAUYAFgBwAUAAFgBuAToAFgBtATQAFgBpAS4AFgAFAGcBTQAWAGgBTgAWAGgBVgAWAGcBXwAWAGoBYgAWAAQAVQE9ABYAUQE9ABYASgE5ABYASAE5ABYAAgBBAW4BFgBCAWwBFgAEADgBJwAWADsBLAAWAEEBMgAWAEcBOQAWAAMAtgE1ARYAqwE4ARYApwE7ARYAGwBxAXwAFgB4AX8AFgB+AYIAFgCDAYYAFgCLAY4AFgCMAZEAFgCRAZcAFgCUAaEAFgCYAasAFgCbAbUAFgCeAcAAFgChAcoAFgClAdQAFgCoAd4AFgCoAeIAFgCqAewAFgCtAfYAFgCtAfsAFgCwAQMBFgCyAQsBFgCzARIBFgC3ARwBFgC4ASMBFgC6AScBFgC6AS8BFgC7ATEBFgC3ATQBFgACAHgBUAAWAHoBVAAWAAYAYwDfARYAYgDbARYAXgDXARYAVgDYARYAUADdARYASwDdARYABAA8AAICFgA5AP8BFgA2APcBFgA0APYBFgACAN0ASgEWAOAASgEWAAMAOQAyAhYANwAqAhYAMgAmAhYAAQBEAVMALgABADYBXQAyAAEAKgFaADEAAQAgAWkAMgABAEABaQAyAAEAQwDnAS4A");
+    const bytes=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
+    const v=new DataView(bytes.buffer); let o=0; const u16=()=>{const n=v.getUint16(o,true);o+=2;return n};
+    const W=u16(),H=u16(),n=u16(),paths=[];
+    for(let i=0;i<n;i++){const m=u16(),p=[];for(let j=0;j<m;j++){p.push([u16(),u16(),u16()/10])}paths.push(p)}
+    return {W,H,paths};
+  }
+  const art=unpackArt();
+  // Remove tracing artifacts: one false long vertical path and isolated single-point dots.
+  art.paths = art.paths.filter((p) => {
+    if (p.length <= 1) return false;
+    let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+    for (const q of p) { minX=Math.min(minX,q[0]); maxX=Math.max(maxX,q[0]); minY=Math.min(minY,q[1]); maxY=Math.max(maxY,q[1]); }
+    const dx=maxX-minX, dy=maxY-minY;
+    if (dy > 200 && dx < 20) return false;
+    return true;
+  });
+
+  function preparePlaybackPaths(paths){
+    const prepared=paths.map((source,index)=>{
+      let path=source.slice();
+      let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity,length=0;
+      for(let i=0;i<path.length;i++) {
+        const p=path[i]; minX=Math.min(minX,p[0]);maxX=Math.max(maxX,p[0]);minY=Math.min(minY,p[1]);maxY=Math.max(maxY,p[1]);
+        if(i) length += Math.hypot(p[0]-path[i-1][0],p[1]-path[i-1][1]);
+      }
+      if(path.length>1){
+        const first=path[0], last=path[path.length-1];
+        const verticalSpan=maxY-minY, horizontalSpan=maxX-minX;
+        const chord=Math.max(1,Math.hypot(last[0]-first[0],last[1]-first[1]));
+        const curveRatio=length/chord;
+        const naturalDownStroke=verticalSpan>18 && verticalSpan>horizontalSpan*1.15 && curveRatio<1.75;
+        if(naturalDownStroke && first[1]>last[1]) path.reverse();
+      }
+      const startY=path[0]?.[1]??minY;
+      return {path,index,minX,minY,startY};
+    });
+    prepared.sort((a,b)=>{
+      const bandA=Math.floor(Math.min(a.minY,a.startY)/52),bandB=Math.floor(Math.min(b.minY,b.startY)/52);
+      if(bandA!==bandB)return bandA-bandB;
+      return bandA%2===0 ? a.minX-b.minX : b.minX-a.minX;
+    });
+    return prepared.map(item=>item.path);
+  }
+  const playbackPaths=preparePlaybackPaths(art.paths);
+  const play=document.getElementById('playWalkSketch'),status=document.getElementById('walkStatus');
+  const sleep=ms=>new Promise(r=>setTimeout(r,ms)),frame=()=>new Promise(r=>requestAnimationFrame(r));
+  function eventAt(p,phase,index){
+    const rect=drawCanvas.getBoundingClientRect(),source=recordSourceRect||{x:0,y:0,width:drawCanvas.width,height:drawCanvas.height};
+    const ps=Math.min(source.width*.78/art.W,source.height*.86/art.H);
+    const inkX=source.x+(source.width-art.W*ps)/2+p[0]*ps,inkY=source.y+(source.height-art.H*ps)/2+p[1]*ps;
+    const width=Math.max(.7,Math.min(45,p[2]*ps/getDisplayDpr()));
+    return {clientX:rect.left+(inkX/drawCanvas.width)*rect.width,clientY:rect.top+(inkY/drawCanvas.height)*rect.height,pointerType:'pen',pressure:.55,playbackWidth:width,pointerId:988};
+  }
+  async function travelTo(p,index){
+    const rect=drawCanvas.getBoundingClientRect(),e=eventAt(p,0,index);
+    const target={x:(e.clientX-rect.left)*drawCanvas.width/rect.width,y:(e.clientY-rect.top)*drawCanvas.height/rect.height};
+    if(!lastPenPos){lastPenPos=target;return;}
+    const from={...lastPenPos},distance=Math.hypot(target.x-from.x,target.y-from.y);
+    const duration=Math.min(80,Math.max(18,distance/getDisplayDpr()*.14)),begin=performance.now();
+    while(true){const t=Math.min(1,(performance.now()-begin)/duration),ease=t*t*(3-2*t);lastPenPos={x:from.x+(target.x-from.x)*ease,y:from.y+(target.y-from.y)*ease};if(t===1)break;await frame();}
+  }
+  async function stroke(path,index){
+    await travelTo(path[0],index);
+    startStroke(eventAt(path[0],0,index));
+    if(path.length===1){endStroke(eventAt(path[0],0,index).playbackWidth);await sleep(15);return}
+    const length=path.slice(1).reduce((v,p,i)=>v+Math.hypot(p[0]-path[i][0],p[1]-path[i][1]),0),seconds=Math.max(.025,Math.min(.5,length/1800)),begin=performance.now();let last=0;
+    while(true){const progress=Math.min(1,(performance.now()-begin)/(seconds*1000)),end=Math.min(path.length-1,Math.floor(progress*(path.length-1)));for(let i=last+1;i<=end;i++)continueStroke(eventAt(path[i],i/(path.length-1),index));last=end;if(progress===1)break;await frame()}
+    endStroke();await sleep(8);
+  }
+
+  async function parkHand(){
+    const source=recordSourceRect||{x:0,y:0,width:drawCanvas.width,height:drawCanvas.height};
+    const from=lastPenPos?{...lastPenPos}:{x:source.x+source.width*.5,y:source.y+source.height*.5};
+    const target={x:source.x+source.width*.965,y:source.y+source.height*.94};
+    const duration=260,begin=performance.now();
+    while(true){
+      const t=Math.min(1,(performance.now()-begin)/duration),ease=t*t*(3-2*t);
+      lastPenPos={x:from.x+(target.x-from.x)*ease,y:from.y+(target.y-from.y)*ease};
+      if(t===1)break;
+      await frame();
+    }
+  }
+
+  play.onclick=async()=>{
+    if(play.disabled)return;
+    if(getComputedStyle(document.getElementById('lockScreen')).display!=='none'){status.textContent='Unlock Ink Sketchbook first.';return}
+    if(mediaRecorder&&mediaRecorder.state!=='inactive'){status.textContent='Stop the current recording first.';return}
+    play.disabled=true;status.textContent='Preparing silent recording…';
+    const settings=[colorPicker,paperColorPicker,thicknessSlider,minSlider,maxSlider,wobbleSlider,streamlineSlider,recordingHandSelect,recordingHandSize],saved=settings.map(el=>el.value);
+    try{
+      document.getElementById('recordingResultPanel')?.remove();automatedPlaybackRecording=true;history=[];redoStack=[];clearBtn.click();resetZoomBtn.click();drawModeBtn.click();
+      const values=['#000000','#ffffff','1','0.8','7','0','10','cream','155'];
+      settings.forEach((el,i)=>{el.value=values[i];el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}))});
+      await frame();
+      refImage=null;refVisible=false;clearBackgroundVideo(false);recordReferenceInVideo=false;drawRef();
+      const hand=recordingHands.cream;await hand.img.decode();hand.ready=true;lastPenPos=null;
+      await recordBtn.onclick();if(!mediaRecorder||mediaRecorder.state!=='recording')throw Error('Video recorder did not start.');
+      status.textContent='Drawing stubborn dog · reference stays hidden';
+      for(let i=0;i<playbackPaths.length;i++) await stroke(playbackPaths[i],i);
+      await parkHand();await sleep(1700);const finished=new Promise(resolve=>mediaRecorder.addEventListener('stop',resolve,{once:true}));stopRecording();await finished;await frame();await sleep(120);const dl=[...document.querySelectorAll('a[download]')].find(a=>/video|record/i.test((a.textContent||'')+' '+(a.download||'')))||document.querySelector('a[download]');if(dl){try{dl.click()}catch(_){}}status.textContent='Stubborn-dog sketch finished · recording ready to download';
+    }catch(error){if(drawing)endStroke();stopRecording();status.textContent='Playback stopped: '+error.message}
+    finally{automatedPlaybackRecording=false;history=[];redoStack=[];saveHistory();settings.forEach((el,i)=>{el.value=saved[i];el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}))});play.disabled=false}
+  };
+})();
+`;
+    html=html.replace('</body>', '<div id="walkBar" style="position:fixed;bottom:12px;left:12px;z-index:2147483647;background:white;border:1px solid #d8d3c6;border-radius:10px;padding:10px;box-shadow:0 3px 14px #0001;font:13px system-ui;display:flex;align-items:center;gap:10px"><button id="playWalkSketch" type="button" style="padding:9px 14px">Draw & record stubborn dog</button><span id="walkStatus" role="status">FIXED v3 · clean trace · auto-download</span></div><script>'+code+'<\/script></body>');
+    document.open();document.write(html);document.close();
+  } catch(error) {document.body.textContent='Could not load stubborn-dog playback: '+error.message}
+})();
+</script></body></html>
