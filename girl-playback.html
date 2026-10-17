@@ -2,7 +2,7 @@
 (async function(){
   try {
     let html = await fetch('./hand-selector-standalone-test.html', {cache:'no-store'}).then(r=>{if(!r.ok)throw Error('Sketchbook could not load');return r.text()});
-    html = html.replace('const recordTargetLongSide = isPhoneRecording ? 1920 : 2160;', 'const recordTargetLongSide = 1280;').replace('const recordMinShortSide = 1080;', 'const recordMinShortSide = 720;');
+    html = html.replace('const recordTargetLongSide = isPhoneRecording ? 1920 : 2160;', 'const recordTargetLongSide = Math.max(drawCanvas.width, drawCanvas.height);').replace('const recordMinShortSide = 1080;', 'const recordMinShortSide = Math.min(drawCanvas.width, drawCanvas.height);');
     html=html.replace('  smoothedWidth = smoothedWidth === null ? targetWidth', '  if (Number.isFinite(e.playbackWidth)) targetWidth=e.playbackWidth*getDisplayDpr();\n  smoothedWidth = smoothedWidth === null ? targetWidth');
     html=html.replace('  const isPhoneRecording = /iPhone|iPod/i.test(navigator.userAgent) || Math.min(screen.width, screen.height) < 600;', '  const portraitWidth=Math.min(recordSourceRect.width,recordSourceRect.height*.66); recordSourceRect.x+=(recordSourceRect.width-portraitWidth)/2; recordSourceRect.width=portraitWidth;\n  const isPhoneRecording = /iPhone|iPod/i.test(navigator.userAgent) || Math.min(screen.width, screen.height) < 600;');
     html = html.replace('if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {', 'if (false) {');
