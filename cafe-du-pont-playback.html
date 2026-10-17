@@ -1,0 +1,100 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Ink Sketchbook — Cafe du Pont Playback</title><body><p>Loading Café du Pont playback…</p><script>
+(async function(){
+try{
+let html=await fetch('./hand-selector-standalone-test.html',{cache:'no-store'}).then(r=>{if(!r.ok)throw Error('Sketchbook could not load');return r.text()});
+html=html.replace('const recordTargetLongSide = isPhoneRecording ? 1920 : 2160;','const recordTargetLongSide = 1280;').replace('const recordMinShortSide = 1080;','const recordMinShortSide = 720;');
+html=html.replace('  smoothedWidth = smoothedWidth === null ? targetWidth','  if (Number.isFinite(e.playbackWidth)) targetWidth=e.playbackWidth*getDisplayDpr();\n  smoothedWidth = smoothedWidth === null ? targetWidth');
+html=html.replace('  const isPhoneRecording = /iPhone|iPod/i.test(navigator.userAgent) || Math.min(screen.width, screen.height) < 600;','  const portraitWidth=Math.min(recordSourceRect.width,recordSourceRect.height*.84); recordSourceRect.x+=(recordSourceRect.width-portraitWidth)/2; recordSourceRect.width=portraitWidth;\n  const isPhoneRecording = /iPhone|iPod/i.test(navigator.userAgent) || Math.min(screen.width, screen.height) < 600;');
+html=html.replace('id="recordingHandSize" min="60" max="140"','id="recordingHandSize" min="60" max="180"').replace('Math.min(1.4, parseFloat(recordingHandSize.value','Math.min(1.8, parseFloat(recordingHandSize.value');
+html=html.replace('function compositeRecordFrame() {','function compositeRecordFrame() {\n  recordCtx.setTransform(1,0,0,1,0,0); recordCtx.globalAlpha=1; recordCtx.globalCompositeOperation="source-over";');
+html=html.replace('if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {','if (false) {');
+html=html.replace('function endStroke() {','function endStroke(playbackDotWidth) {').replace(': minW + pressure * (maxW - minW);',': Number.isFinite(playbackDotWidth) ? playbackDotWidth * getDisplayDpr() : minW + pressure * (maxW - minW);');
+html=html.replace('let lastPenPos = null;','let automatedPlaybackRecording = false;\nlet lastPenPos = null;');
+html=html.replace('function saveHistory() {','function saveHistory() {\n  if (automatedPlaybackRecording) return;');
+html=html.replace('const MIN_PRINT_LONG_SIDE = 3000;','const MIN_PRINT_LONG_SIDE = 1920;');
+html=html.replace('const dpr = Math.max(rawDpr, MIN_PRINT_LONG_SIDE / longSideCss);','const dpr = Math.max(1, MIN_PRINT_LONG_SIDE / longSideCss);');
+const code=`
+(() => {
+const packed="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";
+function artFromPacked(){
+ const bin=atob(packed), b=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++)b[i]=bin.charCodeAt(i);
+ const v=new DataView(b.buffer); let o=0;
+ const u16=()=>{const n=v.getUint16(o,true);o+=2;return n}, i8=()=>v.getInt8(o++);
+ const W=u16(),H=u16(),n=u16(),paths=[];
+ for(let k=0;k<n;k++){
+   const m=u16(), p=[]; if(!m){paths.push(p);continue}
+   let x=u16(),y=u16(); p.push([x,y,1.9]);
+   for(let j=1;j<m;j++){let dx=i8(),dy;if(dx===127){dx=v.getInt16(o,true);o+=2;dy=v.getInt16(o,true);o+=2}else dy=i8();x+=dx;y+=dy;p.push([x,y,1.9])}
+   paths.push(p);
+ }
+ return {W,H,paths};
+}
+const art=artFromPacked();
+function preparePlaybackPaths(paths){
+ const prepared=paths.map((source,index)=>{
+  let path=source.slice(),minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity,length=0;
+  for(let i=0;i<path.length;i++){const p=path[i];minX=Math.min(minX,p[0]);maxX=Math.max(maxX,p[0]);minY=Math.min(minY,p[1]);maxY=Math.max(maxY,p[1]);if(i)length+=Math.hypot(p[0]-path[i-1][0],p[1]-path[i-1][1])}
+  if(path.length>1){const first=path[0],last=path[path.length-1],vs=maxY-minY,hs=maxX-minX,chord=Math.max(1,Math.hypot(last[0]-first[0],last[1]-first[1])),ratio=length/chord;if(vs>24&&vs>hs*1.15&&ratio<1.75&&first[1]>last[1])path.reverse()}
+  return {path,index,minX,minY,startY:path[0]?.[1]??minY};
+ });
+ prepared.sort((a,b)=>{const A=Math.floor(Math.min(a.minY,a.startY)/64),B=Math.floor(Math.min(b.minY,b.startY)/64);if(A!==B)return A-B;return A%2===0?a.minX-b.minX:b.minX-a.minX});
+ return prepared.map(x=>x.path);
+}
+const paths=preparePlaybackPaths(art.paths), play=document.getElementById('playCafeSketch'),status=document.getElementById('cafeStatus');
+const sleep=ms=>new Promise(r=>setTimeout(r,ms)), frame=()=>new Promise(r=>requestAnimationFrame(r));
+function eventAt(p){
+ const rect=drawCanvas.getBoundingClientRect(),source=recordSourceRect||{x:0,y:0,width:drawCanvas.width,height:drawCanvas.height};
+ const ps=Math.min(source.width*.90/art.W,source.height*.84/art.H), ox=source.x+(source.width-art.W*ps)/2, oy=source.y+(source.height-art.H*ps)/2;
+ const inkX=ox+p[0]*ps,inkY=oy+p[1]*ps,width=Math.max(.75,Math.min(16,p[2]*ps/getDisplayDpr()));
+ return {clientX:rect.left+(inkX/drawCanvas.width)*rect.width,clientY:rect.top+(inkY/drawCanvas.height)*rect.height,pointerType:'pen',pressure:.55,playbackWidth:width,pointerId:988};
+}
+async function travelTo(p){
+ const rect=drawCanvas.getBoundingClientRect(),e=eventAt(p),target={x:(e.clientX-rect.left)*drawCanvas.width/rect.width,y:(e.clientY-rect.top)*drawCanvas.height/rect.height};
+ if(!lastPenPos){lastPenPos=target;return}
+ const from={...lastPenPos},dist=Math.hypot(target.x-from.x,target.y-from.y)/getDisplayDpr();
+ if(dist<55){lastPenPos=target;return}
+ const duration=Math.min(75,Math.max(20,dist*.20)),begin=performance.now();
+ while(true){const t=Math.min(1,(performance.now()-begin)/duration),s=t*t*(3-2*t);lastPenPos={x:from.x+(target.x-from.x)*s,y:from.y+(target.y-from.y)*s};if(t===1)break;await frame()}
+}
+async function stroke(path){
+ await travelTo(path[0]); startStroke(eventAt(path[0]));
+ if(path.length===1){endStroke(eventAt(path[0]).playbackWidth);return}
+ const length=path.slice(1).reduce((a,p,i)=>a+Math.hypot(p[0]-path[i][0],p[1]-path[i][1]),0);
+ if(length<55||path.length<5){for(let i=1;i<path.length;i++)continueStroke(eventAt(path[i]));endStroke();return}
+ const seconds=Math.max(.025,Math.min(.20,length/2500)),begin=performance.now();let last=0;
+ while(true){const pr=Math.min(1,(performance.now()-begin)/(seconds*1000)),end=Math.min(path.length-1,Math.floor(pr*(path.length-1)));for(let i=last+1;i<=end;i++)continueStroke(eventAt(path[i]));last=end;if(pr===1)break;await frame()}
+ endStroke();
+}
+async function parkHand(){
+ const source=recordSourceRect||{x:0,y:0,width:drawCanvas.width,height:drawCanvas.height},from=lastPenPos?{...lastPenPos}:{x:source.x+source.width*.5,y:source.y+source.height*.5},target={x:source.x+source.width*.965,y:source.y+source.height*.94},begin=performance.now(),duration=300;
+ while(true){const t=Math.min(1,(performance.now()-begin)/duration),s=t*t*(3-2*t);lastPenPos={x:from.x+(target.x-from.x)*s,y:from.y+(target.y-from.y)*s};if(t===1)break;await frame()}
+}
+play.onclick=async()=>{
+ if(play.disabled)return;
+ if(getComputedStyle(document.getElementById('lockScreen')).display!=='none'){status.textContent='Unlock Ink Sketchbook first.';return}
+ if(mediaRecorder&&mediaRecorder.state!=='inactive'){status.textContent='Stop the current recording first.';return}
+ play.disabled=true;status.textContent='Preparing café recording…';
+ const settings=[colorPicker,paperColorPicker,thicknessSlider,minSlider,maxSlider,wobbleSlider,streamlineSlider,recordingHandSelect,recordingHandSize],saved=settings.map(e=>e.value);
+ try{
+  document.getElementById('recordingResultPanel')?.remove();automatedPlaybackRecording=true;history=[];redoStack=[];clearBtn.click();resetZoomBtn.click();drawModeBtn.click();
+  const values=['#000000','#ffffff','1','0.8','7','0','10','cream','155'];
+  settings.forEach((e,i)=>{e.value=values[i];e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}))});
+  await frame();refImage=null;refVisible=false;clearBackgroundVideo(false);recordReferenceInVideo=false;drawRef();
+  const hand=recordingHands.cream;await hand.img.decode();hand.ready=true;lastPenPos=null;
+  await recordBtn.onclick();if(!mediaRecorder||mediaRecorder.state!=='recording')throw Error('Video recorder did not start.');
+  status.textContent='Drawing Café du Pont · new café trace only';
+  for(const p of paths)await stroke(p);
+  await parkHand();await sleep(2000);
+  const finished=new Promise(resolve=>mediaRecorder.addEventListener('stop',resolve,{once:true}));stopRecording();await finished;await frame();await sleep(120);
+  const dl=[...document.querySelectorAll('a[download]')].find(a=>/video|record/i.test((a.textContent||'')+' '+(a.download||'')))||document.querySelector('a[download]');if(dl){try{dl.click()}catch(_){}}
+  status.textContent='Café video finished · download ready';
+ }catch(err){if(drawing)endStroke();stopRecording();status.textContent='Playback stopped: '+err.message}
+ finally{automatedPlaybackRecording=false;history=[];redoStack=[];saveHistory();settings.forEach((e,i)=>{e.value=saved[i];e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}))});play.disabled=false}
+};
+})();
+`;
+html=html.replace('</body>','<div id="cafeBar" style="position:fixed;bottom:12px;left:12px;z-index:2147483647;background:white;border:1px solid #d8d3c6;border-radius:10px;padding:10px;box-shadow:0 3px 14px #0001;font:13px system-ui;display:flex;align-items:center;gap:10px"><button id="playCafeSketch" type="button" style="padding:9px 14px">Draw & record Café du Pont</button><span id="cafeStatus" role="status">New café trace · 155% cream hand · 2-second finish</span></div><script>'+code+'<\/script></body>');
+document.open();document.write(html);document.close();
+}catch(error){document.body.textContent='Could not load Café du Pont playback: '+error.message}
+})();
+</script></body></html>
