@@ -111,7 +111,8 @@ function demoExportCanvas() {
   syncMark();
 })();
 <\/script>`;
-  html = html.replace('</body>', ui + '</body>');
+  const analytics = `<script data-goatcounter="https://vanya-demo.goatcounter.com/count" async src="https://gc.zgo.at/count.js"><\/script>`;
+  html = html.replace('</body>', ui + analytics + '</body>');
   document.open(); document.write(html); document.close();
 })().catch(err => {
   document.getElementById('loading').textContent = 'The demo could not load: ' + err.message;
