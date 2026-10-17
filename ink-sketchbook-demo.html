@@ -1,1 +1,155 @@
-<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Ink Sketchbook demo</title><body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#f6f4f0;color:#2a2620;font:16px system-ui;text-align:center"><main style="padding:24px"><h1>Ink Sketchbook demo is being updated</h1><p>Please check back soon.</p></main></body></html>
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ink Sketchbook — Five-minute demo</title>
+<body style="margin:0;background:#f6f4f0;font:16px system-ui;color:#292620">
+<p id="loading" style="padding:24px">Loading Ink Sketchbook demo…</p>
+<script>
+(async () => {
+  const etsy = 'https://vanyaillustrations.etsy.com/listing/4554632820';
+  const original = await fetch('./index.html', {cache:'no-store'});
+  if (!original.ok) throw new Error('The sketchbook could not load');
+  let html = await original.text();
+  const gateStart = html.indexOf('// --- Access code gate ---');
+  const gateEnd = html.indexOf('const refCanvas =', gateStart);
+  if (gateStart < 0 || gateEnd < 0) throw new Error('The sketchbook has changed; the demo needs an update');
+  html = html.slice(0, gateStart) + `
+const lockScreen = document.getElementById('lockScreen');
+const passcodeInput = document.getElementById('passcodeInput');
+const unlockBtn = document.getElementById('unlockBtn');
+const lockError = document.getElementById('lockError');
+lockScreen.style.display = 'none';
+function tryUnlock() {}
+` + html.slice(gateEnd);
+
+  function replaceOnce(before, after) {
+    if (!html.includes(before)) throw new Error('The sketchbook has changed; demo export needs an update');
+    html = html.replace(before, after);
+  }
+  const watermark = `
+function demoStamp(c, w, h) {
+  c.save();
+  const size = Math.max(17, Math.min(52, w / 30));
+  const stepX = size * 8.1, stepY = size * 4.1;
+  c.font = '700 ' + size + 'px system-ui, sans-serif';
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.translate(w / 2, h / 2); c.rotate(-Math.PI / 7);
+  c.lineWidth = Math.max(1.5, size * .055);
+  c.strokeStyle = 'rgba(255,255,255,.48)';
+  c.fillStyle = 'rgba(47,39,36,.22)';
+  const reach = Math.hypot(w, h);
+  for (let row = -Math.ceil(reach / stepY); row <= Math.ceil(reach / stepY); row++) {
+    for (let col = -Math.ceil(reach / stepX); col <= Math.ceil(reach / stepX); col++) {
+      const x = col * stepX + (row % 2) * stepX / 2;
+      const y = row * stepY;
+      c.strokeText('VANYA · DEMO', x, y);
+      c.fillText('VANYA · DEMO', x, y);
+    }
+  }
+  c.restore();
+}
+function demoExportCanvas() {
+  const out = document.createElement('canvas');
+  out.width = drawCanvas.width; out.height = drawCanvas.height;
+  const c = out.getContext('2d');
+  c.drawImage(drawCanvas, 0, 0);
+  demoStamp(c, out.width, out.height);
+  return out;
+}
+`;
+  replaceOnce('function flattenOntoBackground(bgColor) {', watermark + '\nfunction flattenOntoBackground(bgColor) {');
+  replaceOnce('  fctx.drawImage(drawCanvas, 0, 0);\n  return flat;', '  fctx.drawImage(drawCanvas, 0, 0);\n  demoStamp(fctx, w, h);\n  return flat;');
+  replaceOnce("const rawBytes = dataUrlToBytes(drawCanvas.toDataURL('image/png'));", "const rawBytes = dataUrlToBytes(demoExportCanvas().toDataURL('image/png'));");
+  replaceOnce("const dataUrl = drawCanvas.toDataURL('image/png');", "const dataUrl = demoExportCanvas().toDataURL('image/png');");
+  // Preserve Save and My Drawings, but keep trial drawings apart from paid ones.
+  html = html.replaceAll("'drawings_index'", "'demo_drawings_index'")
+             .replaceAll("'drawing_'", "'demo_drawing_'");
+  replaceOnce('<title>Ink Sketchbook</title>', '<title>Ink Sketchbook — Five-minute demo</title>');
+
+  const ui = `
+<style>
+  #demoWatermark {position:fixed;z-index:4;pointer-events:none}
+  #demoTop {position:fixed;bottom:10px;left:12px;z-index:999998;
+    background:#fffdf8;border:1px solid #ddd3c4;border-radius:12px;
+    box-shadow:0 3px 18px #0002;padding:7px 12px;display:flex;gap:12px;align-items:center;
+    font:600 13px system-ui;color:#342d29;max-width:96vw}
+  #demoTop a {color:#874d3c;white-space:nowrap}
+  #demoTimer {font-variant-numeric:tabular-nums;font-weight:800;font-size:17px}
+  .demoCurtain {position:fixed;inset:0;z-index:2147483647;background:rgba(246,244,240,.97);
+    display:flex;align-items:center;justify-content:center;padding:20px;font:16px system-ui;color:#292620}
+  .demoCard {background:white;border-radius:18px;padding:26px;max-width:480px;text-align:center;
+    box-shadow:0 12px 40px #0002;line-height:1.5}
+  .demoCard h2 {font-size:24px;margin:0 0 10px}
+  .demoCard button,.demoCard a {display:inline-block;background:#87523f;color:white;border:0;
+    padding:12px 18px;border-radius:9px;font:700 15px system-ui;text-decoration:none;cursor:pointer;margin:7px}
+</style>
+<canvas id="demoWatermark" aria-hidden="true"></canvas>
+<div id="demoTop"><span>INK SKETCHBOOK · DEMO</span><span id="demoTimer">05:00</span><a href="${etsy}" target="_blank" rel="noopener">Full version</a></div>
+<div class="demoCurtain" id="demoWelcome"><div class="demoCard">
+  <h2>Try Ink Sketchbook</h2><p>Draw, trace your own reference, and try all the ink controls.
+  Save drawings on this device or export full-resolution PNG, JPEG and PDF files.
+  Every demo result has a visible watermark.</p>
+  <button id="demoStart" type="button">Start five-minute demo</button>
+</div></div>
+<div class="demoCurtain" id="demoFinished" style="display:none"><div class="demoCard">
+  <h2>Five minutes are up</h2><p>Thank you for trying Ink Sketchbook. Your demo downloads keep the watermark.
+  The full version has no watermark or time limit.</p>
+  <a href="${etsy}" target="_blank" rel="noopener">Get the full version on Etsy</a>
+  <button id="demoAgain" type="button">Try another five minutes</button>
+</div></div>
+<script>
+(() => {
+  const welcome = document.getElementById('demoWelcome');
+  const finished = document.getElementById('demoFinished');
+  const display = document.getElementById('demoTimer');
+  const mark = document.getElementById('demoWatermark');
+  const markCtx = mark.getContext('2d');
+  let deadline = 0;
+  let markedW = 0, markedH = 0;
+  function syncMark() {
+    const r = drawCanvas.getBoundingClientRect();
+    mark.style.left = r.left + 'px'; mark.style.top = r.top + 'px';
+    mark.style.width = r.width + 'px'; mark.style.height = r.height + 'px';
+    const dpr = Math.min(2, devicePixelRatio || 1);
+    const w = Math.max(1, Math.round(r.width * dpr));
+    const h = Math.max(1, Math.round(r.height * dpr));
+    if (w !== markedW || h !== markedH) {
+      markedW = w; markedH = h; mark.width = w; mark.height = h;
+      demoStamp(markCtx, w, h);
+    }
+    requestAnimationFrame(syncMark);
+  }
+  syncMark();
+  function tick() {
+    if (!deadline) return;
+    const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+    display.textContent = String(Math.floor(remaining / 60)).padStart(2,'0') + ':' +
+      String(remaining % 60).padStart(2,'0');
+    if (!remaining) {
+      deadline = 0;
+      sessionStorage.removeItem('ink_demo_deadline');
+      finished.style.display = 'flex';
+    }
+  }
+  function begin() {
+    deadline = Date.now() + 5 * 60 * 1000;
+    sessionStorage.setItem('ink_demo_deadline', String(deadline));
+    welcome.style.display = 'none'; finished.style.display = 'none'; tick();
+  }
+  document.getElementById('demoStart').onclick = begin;
+  document.getElementById('demoAgain').onclick = begin;
+  const old = Number(sessionStorage.getItem('ink_demo_deadline'));
+  if (old && old > Date.now()) { deadline = old; welcome.style.display = 'none'; tick(); }
+  else sessionStorage.removeItem('ink_demo_deadline');
+  setInterval(tick, 250);
+})();
+<\/script>`;
+  html = html.replace('</body>', ui + '</body>');
+  document.open(); document.write(html); document.close();
+})().catch(err => {
+  document.getElementById('loading').textContent = 'The demo could not load: ' + err.message;
+});
+</script>
+</body>
+</html>
