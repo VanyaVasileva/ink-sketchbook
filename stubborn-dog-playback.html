@@ -28,6 +28,8 @@
     return {W,H,paths};
   }
   const art=unpackArt();
+  // Remove tracing artifacts: one false long vertical path and isolated single-point dots.
+  art.paths = art.paths.filter((p, originalIndex) => originalIndex !== 9 && p.length > 1);
 
   function preparePlaybackPaths(paths){
     const prepared=paths.map((source,index)=>{
