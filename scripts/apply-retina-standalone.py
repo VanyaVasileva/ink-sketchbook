@@ -135,8 +135,20 @@ if recording_shadow_test not in s:
     s = s.replace(old_shadow_test, recording_shadow_test, 1)
 PATH.write_text(s)
 
+native_retina_hooks = [
+    "detailCanvas.id = 'detailCanvas'",
+    'const DETAIL_ZOOM_THRESHOLD = 1.12;',
+    'recordDetailSegment(',
+    "drawCanvas.style.opacity = '0';",
+]
 if MARKER in s:
     print('Standalone defaults checked; retina layer already present.')
+    raise SystemExit(0)
+if all(item in s for item in native_retina_hooks):
+    anchor = "detailCanvas.id = 'detailCanvas';"
+    s = s.replace(anchor, "// " + MARKER + "\n" + anchor, 1)
+    PATH.write_text(s)
+    print('Standalone already has native retina detail rendering; added compatibility marker.')
     raise SystemExit(0)
 
 s = replace_one(
