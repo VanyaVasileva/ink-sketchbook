@@ -1208,18 +1208,6 @@ if (recordReferenceBtn) recordReferenceBtn.onclick = () => {
 let lastRecordingUrl = null;
 if (recordingHandSelect) recordingHandSelect.onchange = () => { selectedRecordingHand = recordingHandSelect.value || 'human'; requestAnimationFrame(fitCanvasDisplay); };
 if (recordingHandSize) recordingHandSize.oninput = () => { recordingHandUserScale = Math.max(.6, Math.min(1.4, parseFloat(recordingHandSize.value || '100') / 100)); if (recordingHandSizeValue) recordingHandSizeValue.textContent = Math.round(recordingHandUserScale * 100) + '%'; };
-const frameSafeRecordingHands = new Set(['woodenPencil', 'modernFineLiner', 'classicInkPen']);
-function fitRecordingHandScaleToFrame(selected, desiredScale, penX, penY) {
-  if (!frameSafeRecordingHands.has(selectedRecordingHand)) return desiredScale;
-  const margin = Math.max(4, Math.min(recordCanvas.width, recordCanvas.height) * 0.008);
-  const scaleLimits = [
-    (penX - margin) / Math.max(1, selected.tipX),
-    (recordCanvas.width - margin - penX) / Math.max(1, selected.srcW - selected.tipX),
-    (penY - margin) / Math.max(1, selected.tipY),
-    (recordCanvas.height - margin - penY) / Math.max(1, selected.srcH - selected.tipY),
-  ];
-  return Math.max(0.001, Math.min(desiredScale, ...scaleLimits));
-}
 let lastPenPos = null;      // {x, y} in drawCanvas pixel space, live
 
 function compositeRecordFrame() {
@@ -1263,18 +1251,16 @@ function compositeRecordFrame() {
     if (selected && selected.ready) {
       const baseDisplayW = Math.min(recordCanvas.width * 0.66, recordCanvas.height * 1.10);
       const displayW = baseDisplayW * selected.scale * recordingHandUserScale;
-      const desiredScale = displayW / selected.srcW;
-      const scale = fitRecordingHandScaleToFrame(selected, desiredScale, recordPenX, recordPenY);
-      const fittedDisplayW = selected.srcW * scale;
+      const scale = displayW / selected.srcW;
       const drawX = recordPenX - selected.tipX * scale;
       const drawY = recordPenY - selected.tipY * scale;
       recordCtx.save();
       recordCtx.globalAlpha = 1;
       if (selectedRecordingHand === 'woodenPencil' || selectedRecordingHand === 'modernFineLiner' || selectedRecordingHand === 'classicInkPen') {
         recordCtx.shadowColor = 'rgba(40, 28, 18, 0.16)';
-        recordCtx.shadowBlur = Math.max(1, fittedDisplayW * 0.005);
-        recordCtx.shadowOffsetX = fittedDisplayW * 0.0015;
-        recordCtx.shadowOffsetY = fittedDisplayW * 0.003;
+        recordCtx.shadowBlur = Math.max(1, displayW * 0.005);
+        recordCtx.shadowOffsetX = displayW * 0.0015;
+        recordCtx.shadowOffsetY = displayW * 0.003;
       }
       recordCtx.drawImage(selected.img, drawX, drawY, selected.srcW * scale, selected.srcH * scale);
       recordCtx.restore();
