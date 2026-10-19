@@ -3,7 +3,7 @@ name: Build standalone sketchbook test
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, precheck-baseline-recording-2026-10-19]
     paths:
       - 'hand-selector-v6-test.html'
       - 'hand-selector-v7-test.html'
