@@ -15,23 +15,33 @@ def replace_one(text: str, old: str, new: str, label: str) -> str:
 s = PATH.read_text()
 
 # Use the high-resolution pencil sprite without changing its calibrated pose.
+# Fresh standalone builds contain the base hand maps but not the wooden-pencil
+# assignment yet, while already-patched pages contain explicit assignments.
 hd_pencil = Path('assets/hand-wooden-pencil-hd.webp')
 if hd_pencil.exists():
     sprite_url = 'data:image/webp;base64,' + base64.b64encode(hd_pencil.read_bytes()).decode('ascii')
-    s, source_count = re.subn(
-        r"recordingHandSources\.woodenPencil = '[^']*';",
-        lambda _: "recordingHandSources.woodenPencil = '" + sprite_url + "';",
-        s,
-        count=1,
-    )
-    s, meta_count = re.subn(
-        r'recordingHandMeta\.woodenPencil = \{[^}]*\};',
-        'recordingHandMeta.woodenPencil = {srcW:3072,srcH:2808,tipX:292.683,tipY:1569.041,scale:1.1};',
-        s,
-        count=1,
-    )
-    if source_count != 1 or meta_count != 1:
-        raise SystemExit('High-resolution pencil source or calibration anchor missing')
+    source_line = "recordingHandSources.woodenPencil = '" + sprite_url + "';"
+    meta_line = 'recordingHandMeta.woodenPencil = {srcW:3072,srcH:2808,tipX:292.683,tipY:1569.041,scale:1.1};'
+    source_pattern = r"recordingHandSources\.woodenPencil = '[^']*';"
+    meta_pattern = r'recordingHandMeta\.woodenPencil = \{[^}]*\};'
+
+    has_source = re.search(source_pattern, s) is not None
+    has_meta = re.search(meta_pattern, s) is not None
+    if has_source:
+        s = re.sub(source_pattern, lambda _: source_line, s, count=1)
+    if has_meta:
+        s = re.sub(meta_pattern, meta_line, s, count=1)
+
+    if not has_source or not has_meta:
+        fresh_anchor = 'const recordingHands = {};'
+        if fresh_anchor not in s:
+            raise SystemExit('Fresh recording-hand insertion anchor missing')
+        missing = []
+        if not has_source:
+            missing.append(source_line)
+        if not has_meta:
+            missing.append(meta_line)
+        s = s.replace(fresh_anchor, '\n'.join(missing) + '\n' + fresh_anchor, 1)
     PATH.write_text(s)
 
 # Add the two approved pen hands as separate recording-hand choices.
@@ -70,6 +80,14 @@ PATH.write_text(s)
 
 # Keep Vanya's preferred wooden-pencil recording setup as the page defaults.
 # This patch is idempotent and is re-applied whenever the standalone page is rebuilt.
+wooden_option = '<option value="woodenPencil">Wooden pencil</option>'
+wooden_selected_option = '<option value="woodenPencil" selected>Wooden pencil</option>'
+if wooden_option not in s and wooden_selected_option not in s:
+    option_seed = '<option value="brownOatmeal">Brown + oatmeal</option>'
+    if option_seed not in s:
+        raise SystemExit('Fresh recording-hand selector anchor missing')
+    s = s.replace(option_seed, option_seed + wooden_option, 1)
+
 default_settings = (
     ('<option value="woodenPencil">Wooden pencil</option>',
      '<option value="woodenPencil" selected>Wooden pencil</option>'),
@@ -119,9 +137,29 @@ if '<option value="modernFineLiner">' not in s:
 natural_hand_test = "['woodenPencil', 'modernFineLiner', 'classicInkPen'].includes(name)"
 if natural_hand_test not in s:
     old_test = "name === 'woodenPencil'"
-    if old_test not in s:
-        raise SystemExit('Natural-hand alpha cleanup anchor not found')
-    s = s.replace(old_test, natural_hand_test, 1)
+    if old_test in s:
+        s = s.replace(old_test, natural_hand_test, 1)
+    else:
+        simple_onload = "  entry.img.onload = () => { entry.ready = true; };"
+        natural_onload = """  entry.img.onload = () => {
+    if (['woodenPencil', 'modernFineLiner', 'classicInkPen'].includes(name)) {
+      const sprite = document.createElement('canvas');
+      sprite.width = meta.srcW; sprite.height = meta.srcH;
+      const spriteCtx = sprite.getContext('2d');
+      spriteCtx.drawImage(entry.img, 0, 0);
+      const pixels = spriteCtx.getImageData(0, 0, sprite.width, sprite.height);
+      for (let i = 3; i < pixels.data.length; i += 4) {
+        const alpha = pixels.data[i];
+        pixels.data[i] = alpha < 128 ? 0 : alpha < 240 ? Math.round((alpha - 128) * 255 / 112) : 255;
+      }
+      spriteCtx.putImageData(pixels, 0, 0);
+      entry.img = sprite;
+    }
+    entry.ready = true;
+  };"""
+        if simple_onload not in s:
+            raise SystemExit('Natural-hand alpha cleanup anchor not found')
+        s = s.replace(simple_onload, natural_onload, 1)
 
 recording_shadow_test = (
     "selectedRecordingHand === 'woodenPencil' || "
@@ -130,9 +168,22 @@ recording_shadow_test = (
 )
 if recording_shadow_test not in s:
     old_shadow_test = "selectedRecordingHand === 'woodenPencil'"
-    if old_shadow_test not in s:
-        raise SystemExit('Natural-hand recording shadow anchor not found')
-    s = s.replace(old_shadow_test, recording_shadow_test, 1)
+    if old_shadow_test in s:
+        s = s.replace(old_shadow_test, recording_shadow_test, 1)
+    else:
+        shadow_anchor = """      recordCtx.globalAlpha = 1;
+      recordCtx.drawImage(selected.img, drawX, drawY, selected.srcW * scale, selected.srcH * scale);"""
+        shadow_block = """      recordCtx.globalAlpha = 1;
+      if (selectedRecordingHand === 'woodenPencil' || selectedRecordingHand === 'modernFineLiner' || selectedRecordingHand === 'classicInkPen') {
+        recordCtx.shadowColor = 'rgba(40, 28, 18, 0.16)';
+        recordCtx.shadowBlur = Math.max(1, displayW * 0.005);
+        recordCtx.shadowOffsetX = displayW * 0.0015;
+        recordCtx.shadowOffsetY = displayW * 0.003;
+      }
+      recordCtx.drawImage(selected.img, drawX, drawY, selected.srcW * scale, selected.srcH * scale);"""
+        if shadow_anchor not in s:
+            raise SystemExit('Natural-hand recording shadow anchor not found')
+        s = s.replace(shadow_anchor, shadow_block, 1)
 PATH.write_text(s)
 
 native_retina_hooks = [
