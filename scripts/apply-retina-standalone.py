@@ -11,8 +11,36 @@ def replace_one(text: str, old: str, new: str, label: str) -> str:
 
 
 s = PATH.read_text()
+
+# Keep Vanya's preferred wooden-pencil recording setup as the page defaults.
+# This patch is idempotent and is re-applied whenever the standalone page is rebuilt.
+default_settings = (
+    ('<option value="woodenPencil">Wooden pencil</option>',
+     '<option value="woodenPencil" selected>Wooden pencil</option>'),
+    ('<span>Hand size <b id="recordingHandSizeValue" style="font-weight:600;">100%</b></span> <input type="range" id="recordingHandSize" min="60" max="140" value="100" step="5">',
+     '<span>Hand size <b id="recordingHandSizeValue" style="font-weight:600;">115%</b></span> <input type="range" id="recordingHandSize" min="60" max="140" value="115" step="5">'),
+    ('id="thicknessSlider" min="0.5" max="3" value="1" step="0.25"',
+     'id="thicknessSlider" min="0.5" max="3" value="1.25" step="0.25"'),
+    ('id="minSlider" min="0.5" max="6" value="1" step="0.5"',
+     'id="minSlider" min="0.5" max="6" value="0.5" step="0.5"'),
+    ('id="maxSlider" min="2" max="16" value="8" step="0.5"',
+     'id="maxSlider" min="2" max="16" value="6" step="0.5"'),
+    ("let selectedRecordingHand = 'human';", "let selectedRecordingHand = 'woodenPencil';"),
+    ('let recordingHandUserScale = 1;', 'let recordingHandUserScale = 1.15;'),
+)
+settings_changed = False
+for old, new in default_settings:
+    if new in s:
+        continue
+    if old not in s:
+        raise SystemExit('Wooden-pencil default anchor not found: ' + old[:80])
+    s = s.replace(old, new, 1)
+    settings_changed = True
+if settings_changed:
+    PATH.write_text(s)
+
 if MARKER in s:
-    print('Standalone retina layer already present; no patch needed.')
+    print('Standalone defaults checked; retina layer already present.')
     raise SystemExit(0)
 
 s = replace_one(
@@ -370,40 +398,3 @@ redoBtn.onclick = () => {
 clearBtn.onclick = () => {
   ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
   history = [];
-  resetDetailVectors(true);
-  saveHistory();
-};
-""",
-    'undo/redo/clear',
-)
-
-s = replace_one(
-    s,
-    """        ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
-        ctx.drawImage(loadImg, 0, 0, drawCanvas.width, drawCanvas.height);
-        saveHistory();
-""",
-    """        ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
-        ctx.drawImage(loadImg, 0, 0, drawCanvas.width, drawCanvas.height);
-        // Older saved PNGs have no stroke geometry to replay, so keep their
-        // normal raster display rather than inventing detail that is not there.
-        resetDetailVectors(false);
-        history = [];
-        saveHistory();
-""",
-    'saved drawing load',
-)
-
-required = [
-    MARKER,
-    "detailCanvas.id = 'detailCanvas'",
-    'const DETAIL_ZOOM_THRESHOLD = 1.12;',
-    'recordDetailSegment(renderPrev.x, renderPrev.y, x, y, smoothedWidth, mode, currentColor);',
-    "drawCanvas.style.opacity = '0';",
-]
-for item in required:
-    if item not in s:
-        raise SystemExit('Missing final retina hook: ' + item)
-
-PATH.write_text(s)
-print('Patched exact standalone hand-selector page with retina-sharp zoom display.')
