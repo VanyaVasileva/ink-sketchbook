@@ -161,18 +161,10 @@ jobs:
 
           fit_needle = "[refCanvas, guideCanvas, drawCanvas].forEach(c => {"
           fit_replacement = "[refCanvas, guideCanvas, drawCanvas, refDomLayer].forEach(c => {"
-          if fit_needle not in text:
-              raise SystemExit('DOM reference layout sync point not found')
-          text = text.replace(fit_needle, fit_replacement, 1)
-
-          view_needle = """  refCanvas.style.transform = t;
-            guideCanvas.style.transform = t;"""
-          view_replacement = """  refCanvas.style.transform = t;
-            refDomLayer.style.transform = t;
-            guideCanvas.style.transform = t;"""
-          if view_needle not in text:
-              raise SystemExit('DOM reference view transform sync point not found')
-          text = text.replace(view_needle, view_replacement, 1)
+          fit_count = text.count(fit_needle)
+          if fit_count < 2:
+              raise SystemExit(f'Expected grouped canvas sync in resize and applyView; found {fit_count}')
+          text = text.replace(fit_needle, fit_replacement)
 
           draw_needle = """function drawRef() {
             ensureStillBackgroundNativeQuality();
@@ -227,7 +219,7 @@ jobs:
               'id="refDomImage"',
               'function syncStillBackgroundDom()',
               '[refCanvas, guideCanvas, drawCanvas, refDomLayer].forEach',
-              'refDomLayer.style.transform = t;'
+              'c.style.transform = t;'
           ]
           for needle in required:
               if needle not in text:
