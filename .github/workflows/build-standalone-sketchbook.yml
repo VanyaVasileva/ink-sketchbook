@@ -9,6 +9,7 @@ on:
       - 'hand-selector-v7-test.html'
       - 'hand-selector-v8-layers-test.html'
       - 'scripts/build-standalone.mjs'
+      - 'scripts/apply-retina-standalone.py'
       - '.github/workflows/build-standalone-sketchbook.yml'
 
 permissions:
@@ -34,13 +35,13 @@ jobs:
           from pathlib import Path
           path = Path('scripts/build-standalone.mjs')
           text = path.read_text()
-          old = """  '  const recordTargetLongSide = isPhoneRecording ? 1920 : 2160;',
+          old = """  '  const recordTargetLongSide = isPhoneRecording ? 1920 : 3200;',
             '  const sourceLongSide = Math.max(recordSourceRect.width, recordSourceRect.height);',
             '  const recordVideoScale = Math.min(2, recordTargetLongSide / Math.max(1, sourceLongSide));',
             '  const evenRecordSize = (value) => Math.max(2, Math.round(value / 2) * 2);',
             '  recordCanvas.width = evenRecordSize(recordSourceRect.width * recordVideoScale);',
             '  recordCanvas.height = evenRecordSize(recordSourceRect.height * recordVideoScale);'"""
-          new = """  '  const recordTargetLongSide = isPhoneRecording ? 1920 : 2160;',
+          new = """  '  const recordTargetLongSide = isPhoneRecording ? 1920 : 3200;',
             '  const recordMinShortSide = 1080;',
             '  const sourceLongSide = Math.max(recordSourceRect.width, recordSourceRect.height);',
             '  const sourceShortSide = Math.min(recordSourceRect.width, recordSourceRect.height);',
@@ -161,18 +162,10 @@ jobs:
 
           fit_needle = "[refCanvas, guideCanvas, drawCanvas].forEach(c => {"
           fit_replacement = "[refCanvas, guideCanvas, drawCanvas, refDomLayer].forEach(c => {"
-          if fit_needle not in text:
-              raise SystemExit('DOM reference layout sync point not found')
-          text = text.replace(fit_needle, fit_replacement, 1)
-
-          view_needle = """  refCanvas.style.transform = t;
-            guideCanvas.style.transform = t;"""
-          view_replacement = """  refCanvas.style.transform = t;
-            refDomLayer.style.transform = t;
-            guideCanvas.style.transform = t;"""
-          if view_needle not in text:
-              raise SystemExit('DOM reference view transform sync point not found')
-          text = text.replace(view_needle, view_replacement, 1)
+          fit_count = text.count(fit_needle)
+          if fit_count < 2:
+              raise SystemExit(f'Expected grouped canvas sync in resize and applyView; found {fit_count}')
+          text = text.replace(fit_needle, fit_replacement)
 
           draw_needle = """function drawRef() {
             ensureStillBackgroundNativeQuality();
@@ -227,7 +220,7 @@ jobs:
               'id="refDomImage"',
               'function syncStillBackgroundDom()',
               '[refCanvas, guideCanvas, drawCanvas, refDomLayer].forEach',
-              'refDomLayer.style.transform = t;'
+              'c.style.transform = t;'
           ]
           for needle in required:
               if needle not in text:
@@ -235,6 +228,36 @@ jobs:
 
           path.write_text(text)
           PY
+
+      - name: Restore recording hands and validate generated page
+        run: |
+          python3 scripts/apply-retina-standalone.py
+          python3 - <<'PY'
+          from pathlib import Path
+          s = Path('hand-selector-standalone-test.html').read_text()
+          required = [
+              'retina-detail-display-v2-standalone',
+              "detailCanvas.id = 'detailCanvas'",
+              'const DETAIL_ZOOM_THRESHOLD = 1.12;',
+              'recordDetailSegment(',
+              "drawCanvas.style.opacity = '0';",
+              'recordingHandSources.woodenPencil',
+              'recordingHandMeta.woodenPencil',
+              'recordingHandSources.modernFineLiner',
+              'recordingHandMeta.modernFineLiner',
+              'recordingHandSources.classicInkPen',
+              'recordingHandMeta.classicInkPen',
+              "let selectedRecordingHand = 'woodenPencil';",
+              'let recordingHandUserScale = 1.15;',
+          ]
+          for item in required:
+              if item not in s:
+                  raise SystemExit('Missing generated-page hook: ' + item)
+          start = s.index('<script>') + len('<script>')
+          end = s.rindex('</script>')
+          Path('/tmp/standalone.js').write_text(s[start:end])
+          PY
+          node --check /tmp/standalone.js
 
       - name: Commit generated standalone page
         run: |
