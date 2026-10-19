@@ -1,4 +1,6 @@
 from pathlib import Path
+import base64
+import re
 
 PATH = Path('hand-selector-standalone-test.html')
 MARKER = 'retina-detail-display-v2-standalone'
@@ -11,6 +13,26 @@ def replace_one(text: str, old: str, new: str, label: str) -> str:
 
 
 s = PATH.read_text()
+
+# Use the high-resolution pencil sprite without changing its calibrated pose.
+hd_pencil = Path('assets/hand-wooden-pencil-hd.webp')
+if hd_pencil.exists():
+    sprite_url = 'data:image/webp;base64,' + base64.b64encode(hd_pencil.read_bytes()).decode('ascii')
+    s, source_count = re.subn(
+        r"recordingHandSources\.woodenPencil = '[^']*';",
+        lambda _: "recordingHandSources.woodenPencil = '" + sprite_url + "';",
+        s,
+        count=1,
+    )
+    s, meta_count = re.subn(
+        r'recordingHandMeta\.woodenPencil = \{[^}]*\};',
+        'recordingHandMeta.woodenPencil = {srcW:3072,srcH:2808,tipX:292.683,tipY:1569.041,scale:1.1};',
+        s,
+        count=1,
+    )
+    if source_count != 1 or meta_count != 1:
+        raise SystemExit('High-resolution pencil source or calibration anchor missing')
+    PATH.write_text(s)
 
 # Keep Vanya's preferred wooden-pencil recording setup as the page defaults.
 # This patch is idempotent and is re-applied whenever the standalone page is rebuilt.
