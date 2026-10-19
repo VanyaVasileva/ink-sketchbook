@@ -133,6 +133,56 @@ if recording_shadow_test not in s:
     if old_shadow_test not in s:
         raise SystemExit('Natural-hand recording shadow anchor not found')
     s = s.replace(old_shadow_test, recording_shadow_test, 1)
+
+# Keep the complete natural-hand sprite inside the exported video. The pen tip
+# remains locked to the stroke; only the sprite scale is reduced when the hand
+# would otherwise be clipped by an edge of the recording frame.
+frame_safe_helper = r'''const frameSafeRecordingHands = new Set(['woodenPencil', 'modernFineLiner', 'classicInkPen']);
+function fitRecordingHandScaleToFrame(selected, desiredScale, penX, penY) {
+  if (!frameSafeRecordingHands.has(selectedRecordingHand)) return desiredScale;
+  const margin = Math.max(4, Math.min(recordCanvas.width, recordCanvas.height) * 0.008);
+  const scaleLimits = [
+    (penX - margin) / Math.max(1, selected.tipX),
+    (recordCanvas.width - margin - penX) / Math.max(1, selected.srcW - selected.tipX),
+    (penY - margin) / Math.max(1, selected.tipY),
+    (recordCanvas.height - margin - penY) / Math.max(1, selected.srcH - selected.tipY),
+  ];
+  return Math.max(0.001, Math.min(desiredScale, ...scaleLimits));
+}
+'''
+if 'function fitRecordingHandScaleToFrame(' not in s:
+    frame_safe_anchor = 'let lastPenPos = null;      // {x, y} in drawCanvas pixel space, live\n'
+    if frame_safe_anchor not in s:
+        raise SystemExit('Recording-hand frame-fit helper anchor not found')
+    s = s.replace(frame_safe_anchor, frame_safe_helper + frame_safe_anchor, 1)
+
+old_recording_scale = '''      const displayW = baseDisplayW * selected.scale * recordingHandUserScale;
+      const scale = displayW / selected.srcW;
+      const drawX = recordPenX - selected.tipX * scale;
+      const drawY = recordPenY - selected.tipY * scale;'''
+new_recording_scale = '''      const displayW = baseDisplayW * selected.scale * recordingHandUserScale;
+      const desiredScale = displayW / selected.srcW;
+      const scale = fitRecordingHandScaleToFrame(selected, desiredScale, recordPenX, recordPenY);
+      const fittedDisplayW = selected.srcW * scale;
+      const drawX = recordPenX - selected.tipX * scale;
+      const drawY = recordPenY - selected.tipY * scale;'''
+if new_recording_scale not in s:
+    if old_recording_scale not in s:
+        raise SystemExit('Recording-hand frame-fit scale anchor not found')
+    s = s.replace(old_recording_scale, new_recording_scale, 1)
+
+for old_shadow, new_shadow in (
+    ("recordCtx.shadowBlur = Math.max(1, displayW * 0.005);",
+     "recordCtx.shadowBlur = Math.max(1, fittedDisplayW * 0.005);"),
+    ("recordCtx.shadowOffsetX = displayW * 0.0015;",
+     "recordCtx.shadowOffsetX = fittedDisplayW * 0.0015;"),
+    ("recordCtx.shadowOffsetY = displayW * 0.003;",
+     "recordCtx.shadowOffsetY = fittedDisplayW * 0.003;"),
+):
+    if new_shadow not in s:
+        if old_shadow not in s:
+            raise SystemExit('Recording-hand frame-fit shadow anchor not found')
+        s = s.replace(old_shadow, new_shadow, 1)
 PATH.write_text(s)
 
 if MARKER in s:
