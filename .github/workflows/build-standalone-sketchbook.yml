@@ -35,13 +35,13 @@ jobs:
           from pathlib import Path
           path = Path('scripts/build-standalone.mjs')
           text = path.read_text()
-          old = """  '  const recordTargetLongSide = isPhoneRecording ? 1920 : 2160;',
+          old = """  '  const recordTargetLongSide = isPhoneRecording ? 1920 : 3200;',
             '  const sourceLongSide = Math.max(recordSourceRect.width, recordSourceRect.height);',
             '  const recordVideoScale = Math.min(2, recordTargetLongSide / Math.max(1, sourceLongSide));',
             '  const evenRecordSize = (value) => Math.max(2, Math.round(value / 2) * 2);',
             '  recordCanvas.width = evenRecordSize(recordSourceRect.width * recordVideoScale);',
             '  recordCanvas.height = evenRecordSize(recordSourceRect.height * recordVideoScale);'"""
-          new = """  '  const recordTargetLongSide = isPhoneRecording ? 1920 : 2160;',
+          new = """  '  const recordTargetLongSide = isPhoneRecording ? 1920 : 3200;',
             '  const recordMinShortSide = 1080;',
             '  const sourceLongSide = Math.max(recordSourceRect.width, recordSourceRect.height);',
             '  const sourceShortSide = Math.min(recordSourceRect.width, recordSourceRect.height);',

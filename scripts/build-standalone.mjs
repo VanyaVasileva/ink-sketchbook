@@ -265,7 +265,7 @@ const oldRecordSize = [
   '  recordCanvas.height = Math.max(2, Math.round(recordSourceRect.height * recordVideoScale));'
 ].join('\n');
 const socialRecordSize = [
-  '  const recordTargetLongSide = isPhoneRecording ? 1920 : 2160;',
+  '  const recordTargetLongSide = isPhoneRecording ? 1920 : 3200;'
   '  const sourceLongSide = Math.max(recordSourceRect.width, recordSourceRect.height);',
   '  const recordVideoScale = Math.min(2, recordTargetLongSide / Math.max(1, sourceLongSide));',
   '  const evenRecordSize = (value) => Math.max(2, Math.round(value / 2) * 2);',
@@ -273,12 +273,22 @@ const socialRecordSize = [
   '  recordCanvas.height = evenRecordSize(recordSourceRect.height * recordVideoScale);'
 ].join('\n');
 replaceFinal(oldRecordSize, socialRecordSize, 'social recording dimensions');
+replaceFinal(
+  '  recordCtx.drawImage(drawCanvas, source.x, source.y, source.width, source.height, 0, 0, recordCanvas.width, recordCanvas.height);',
+  [
+    '  recordCtx.save();',
+    '  recordCtx.imageSmoothingEnabled = false;',
+    '  recordCtx.drawImage(drawCanvas, source.x, source.y, source.width, source.height, 0, 0, recordCanvas.width, recordCanvas.height);',
+    '  recordCtx.restore();'
+  ].join('\n'),
+  'sharp ink recording copy'
+);
 
 if (!finalHtml.includes('recordCanvas.captureStream(24)')) throw new Error('Final quality patch failed: 24fps capture stream not found');
 finalHtml = finalHtml.replaceAll('recordCanvas.captureStream(24)', 'recordCanvas.captureStream(30)');
 replaceFinal(
   'videoBitsPerSecond: isPhoneRecording ? 6000000 : 14000000, audioBitsPerSecond: 256000',
-  'videoBitsPerSecond: isPhoneRecording ? 12000000 : 20000000, audioBitsPerSecond: 256000',
+  'videoBitsPerSecond: isPhoneRecording ? 12000000 : 30000000, audioBitsPerSecond: 256000',
   'high recording bitrate'
 );
 
@@ -291,9 +301,10 @@ const required = [
   'id="floatingSettingsStyle"',
   'id="refSizeSlider" min="25" max="500"',
   'id="guideSizeSlider" min="10" max="500"',
-  'const recordTargetLongSide = isPhoneRecording ? 1920 : 2160;',
+  'const recordTargetLongSide = isPhoneRecording ? 1920 : 3200;',
   'recordCanvas.captureStream(30)',
-  'videoBitsPerSecond: isPhoneRecording ? 12000000 : 20000000',
+  'recordCtx.imageSmoothingEnabled = false;',
+  'videoBitsPerSecond: isPhoneRecording ? 12000000 : 30000000',
   'const activeRecordingRef = backgroundVideoReady ? backgroundVideo : refImage;',
   'Social-HD source',
 ];
