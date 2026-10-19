@@ -34,6 +34,40 @@ if hd_pencil.exists():
         raise SystemExit('High-resolution pencil source or calibration anchor missing')
     PATH.write_text(s)
 
+# Add the two approved pen hands as separate recording-hand choices.
+extra_hands = (
+    ('modernFineLiner', Path('assets/hand-modern-fineliner.png'),
+     '{srcW:1312,srcH:1199,tipX:127,tipY:663,scale:1.1}'),
+    ('classicInkPen', Path('assets/hand-classic-ink-pen.png'),
+     '{srcW:1312,srcH:1199,tipX:126,tipY:667,scale:1.1}'),
+)
+previous_key = 'woodenPencil'
+for key, asset_path, meta in extra_hands:
+    if not asset_path.exists():
+        raise SystemExit(f'Missing recording-hand asset: {asset_path}')
+    asset_url = 'data:image/png;base64,' + base64.b64encode(asset_path.read_bytes()).decode('ascii')
+    source_line = f"recordingHandSources.{key} = '{asset_url}';"
+    source_pattern = rf"recordingHandSources\.{key} = '[^']*';"
+    if re.search(source_pattern, s):
+        s = re.sub(source_pattern, lambda _: source_line, s, count=1)
+    else:
+        anchor_pattern = rf"(recordingHandSources\.{previous_key} = '[^']*';)"
+        s, count = re.subn(anchor_pattern, lambda m: m.group(1) + '\n' + source_line, s, count=1)
+        if count != 1:
+            raise SystemExit(f'Recording-hand source anchor missing for {key}')
+
+    meta_line = f'recordingHandMeta.{key} = {meta};'
+    meta_pattern = rf'recordingHandMeta\.{key} = \{{[^}}]*\}};'
+    if re.search(meta_pattern, s):
+        s = re.sub(meta_pattern, meta_line, s, count=1)
+    else:
+        meta_anchor = rf'(recordingHandMeta\.{previous_key} = \{{[^}}]*\}};)'
+        s, count = re.subn(meta_anchor, lambda m: m.group(1) + '\n' + meta_line, s, count=1)
+        if count != 1:
+            raise SystemExit(f'Recording-hand metadata anchor missing for {key}')
+    previous_key = key
+PATH.write_text(s)
+
 # Keep Vanya's preferred wooden-pencil recording setup as the page defaults.
 # This patch is idempotent and is re-applied whenever the standalone page is rebuilt.
 default_settings = (
@@ -60,6 +94,46 @@ for old, new in default_settings:
     settings_changed = True
 if settings_changed:
     PATH.write_text(s)
+
+# Safari can restore an older form selection after a reload, even when the
+# HTML default and JavaScript default have changed. Explicitly sync the visible
+# selector so existing iPad tabs show the wooden pencil after this update.
+hand_select_sync = "if (recordingHandSelect) recordingHandSelect.value = selectedRecordingHand;"
+if hand_select_sync not in s:
+    hand_select_anchor = "let selectedRecordingHand = 'woodenPencil';\n"
+    if hand_select_anchor not in s:
+        raise SystemExit('Wooden-pencil selector sync anchor not found')
+    s = s.replace(hand_select_anchor, hand_select_anchor + hand_select_sync + "\n", 1)
+    PATH.write_text(s)
+
+extra_options = (
+    '<option value="modernFineLiner">Modern fine liner</option>'
+    '<option value="classicInkPen">Classic ink pen</option>'
+)
+if '<option value="modernFineLiner">' not in s:
+    option_anchor = '<option value="woodenPencil" selected>Wooden pencil</option>'
+    if option_anchor not in s:
+        raise SystemExit('Wooden-pencil selector option anchor not found')
+    s = s.replace(option_anchor, option_anchor + extra_options, 1)
+
+natural_hand_test = "['woodenPencil', 'modernFineLiner', 'classicInkPen'].includes(name)"
+if natural_hand_test not in s:
+    old_test = "name === 'woodenPencil'"
+    if old_test not in s:
+        raise SystemExit('Natural-hand alpha cleanup anchor not found')
+    s = s.replace(old_test, natural_hand_test, 1)
+
+recording_shadow_test = (
+    "selectedRecordingHand === 'woodenPencil' || "
+    "selectedRecordingHand === 'modernFineLiner' || "
+    "selectedRecordingHand === 'classicInkPen'"
+)
+if recording_shadow_test not in s:
+    old_shadow_test = "selectedRecordingHand === 'woodenPencil'"
+    if old_shadow_test not in s:
+        raise SystemExit('Natural-hand recording shadow anchor not found')
+    s = s.replace(old_shadow_test, recording_shadow_test, 1)
+PATH.write_text(s)
 
 if MARKER in s:
     print('Standalone defaults checked; retina layer already present.')
