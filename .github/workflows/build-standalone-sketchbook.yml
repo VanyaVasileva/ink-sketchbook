@@ -9,6 +9,7 @@ on:
       - 'hand-selector-v7-test.html'
       - 'hand-selector-v8-layers-test.html'
       - 'scripts/build-standalone.mjs'
+      - 'scripts/apply-retina-standalone.py'
       - '.github/workflows/build-standalone-sketchbook.yml'
 
 permissions:
@@ -227,6 +228,36 @@ jobs:
 
           path.write_text(text)
           PY
+
+      - name: Restore recording hands and validate generated page
+        run: |
+          python3 scripts/apply-retina-standalone.py
+          python3 - <<'PY'
+          from pathlib import Path
+          s = Path('hand-selector-standalone-test.html').read_text()
+          required = [
+              'retina-detail-display-v2-standalone',
+              "detailCanvas.id = 'detailCanvas'",
+              'const DETAIL_ZOOM_THRESHOLD = 1.12;',
+              'recordDetailSegment(',
+              "drawCanvas.style.opacity = '0';",
+              'recordingHandSources.woodenPencil',
+              'recordingHandMeta.woodenPencil',
+              'recordingHandSources.modernFineLiner',
+              'recordingHandMeta.modernFineLiner',
+              'recordingHandSources.classicInkPen',
+              'recordingHandMeta.classicInkPen',
+              "let selectedRecordingHand = 'woodenPencil';",
+              'let recordingHandUserScale = 1.15;',
+          ]
+          for item in required:
+              if item not in s:
+                  raise SystemExit('Missing generated-page hook: ' + item)
+          start = s.index('<script>') + len('<script>')
+          end = s.rindex('</script>')
+          Path('/tmp/standalone.js').write_text(s[start:end])
+          PY
+          node --check /tmp/standalone.js
 
       - name: Commit generated standalone page
         run: |
