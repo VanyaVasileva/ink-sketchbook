@@ -265,7 +265,7 @@ const oldRecordSize = [
   '  recordCanvas.height = Math.max(2, Math.round(recordSourceRect.height * recordVideoScale));'
 ].join('\n');
 const socialRecordSize = [
-  '  const recordTargetLongSide = isPhoneRecording ? 1920 : 3200;'
+  '  const recordTargetLongSide = isPhoneRecording ? 1920 : 3200;',
   '  const sourceLongSide = Math.max(recordSourceRect.width, recordSourceRect.height);',
   '  const recordVideoScale = Math.min(2, recordTargetLongSide / Math.max(1, sourceLongSide));',
   '  const evenRecordSize = (value) => Math.max(2, Math.round(value / 2) * 2);',
@@ -301,7 +301,7 @@ const required = [
   'id="floatingSettingsStyle"',
   'id="refSizeSlider" min="25" max="500"',
   'id="guideSizeSlider" min="10" max="500"',
-  'const recordTargetLongSide = isPhoneRecording ? 1920 : 3200;',
+  'const recordTargetLongSide = isPhoneRecording ? 1920 : 3200;',,
   'recordCanvas.captureStream(30)',
   'recordCtx.imageSmoothingEnabled = false;',
   'videoBitsPerSecond: isPhoneRecording ? 12000000 : 30000000',
