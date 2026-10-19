@@ -1232,7 +1232,10 @@ function compositeRecordFrame() {
       recordCtx.restore();
     }
   }
+  recordCtx.save();
+  recordCtx.imageSmoothingEnabled = false;
   recordCtx.drawImage(drawCanvas, source.x, source.y, source.width, source.height, 0, 0, recordCanvas.width, recordCanvas.height);
+  recordCtx.restore();
   const recordScaleX = recordCanvas.width / source.width;
   const recordScaleY = recordCanvas.height / source.height;
   const recordPenX = lastPenPos ? (lastPenPos.x - source.x) * recordScaleX : 0;
@@ -1292,7 +1295,7 @@ recordBtn.onclick = async () => {
     height: visibleHeight * drawCanvas.height / canvasRectForRecording.height
   };
   const isPhoneRecording = /iPhone|iPod/i.test(navigator.userAgent) || Math.min(screen.width, screen.height) < 600;
-  const recordTargetLongSide = isPhoneRecording ? 1920 : 2160;
+  const recordTargetLongSide = isPhoneRecording ? 1920 : 3200;
   const recordMinShortSide = 1080;
   const sourceLongSide = Math.max(recordSourceRect.width, recordSourceRect.height);
   const sourceShortSide = Math.min(recordSourceRect.width, recordSourceRect.height);
@@ -1328,7 +1331,7 @@ recordBtn.onclick = async () => {
     }
   }
   recordedChunks = [];
-  mediaRecorder = new MediaRecorder(stream, { mimeType: recordingSupport, videoBitsPerSecond: isPhoneRecording ? 12000000 : 20000000, audioBitsPerSecond: 256000 });
+  mediaRecorder = new MediaRecorder(stream, { mimeType: recordingSupport, videoBitsPerSecond: isPhoneRecording ? 12000000 : 30000000, audioBitsPerSecond: 256000 });
   const fileExt = recordingSupport.startsWith('video/mp4') ? 'mp4' : 'webm';
   mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
   mediaRecorder.onstop = () => {
