@@ -398,3 +398,40 @@ redoBtn.onclick = () => {
 clearBtn.onclick = () => {
   ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
   history = [];
+  resetDetailVectors(true);
+  saveHistory();
+};
+""",
+    'undo/redo/clear',
+)
+
+s = replace_one(
+    s,
+    """        ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+        ctx.drawImage(loadImg, 0, 0, drawCanvas.width, drawCanvas.height);
+        saveHistory();
+""",
+    """        ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+        ctx.drawImage(loadImg, 0, 0, drawCanvas.width, drawCanvas.height);
+        // Older saved PNGs have no stroke geometry to replay, so keep their
+        // normal raster display rather than inventing detail that is not there.
+        resetDetailVectors(false);
+        history = [];
+        saveHistory();
+""",
+    'saved drawing load',
+)
+
+required = [
+    MARKER,
+    "detailCanvas.id = 'detailCanvas'",
+    'const DETAIL_ZOOM_THRESHOLD = 1.12;',
+    'recordDetailSegment(renderPrev.x, renderPrev.y, x, y, smoothedWidth, mode, currentColor);',
+    "drawCanvas.style.opacity = '0';",
+]
+for item in required:
+    if item not in s:
+        raise SystemExit('Missing final retina hook: ' + item)
+
+PATH.write_text(s)
+print('Patched exact standalone hand-selector page with retina-sharp zoom display.')
