@@ -46,16 +46,16 @@ if hd_pencil.exists():
 
 # Add the two approved pen hands as separate recording-hand choices.
 extra_hands = (
-    ('modernFineLiner', Path('assets/hand-modern-fineliner.png'),
+    ('modernFineLiner', Path('assets/hand-modern-fineliner.webp'),
      '{srcW:1312,srcH:1199,tipX:127,tipY:663,scale:1.1}'),
-    ('classicInkPen', Path('assets/hand-classic-ink-pen.png'),
+    ('classicInkPen', Path('assets/hand-classic-ink-pen.webp'),
      '{srcW:1312,srcH:1199,tipX:126,tipY:667,scale:1.1}'),
 )
 previous_key = 'woodenPencil'
 for key, asset_path, meta in extra_hands:
     if not asset_path.exists():
         raise SystemExit(f'Missing recording-hand asset: {asset_path}')
-    asset_url = 'data:image/png;base64,' + base64.b64encode(asset_path.read_bytes()).decode('ascii')
+    asset_url = 'data:image/webp;base64,' + base64.b64encode(asset_path.read_bytes()).decode('ascii')
     source_line = f"recordingHandSources.{key} = '{asset_url}';"
     source_pattern = rf"recordingHandSources\.{key} = '[^']*';"
     if re.search(source_pattern, s):
@@ -186,30 +186,21 @@ if recording_shadow_test not in s:
         s = s.replace(shadow_anchor, shadow_block, 1)
 PATH.write_text(s)
 
-# Keep the nib on the stroke while the complete pen sprite fits the recording.
-# The bounds describe opaque pixels in the two validated source PNGs.
-fit_marker = 'const penBounds = selectedRecordingHand ==='
-if fit_marker not in s:
-    old = '''      const scale = displayW / selected.srcW;
-      const drawX = recordPenX - selected.tipX * scale;'''
-    new = '''      const penBounds = selectedRecordingHand === 'modernFineLiner'
-        ? {left:33, top:39, right:1312, bottom:1199}
-        : selectedRecordingHand === 'classicInkPen'
-          ? {left:81, top:161, right:1312, bottom:1199} : null;
-      let scale = displayW / selected.srcW;
-      if (penBounds) {
-        const margin = Math.max(2, Math.min(recordCanvas.width, recordCanvas.height) * .004);
-        const limits = [scale];
-        if (selected.tipX > penBounds.left) limits.push((recordPenX - margin) / (selected.tipX - penBounds.left));
-        if (penBounds.right > selected.tipX) limits.push((recordCanvas.width - margin - recordPenX) / (penBounds.right - selected.tipX));
-        if (selected.tipY > penBounds.top) limits.push((recordPenY - margin) / (selected.tipY - penBounds.top));
-        if (penBounds.bottom > selected.tipY) limits.push((recordCanvas.height - margin - recordPenY) / (penBounds.bottom - selected.tipY));
-        scale = Math.max(0, Math.min(...limits));
-      }
-      const drawX = recordPenX - selected.tipX * scale;'''
-    if old not in s:
-        raise SystemExit('Recording pen fit anchor missing')
-    s = s.replace(old, new, 1)
+# Keep a constant recording-hand scale for both pens, matching the wooden pencil.
+# Earlier builds constrained pen sprites to the frame and made them grow and shrink
+# as the tip moved. Remove that position-dependent fit on every fresh build.
+fit_pattern = re.compile(
+    r"      const penBounds = selectedRecordingHand === 'modernFineLiner'\n"
+    r".*?      const drawX = recordPenX - selected.tipX \* scale;",
+    re.DOTALL,
+)
+s, fit_count = fit_pattern.subn(
+    '      const scale = displayW / selected.srcW;\n'
+    '      const drawX = recordPenX - selected.tipX * scale;',
+    s,
+    count=1,
+)
+if fit_count:
     PATH.write_text(s)
 
 native_retina_hooks = [
