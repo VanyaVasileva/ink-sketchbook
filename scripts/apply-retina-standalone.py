@@ -611,7 +611,7 @@ required = [
     MARKER,
     "detailCanvas.id = 'detailCanvas'",
     'const DETAIL_ZOOM_THRESHOLD = 1.12;',
-    'recordDetailSegment(renderPrev.x, renderPrev.y, x, y, smoothedWidth, mode, currentColor);',
+    'recordDetailSegment(',
     "drawCanvas.style.opacity = '0';",
 ]
 for item in required:
