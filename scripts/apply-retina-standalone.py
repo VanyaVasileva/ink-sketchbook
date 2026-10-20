@@ -186,6 +186,32 @@ if recording_shadow_test not in s:
         s = s.replace(shadow_anchor, shadow_block, 1)
 PATH.write_text(s)
 
+# Keep the nib on the stroke while the complete pen sprite fits the recording.
+# The bounds describe opaque pixels in the two validated source PNGs.
+fit_marker = 'const penBounds = selectedRecordingHand ==='
+if fit_marker not in s:
+    old = '''      const scale = displayW / selected.srcW;
+      const drawX = recordPenX - selected.tipX * scale;'''
+    new = '''      const penBounds = selectedRecordingHand === 'modernFineLiner'
+        ? {left:33, top:39, right:1312, bottom:1199}
+        : selectedRecordingHand === 'classicInkPen'
+          ? {left:81, top:161, right:1312, bottom:1199} : null;
+      let scale = displayW / selected.srcW;
+      if (penBounds) {
+        const margin = Math.max(2, Math.min(recordCanvas.width, recordCanvas.height) * .004);
+        const limits = [scale];
+        if (selected.tipX > penBounds.left) limits.push((recordPenX - margin) / (selected.tipX - penBounds.left));
+        if (penBounds.right > selected.tipX) limits.push((recordCanvas.width - margin - recordPenX) / (penBounds.right - selected.tipX));
+        if (selected.tipY > penBounds.top) limits.push((recordPenY - margin) / (selected.tipY - penBounds.top));
+        if (penBounds.bottom > selected.tipY) limits.push((recordCanvas.height - margin - recordPenY) / (penBounds.bottom - selected.tipY));
+        scale = Math.max(0, Math.min(...limits));
+      }
+      const drawX = recordPenX - selected.tipX * scale;'''
+    if old not in s:
+        raise SystemExit('Recording pen fit anchor missing')
+    s = s.replace(old, new, 1)
+    PATH.write_text(s)
+
 native_retina_hooks = [
     "detailCanvas.id = 'detailCanvas'",
     'const DETAIL_ZOOM_THRESHOLD = 1.12;',
