@@ -1245,7 +1245,20 @@ function compositeRecordFrame() {
     if (selected && selected.ready) {
       const baseDisplayW = Math.min(recordCanvas.width * 0.66, recordCanvas.height * 1.10);
       const displayW = baseDisplayW * selected.scale * recordingHandUserScale;
-      const scale = displayW / selected.srcW;
+      const penBounds = selectedRecordingHand === 'modernFineLiner'
+        ? {left:33, top:39, right:1312, bottom:1199}
+        : selectedRecordingHand === 'classicInkPen'
+          ? {left:81, top:161, right:1312, bottom:1199} : null;
+      let scale = displayW / selected.srcW;
+      if (penBounds) {
+        const margin = Math.max(2, Math.min(recordCanvas.width, recordCanvas.height) * .004);
+        const limits = [scale];
+        if (selected.tipX > penBounds.left) limits.push((recordPenX - margin) / (selected.tipX - penBounds.left));
+        if (penBounds.right > selected.tipX) limits.push((recordCanvas.width - margin - recordPenX) / (penBounds.right - selected.tipX));
+        if (selected.tipY > penBounds.top) limits.push((recordPenY - margin) / (selected.tipY - penBounds.top));
+        if (penBounds.bottom > selected.tipY) limits.push((recordCanvas.height - margin - recordPenY) / (penBounds.bottom - selected.tipY));
+        scale = Math.max(0, Math.min(...limits));
+      }
       const drawX = recordPenX - selected.tipX * scale;
       const drawY = recordPenY - selected.tipY * scale;
       recordCtx.save();
