@@ -1201,6 +1201,53 @@ if (recordingHandSelect) recordingHandSelect.onchange = () => { selectedRecordin
 if (recordingHandSize) recordingHandSize.oninput = () => { recordingHandUserScale = Math.max(.6, Math.min(1.4, parseFloat(recordingHandSize.value || '100') / 100)); if (recordingHandSizeValue) recordingHandSizeValue.textContent = Math.round(recordingHandUserScale * 100) + '%'; };
 let lastPenPos = null;      // {x, y} in drawCanvas pixel space, live
 
+let recordingInkLayer = null;
+let recordingInkKey = '';
+function paintRecordingInk(source) {
+  if (typeof detailVectorValid === 'undefined' || !detailVectorValid ||
+      typeof detailStrokes === 'undefined') return false;
+  if (!recordingInkLayer || recordingInkLayer.width !== recordCanvas.width ||
+      recordingInkLayer.height !== recordCanvas.height) {
+    recordingInkLayer = document.createElement('canvas');
+    recordingInkLayer.width = recordCanvas.width;
+    recordingInkLayer.height = recordCanvas.height;
+    recordingInkKey = '';
+  }
+  const activeCount = activeDetailStroke ? activeDetailStroke.ops.length : 0;
+  const key = [detailVisibleCount, activeCount, source.x, source.y,
+    source.width, source.height, recordCanvas.width, recordCanvas.height].join(':');
+  if (key !== recordingInkKey) {
+    const ink = recordingInkLayer.getContext('2d');
+    ink.setTransform(1, 0, 0, 1, 0, 0);
+    ink.clearRect(0, 0, recordingInkLayer.width, recordingInkLayer.height);
+    const sx = recordCanvas.width / source.width;
+    const sy = recordCanvas.height / source.height;
+    ink.setTransform(sx, 0, 0, sy, -source.x * sx, -source.y * sy);
+    const paint = op => {
+      ink.globalCompositeOperation = op.mode === 'erase' ? 'destination-out' : 'source-over';
+      ink.lineCap = 'round'; ink.lineJoin = 'round';
+      ink.lineWidth = op.width;
+      ink.fillStyle = ink.strokeStyle = op.mode === 'erase' ? '#000' : op.color;
+      ink.beginPath();
+      if (op.kind === 'dot') {
+        ink.arc(op.x, op.y, op.width / 2, 0, Math.PI * 2);
+        ink.fill();
+      } else {
+        ink.moveTo(op.x1, op.y1);
+        ink.lineTo(op.x2, op.y2);
+        ink.stroke();
+      }
+    };
+    for (let i = 0; i < detailVisibleCount; i++)
+      for (const op of detailStrokes[i].ops) paint(op);
+    if (activeDetailStroke) for (const op of activeDetailStroke.ops) paint(op);
+    ink.setTransform(1, 0, 0, 1, 0, 0);
+    ink.globalCompositeOperation = 'source-over';
+    recordingInkKey = key;
+  }
+  recordCtx.drawImage(recordingInkLayer, 0, 0);
+  return true;
+}
 function compositeRecordFrame() {
   recordCtx.fillStyle = paperColorPicker.value || '#ffffff';
   recordCtx.fillRect(0, 0, recordCanvas.width, recordCanvas.height);
@@ -1232,10 +1279,12 @@ function compositeRecordFrame() {
       recordCtx.restore();
     }
   }
+  if (!paintRecordingInk(source)) {
   recordCtx.save();
   recordCtx.imageSmoothingEnabled = false;
   recordCtx.drawImage(drawCanvas, source.x, source.y, source.width, source.height, 0, 0, recordCanvas.width, recordCanvas.height);
   recordCtx.restore();
+  }
   const recordScaleX = recordCanvas.width / source.width;
   const recordScaleY = recordCanvas.height / source.height;
   const recordPenX = lastPenPos ? (lastPenPos.x - source.x) * recordScaleX : 0;
@@ -1312,9 +1361,7 @@ recordBtn.onclick = async () => {
   const recordMinShortSide = 1080;
   const sourceLongSide = Math.max(recordSourceRect.width, recordSourceRect.height);
   const sourceShortSide = Math.min(recordSourceRect.width, recordSourceRect.height);
-  const scaleForLongSide = recordTargetLongSide / Math.max(1, sourceLongSide);
-  const scaleForShortSide = recordMinShortSide / Math.max(1, sourceShortSide);
-  const recordVideoScale = Math.min(2.5, Math.max(scaleForLongSide, scaleForShortSide));
+  const recordVideoScale = Math.max(recordTargetLongSide / Math.max(1, sourceLongSide), recordMinShortSide / Math.max(1, sourceShortSide));
   const evenRecordSize = (value) => Math.max(2, Math.round(value / 2) * 2);
   recordCanvas.width = evenRecordSize(recordSourceRect.width * recordVideoScale);
   recordCanvas.height = evenRecordSize(recordSourceRect.height * recordVideoScale);
