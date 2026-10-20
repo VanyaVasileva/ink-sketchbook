@@ -266,8 +266,10 @@ const oldRecordSize = [
 ].join('\n');
 const socialRecordSize = [
   '  const recordTargetLongSide = isPhoneRecording ? 1920 : 3200;',
+  '  const recordMinShortSide = 1080;',
   '  const sourceLongSide = Math.max(recordSourceRect.width, recordSourceRect.height);',
-  '  const recordVideoScale = Math.min(2, recordTargetLongSide / Math.max(1, sourceLongSide));',
+  '  const sourceShortSide = Math.min(recordSourceRect.width, recordSourceRect.height);',
+  '  const recordVideoScale = Math.max(recordTargetLongSide / Math.max(1, sourceLongSide), recordMinShortSide / Math.max(1, sourceShortSide));',
   '  const evenRecordSize = (value) => Math.max(2, Math.round(value / 2) * 2);',
   '  recordCanvas.width = evenRecordSize(recordSourceRect.width * recordVideoScale);',
   '  recordCanvas.height = evenRecordSize(recordSourceRect.height * recordVideoScale);'
@@ -283,6 +285,68 @@ replaceFinal(
   ].join('\n'),
   'sharp ink recording copy'
 );
+// The editable canvas can represent only a small source crop when the artist
+// zooms in. Replay its retained stroke geometry at recording resolution so
+// raising the output size does not merely enlarge a tiny bitmap.
+const sharpInkCopy = [
+  '  recordCtx.save();',
+  '  recordCtx.imageSmoothingEnabled = false;',
+  '  recordCtx.drawImage(drawCanvas, source.x, source.y, source.width, source.height, 0, 0, recordCanvas.width, recordCanvas.height);',
+  '  recordCtx.restore();'
+].join('\n');
+const vectorInkHelpers = `let recordingInkLayer = null;
+let recordingInkKey = '';
+function paintRecordingInk(source) {
+  if (typeof detailVectorValid === 'undefined' || !detailVectorValid ||
+      typeof detailStrokes === 'undefined') return false;
+  if (!recordingInkLayer || recordingInkLayer.width !== recordCanvas.width ||
+      recordingInkLayer.height !== recordCanvas.height) {
+    recordingInkLayer = document.createElement('canvas');
+    recordingInkLayer.width = recordCanvas.width;
+    recordingInkLayer.height = recordCanvas.height;
+    recordingInkKey = '';
+  }
+  const activeCount = activeDetailStroke ? activeDetailStroke.ops.length : 0;
+  const key = [detailVisibleCount, activeCount, source.x, source.y,
+    source.width, source.height, recordCanvas.width, recordCanvas.height].join(':');
+  if (key !== recordingInkKey) {
+    const ink = recordingInkLayer.getContext('2d');
+    ink.setTransform(1, 0, 0, 1, 0, 0);
+    ink.clearRect(0, 0, recordingInkLayer.width, recordingInkLayer.height);
+    const sx = recordCanvas.width / source.width;
+    const sy = recordCanvas.height / source.height;
+    ink.setTransform(sx, 0, 0, sy, -source.x * sx, -source.y * sy);
+    const paint = op => {
+      ink.globalCompositeOperation = op.mode === 'erase' ? 'destination-out' : 'source-over';
+      ink.lineCap = 'round'; ink.lineJoin = 'round';
+      ink.lineWidth = op.width;
+      ink.fillStyle = ink.strokeStyle = op.mode === 'erase' ? '#000' : op.color;
+      ink.beginPath();
+      if (op.kind === 'dot') {
+        ink.arc(op.x, op.y, op.width / 2, 0, Math.PI * 2);
+        ink.fill();
+      } else {
+        ink.moveTo(op.x1, op.y1);
+        ink.lineTo(op.x2, op.y2);
+        ink.stroke();
+      }
+    };
+    for (let i = 0; i < detailVisibleCount; i++)
+      for (const op of detailStrokes[i].ops) paint(op);
+    if (activeDetailStroke) for (const op of activeDetailStroke.ops) paint(op);
+    ink.setTransform(1, 0, 0, 1, 0, 0);
+    ink.globalCompositeOperation = 'source-over';
+    recordingInkKey = key;
+  }
+  recordCtx.drawImage(recordingInkLayer, 0, 0);
+  return true;
+}
+`;
+replaceFinal('function compositeRecordFrame() {',
+  vectorInkHelpers + 'function compositeRecordFrame() {', 'recording ink renderer');
+replaceFinal(sharpInkCopy,
+  '  if (!paintRecordingInk(source)) {\n' + sharpInkCopy + '\n  }',
+  'vector ink recording copy');
 
 if (!finalHtml.includes('recordCanvas.captureStream(24)')) throw new Error('Final quality patch failed: 24fps capture stream not found');
 finalHtml = finalHtml.replaceAll('recordCanvas.captureStream(24)', 'recordCanvas.captureStream(30)');
@@ -301,7 +365,8 @@ const required = [
   'id="floatingSettingsStyle"',
   'id="refSizeSlider" min="25" max="500"',
   'id="guideSizeSlider" min="10" max="500"',
-  'const recordTargetLongSide = isPhoneRecording ? 1920 : 3200;',,
+  'const recordTargetLongSide = isPhoneRecording ? 1920 : 3200;',
+  'const recordMinShortSide = 1080;',
   'recordCanvas.captureStream(30)',
   'recordCtx.imageSmoothingEnabled = false;',
   'videoBitsPerSecond: isPhoneRecording ? 12000000 : 30000000',
