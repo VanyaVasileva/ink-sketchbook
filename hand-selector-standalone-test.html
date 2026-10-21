@@ -1300,10 +1300,11 @@ function compositeRecordFrame() {
       recordCtx.save();
       recordCtx.globalAlpha = 1;
       if (selectedRecordingHand === 'woodenPencil' || selectedRecordingHand === 'modernFineLiner' || selectedRecordingHand === 'classicInkPen') {
-        recordCtx.shadowColor = 'rgba(40, 28, 18, 0.16)';
-        recordCtx.shadowBlur = Math.max(1, displayW * 0.005);
-        recordCtx.shadowOffsetX = displayW * 0.0015;
-        recordCtx.shadowOffsetY = displayW * 0.003;
+        const classicPen = selectedRecordingHand === 'classicInkPen';
+        recordCtx.shadowColor = classicPen ? 'rgba(30, 25, 22, 0.28)' : 'rgba(40, 28, 18, 0.16)';
+        recordCtx.shadowBlur = Math.max(1, displayW * (classicPen ? 0.009 : 0.005));
+        recordCtx.shadowOffsetX = displayW * (classicPen ? 0.005 : 0.0015);
+        recordCtx.shadowOffsetY = displayW * (classicPen ? 0.008 : 0.003);
       }
       recordCtx.drawImage(selected.img, drawX, drawY, selected.srcW * scale, selected.srcH * scale);
       recordCtx.restore();
