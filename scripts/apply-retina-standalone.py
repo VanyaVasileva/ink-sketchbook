@@ -186,6 +186,21 @@ if recording_shadow_test not in s:
         s = s.replace(shadow_anchor, shadow_block, 1)
 PATH.write_text(s)
 
+# Give the classic nib and fingers a closer, directional cast shadow. Keep
+# the existing lighter shadow for the wooden pencil and fine liner.
+old_classic_shadow = """        recordCtx.shadowColor = 'rgba(40, 28, 18, 0.16)';
+        recordCtx.shadowBlur = Math.max(1, displayW * 0.005);
+        recordCtx.shadowOffsetX = displayW * 0.0015;
+        recordCtx.shadowOffsetY = displayW * 0.003;"""
+new_classic_shadow = """        const classicPen = selectedRecordingHand === 'classicInkPen';
+        recordCtx.shadowColor = classicPen ? 'rgba(30, 25, 22, 0.28)' : 'rgba(40, 28, 18, 0.16)';
+        recordCtx.shadowBlur = Math.max(1, displayW * (classicPen ? 0.009 : 0.005));
+        recordCtx.shadowOffsetX = displayW * (classicPen ? 0.005 : 0.0015);
+        recordCtx.shadowOffsetY = displayW * (classicPen ? 0.008 : 0.003);"""
+if old_classic_shadow in s:
+    s = s.replace(old_classic_shadow, new_classic_shadow, 1)
+    PATH.write_text(s)
+
 # Keep a constant recording-hand scale for both pens, matching the wooden pencil.
 # Earlier builds constrained pen sprites to the frame and made them grow and shrink
 # as the tip moved. Remove that position-dependent fit on every fresh build.
