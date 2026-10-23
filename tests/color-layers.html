@@ -205,6 +205,22 @@ async function runColorLayerChecks(source, log) {
   assert(live.state().color.toDataURL()===live.replayActive().toDataURL(), 'Active brush accumulated old circular caps instead of replacing its outline');
   live.penEnd();
   log('PASS: live pressure changes replace the stroke outline cleanly without leftover round tips.');
+  const coverage=fixture();coverage.layer('color');coverage.brushSize(51);coverage.color('#ddb69f');
+  const scribble=[];
+  for(let row=0;row<21;row++) for(let step=0;step<=60;step++) {
+    const x=row%2 ? 420-step*5 : 120+step*5;
+    scribble.push([x,100+row*8+11*Math.sin(step*1.9+row*2.3),.72+.2*Math.sin(step*.25)**2]);
+  }
+  coverage.penStroke(scribble);
+  const fill=coverage.state().color.getContext('2d').getImageData(145,120,250,120).data;
+  let gaps=0;for(let i=3;i<fill.length;i+=4)if(fill[i]<250)gaps++;
+  assert(gaps===0, 'Back-and-forth coloring left '+gaps+' pale or transparent pixels inside a fully covered area');
+  log('PASS: dense back-and-forth coloring produces fully opaque coverage without white flecks.');
+  const loops=fixture();loops.layer('color');loops.brushSize(51);loops.color('#ddb69f');
+  loops.penStroke(Array.from({length:721},(_,i)=>[300+15*Math.cos(i/720*Math.PI*12),200+15*Math.sin(i/720*Math.PI*12),.9]));
+  const covered=loops.state().color.getContext('2d').getImageData(297,197,6,6).data;
+  assert(Array.from(covered).every((value,i)=>i%4!==3 || value===255), 'Tight overlapping coloring loops cut pale holes through solid brush coverage');
+  log('PASS: tight loops and reversals stay solid instead of cutting pale holes into the color.');
   const saved=f.save();
   assert(saved.version===2 && saved.inkDataUrl && saved.colorDataUrl, 'Save flattened the layers');
   f.layer('ink');f.clear();f.layer('color');f.clear();
