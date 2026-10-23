@@ -218,6 +218,70 @@ s, fit_count = fit_pattern.subn(
 if fit_count:
     PATH.write_text(s)
 
+# Keep the video frame fixed while following the current canvas zoom and pan.
+# Apply this before the retina early returns so both existing pages and fresh
+# builds receive the same recording behavior.
+recording_view_helpers = """let recordViewport = null;
+
+function getLiveRecordingSourceRect() {
+  if (!recordViewport) {
+    return recordSourceRect || { x: 0, y: 0, width: drawCanvas.width, height: drawCanvas.height };
+  }
+  const canvasRect = drawCanvas.getBoundingClientRect();
+  const wrapRect = wrap.getBoundingClientRect();
+  const sx = drawCanvas.width / Math.max(1, canvasRect.width);
+  const sy = drawCanvas.height / Math.max(1, canvasRect.height);
+  // Do not intersect with the canvas again: that would stretch the remaining
+  // artwork when panning past an edge. Areas outside the page stay paper-colored.
+  return {
+    x: (wrapRect.left + recordViewport.x - canvasRect.left) * sx,
+    y: (wrapRect.top + recordViewport.y - canvasRect.top) * sy,
+    width: recordViewport.width * sx,
+    height: recordViewport.height * sy
+  };
+}
+"""
+recording_view_patches = (
+    ('let recordSourceRect = null;\n',
+     'let recordSourceRect = null;\n' + recording_view_helpers),
+    ("  const visibleHeight = Math.max(1, visibleBottom - visibleTop);\n  recordSourceRect = {",
+     """  const visibleHeight = Math.max(1, visibleBottom - visibleTop);
+  recordViewport = {
+    x: visibleLeft - wrapRectForRecording.left,
+    y: visibleTop - wrapRectForRecording.top,
+    width: visibleWidth,
+    height: visibleHeight
+  };
+  recordSourceRect = {"""),
+    ('  const source = recordSourceRect || { x: 0, y: 0, width: drawCanvas.width, height: drawCanvas.height };',
+     '  const source = getLiveRecordingSourceRect();'),
+    ('      const displayW = baseDisplayW * selected.scale * recordingHandUserScale;',
+     """      const cameraScale = recordSourceRect ? recordSourceRect.width / source.width : 1;
+      const displayW = baseDisplayW * selected.scale * recordingHandUserScale * cameraScale;"""),
+    ('    ink.setTransform(sx, 0, 0, sy, -source.x * sx, -source.y * sy);',
+     """    ink.save();
+    ink.setTransform(sx, 0, 0, sy, -source.x * sx, -source.y * sy);
+    ink.beginPath();
+    ink.rect(0, 0, drawCanvas.width, drawCanvas.height);
+    ink.clip();"""),
+    ("    ink.setTransform(1, 0, 0, 1, 0, 0);\n    ink.globalCompositeOperation = 'source-over';",
+     "    ink.restore();\n    ink.setTransform(1, 0, 0, 1, 0, 0);\n    ink.globalCompositeOperation = 'source-over';"),
+    ('      recordCtx.setTransform(mapX, 0, 0, mapY, -cropX * mapX, -cropY * mapY);',
+     """      recordCtx.setTransform(mapX, 0, 0, mapY, -cropX * mapX, -cropY * mapY);
+      recordCtx.beginPath();
+      recordCtx.rect(0, 0, cw, ch);
+      recordCtx.clip();"""),
+    ('The sketch overlay always stays private and is never recorded.</div>',
+     'The sketch overlay always stays private and is never recorded. Zoom and pan are included in recordings.</div>'),
+    ('recordingHintMsg: "Recording — only your paper and ink lines are captured, your reference stays private."',
+     'recordingHintMsg: "Recording — zoom and pan are captured. The sketch overlay stays private."'),
+)
+for old, new in recording_view_patches:
+    if new in s:
+        continue
+    s = replace_one(s, old, new, 'Live recording view')
+PATH.write_text(s)
+
 native_retina_hooks = [
     "detailCanvas.id = 'detailCanvas'",
     'const DETAIL_ZOOM_THRESHOLD = 1.12;',
