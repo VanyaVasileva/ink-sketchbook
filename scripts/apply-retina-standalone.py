@@ -1195,6 +1195,102 @@ function finishColorBrush(cancel = false) {
     return text
 
 
+def apply_solid_color_brush(text: str) -> str:
+    """Union every painted section, including tight loops and reversals."""
+    if '// solid-color-brush-v2' in text:
+        return text
+
+    def change(old: str, new: str, label: str) -> None:
+        nonlocal text
+        text = replace_one(text, old, new, 'Solid color brush: ' + label)
+
+    # Use the library's smoothed centerline, with a coverage renderer whose
+    # subpaths all have positive winding. Self-crossings can only add color.
+    change('  return exports.getStroke;\n})();',
+           '  exports.getStroke.getPoints = exports.getStrokePoints;\n  return exports.getStroke;\n})();', 'centerline geometry')
+    first = text.index('function paintColorBrushShape(target, op) {')
+    last = text.index('function beginColorBrush(e) {', first)
+    text = text[:first] + r'''function paintColorBrushShape(target, op) {
+  // solid-color-brush-v2
+  const sweep=op.sweep,outline=op.outline;
+  if (!sweep && (!outline || outline.length<3)) return;
+  target.save();
+  target.globalCompositeOperation='source-over';
+  target.globalAlpha=1;
+  target.fillStyle=op.color;
+  target.beginPath();
+  if (sweep) {
+    for(let i=0;i<sweep.length;i++) {
+      const p=sweep[i],r=p[2];
+      if(r>0) {
+        target.moveTo(p[0]+r,p[1]);
+        target.arc(p[0],p[1],r,0,Math.PI*2);
+        target.closePath();
+      }
+      if(i===0) continue;
+      const a=sweep[i-1],distance=Math.hypot(p[0]-a[0],p[1]-a[1]);
+      if(distance<.00001) continue;
+      const nx=-(p[1]-a[1])/distance,ny=(p[0]-a[0])/distance;
+      // This vertex order matches the circles' winding even when the brush
+      // reverses direction. Fill the entire union once to avoid seam pixels.
+      target.moveTo(a[0]+nx*a[2],a[1]+ny*a[2]);
+      target.lineTo(a[0]-nx*a[2],a[1]-ny*a[2]);
+      target.lineTo(p[0]-nx*r,p[1]-ny*r);
+      target.lineTo(p[0]+nx*r,p[1]+ny*r);
+      target.closePath();
+    }
+  } else {
+    // Retain support for the earlier outline format in recording fixtures.
+    const last=outline[outline.length-1],first=outline[0];
+    target.moveTo((last[0]+first[0])/2,(last[1]+first[1])/2);
+    for(let i=0;i<outline.length;i++) {
+      const p=outline[i],next=outline[(i+1)%outline.length];
+      target.quadraticCurveTo(p[0],p[1],(p[0]+next[0])/2,(p[1]+next[1])/2);
+    }
+    target.closePath();
+  }
+  target.fill('nonzero');
+  target.restore();
+}
+
+function buildColorBrushSweep(stroke) {
+  const centerline=getColorStrokeOutline.getPoints(stroke.samples,{
+    size:stroke.size/2,
+    streamline:Math.max(0,Math.min(.45,(parseFloat(streamlineSlider.value)||0)/250)),
+    last:true
+  });
+  const sweep=[];
+  const spacing=Math.max(.5,stroke.size/12);
+  for(let i=0;i<centerline.length;i++) {
+    const p=centerline[i];
+    if(i===0) { sweep.push([p.point[0],p.point[1],stroke.size*.5*p.pressure]);continue; }
+    const a=centerline[i-1];
+    const distance=Math.hypot(p.point[0]-a.point[0],p.point[1]-a.point[1]);
+    const steps=Math.max(1,Math.min(128,Math.ceil(distance/spacing)));
+    for(let j=1;j<=steps;j++) {
+      const t=j/steps,pressure=a.pressure+(p.pressure-a.pressure)*t;
+      sweep.push([a.point[0]+(p.point[0]-a.point[0])*t,a.point[1]+(p.point[1]-a.point[1])*t,stroke.size*.5*pressure]);
+    }
+  }
+  return sweep;
+}
+
+''' + text[last:]
+    change('''      outline:getColorStrokeOutline(stroke.samples, {
+        size:stroke.size / 2, thinning:1, smoothing:.55,
+        streamline:Math.max(0, Math.min(.45, (parseFloat(streamlineSlider.value) || 0) / 250)),
+        simulatePressure:false, last:true,
+        start:{cap:false,taper:Math.min(stroke.size*.35, stroke.length*.2)},
+        end:{cap:false,taper:finished ? Math.min(stroke.size*.4, stroke.length*.25) : 0}
+      })''',
+           '''      sweep:buildColorBrushSweep(stroke)''', 'solid pressure coverage')
+    change('''  } else for (const p of stroke.op.outline) include(p[0],p[1]);''',
+           '''  } else if (stroke.op.sweep) {
+    for(const p of stroke.op.sweep) { include(p[0]-p[2],p[1]-p[2]);include(p[0]+p[2],p[1]+p[2]); }
+  } else for (const p of stroke.op.outline) include(p[0],p[1]);''', 'painted bounds')
+    return text
+
+
 # Vanya prefers an unobstructed tip while erasing. The pointer handlers can set
 # inline display values, so keep the outline hidden for every input device.
 eraser_cursor_style = '<style id="eraserCursorVisibility">#eraserCursor{display:none!important}</style>'
@@ -1209,14 +1305,14 @@ native_retina_hooks = [
     "drawCanvas.style.opacity = '0';",
 ]
 if MARKER in s:
-    PATH.write_text(apply_color_pressure_brush(apply_precise_eraser(apply_color_layer(s))))
+    PATH.write_text(apply_solid_color_brush(apply_color_pressure_brush(apply_precise_eraser(apply_color_layer(s)))))
     print('Standalone defaults checked; retina layer already present.')
     raise SystemExit(0)
 if all(item in s for item in native_retina_hooks):
     anchor = "detailCanvas.id = 'detailCanvas';"
     s = s.replace(anchor, "// " + MARKER + "\n" + anchor, 1)
     PATH.write_text(s)
-    PATH.write_text(apply_color_pressure_brush(apply_precise_eraser(apply_color_layer(s))))
+    PATH.write_text(apply_solid_color_brush(apply_color_pressure_brush(apply_precise_eraser(apply_color_layer(s)))))
     print('Standalone already has native retina detail rendering; added compatibility marker.')
     raise SystemExit(0)
 
@@ -1612,4 +1708,4 @@ for item in required:
 
 PATH.write_text(s)
 print('Patched exact standalone hand-selector page with retina-sharp zoom display.')
-PATH.write_text(apply_color_pressure_brush(apply_precise_eraser(apply_color_layer(s))))
+PATH.write_text(apply_solid_color_brush(apply_color_pressure_brush(apply_precise_eraser(apply_color_layer(s)))))
