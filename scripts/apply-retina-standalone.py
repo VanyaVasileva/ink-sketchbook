@@ -1291,6 +1291,108 @@ function buildColorBrushSweep(stroke) {
     return text
 
 
+def apply_direct_color_brush(text: str) -> str:
+    """Follow raw Pencil samples and keep live work independent of stroke length."""
+    if '// direct-color-brush-v3' in text:
+        return text
+
+    text = replace_one(text, '<b id="colorBrushSizeValue">28</b>',
+                       '<b id="colorBrushSizeValue">80</b>', 'Broader default color brush label')
+    text = replace_one(text, 'id="colorBrushSize" min="2" max="100" step="1" value="28"',
+                       'id="colorBrushSize" min="2" max="240" step="1" value="80"', 'Broader color brush range')
+    first = text.index('function buildColorBrushSweep(stroke) {')
+    last = text.index('function startStroke(e) {', first)
+    text = text[:first] + r'''function beginColorBrush(e) {
+  // direct-color-brush-v3
+  const base=document.createElement('canvas');
+  base.width=colorCanvas.width;base.height=colorCanvas.height;
+  base.getContext('2d').drawImage(colorCanvas,0,0);
+  const p=points[0],pressure=usingPressure ? Math.max(.005,Math.min(1,e.pressure || .005)) : 1;
+  const size=Math.max(2,parseFloat(colorBrushSize.value) || 80)*getDisplayDpr();
+  const sample=[p.x,p.y,size*.5*pressure];
+  const op={kind:'brush',mode:'draw',color:currentColor,sweep:[sample]};
+  colorBrushStroke={base,size,pressure:usingPressure,color:currentColor,op,bounds:null};
+  if(detailVectorValid && activeDetailStroke) activeDetailStroke.ops=[op];
+  paintColorBrushLive([sample]);
+}
+
+function includeColorBrushBounds(sample) {
+  const stroke=colorBrushStroke,[x,y,r]=sample;
+  if(!stroke.bounds) stroke.bounds={left:x-r,top:y-r,right:x+r,bottom:y+r};
+  else {
+    stroke.bounds.left=Math.min(stroke.bounds.left,x-r);stroke.bounds.top=Math.min(stroke.bounds.top,y-r);
+    stroke.bounds.right=Math.max(stroke.bounds.right,x+r);stroke.bounds.bottom=Math.max(stroke.bounds.bottom,y+r);
+  }
+}
+
+function paintColorBrushLive(sweep) {
+  const stroke=colorBrushStroke;
+  // Only the newest section is painted while moving. No delayed follow point,
+  // whole-stroke geometry rebuild, or second animation frame for zoomed paint.
+  for(const sample of sweep) includeColorBrushBounds(sample);
+  const op={kind:'brush',mode:'draw',color:stroke.color,sweep};
+  paintColorBrushShape(colorCtx,op);
+  drawDetailOpLive(op);
+  artworkRevision++;
+}
+
+function renderColorBrushNow() {
+  const stroke=colorBrushStroke,bounds=stroke && stroke.bounds;
+  if(!bounds) return;
+  const x=Math.max(0,Math.floor(bounds.left)-2),y=Math.max(0,Math.floor(bounds.top)-2);
+  const w=Math.min(colorCanvas.width,Math.ceil(bounds.right)+2)-x;
+  const h=Math.min(colorCanvas.height,Math.ceil(bounds.bottom)+2)-y;
+  if(w<=0 || h<=0) return;
+  colorCtx.save();colorCtx.setTransform(1,0,0,1,0,0);
+  colorCtx.globalCompositeOperation='source-over';
+  colorCtx.beginPath();colorCtx.rect(x,y,w,h);colorCtx.clip();
+  colorCtx.clearRect(x,y,w,h);
+  colorCtx.drawImage(stroke.base,x,y,w,h,x,y,w,h);
+  // On release, union the complete stroke once for consistent clean edges
+  // in the native artwork, sharp zoom display, exports and recordings.
+  paintColorBrushShape(colorCtx,stroke.op);
+  colorCtx.restore();
+}
+
+function continueColorBrush(e) {
+  const stroke=colorBrushStroke;
+  if(!stroke) return;
+  const p=getPos(e),sweep=stroke.op.sweep,previous=sweep[sweep.length-1];
+  const distance=Math.hypot(p.x-previous[0],p.y-previous[1]);
+  const pressure=stroke.pressure
+    ? (e.type==='pointerup' || !(e.pressure>0) ? previous[2]/(stroke.size*.5) : Math.min(1,e.pressure)) : 1;
+  const sample=[p.x,p.y,stroke.size*.5*Math.max(.005,pressure)];
+  if(distance<.00001) {
+    // Keep pressure changes at a stationary tip; moving samples are never
+    // filtered, resampled or pulled toward an earlier position.
+    if(Math.abs(sample[2]-previous[2])>.001) {
+      previous[2]=sample[2];includeColorBrushBounds(previous);renderColorBrushNow();
+      artworkRevision++;scheduleDetailRender();
+    }
+    return;
+  }
+  sweep.push(sample);moved=true;lastPressure=e.pressure;
+  points.push(p);lastRenderedPoint={x:p.x,y:p.y};lastPenPos={x:p.x,y:p.y};
+  paintColorBrushLive([previous,sample]);
+}
+
+function finishColorBrush(cancel=false) {
+  const stroke=colorBrushStroke;
+  if(!stroke) return;
+  if(cancel) {
+    stroke.op={kind:'brush',mode:'draw',color:stroke.color,sweep:[]};
+    activeDetailStroke=null;
+  }
+  renderColorBrushNow();
+  stroke.base.width=stroke.base.height=0;
+  colorBrushStroke=null;
+  artworkRevision++;scheduleDetailRender();
+}
+
+''' + text[last:]
+    return text
+
+
 # Vanya prefers an unobstructed tip while erasing. The pointer handlers can set
 # inline display values, so keep the outline hidden for every input device.
 eraser_cursor_style = '<style id="eraserCursorVisibility">#eraserCursor{display:none!important}</style>'
@@ -1305,14 +1407,14 @@ native_retina_hooks = [
     "drawCanvas.style.opacity = '0';",
 ]
 if MARKER in s:
-    PATH.write_text(apply_solid_color_brush(apply_color_pressure_brush(apply_precise_eraser(apply_color_layer(s)))))
+    PATH.write_text(apply_direct_color_brush(apply_solid_color_brush(apply_color_pressure_brush(apply_precise_eraser(apply_color_layer(s))))))
     print('Standalone defaults checked; retina layer already present.')
     raise SystemExit(0)
 if all(item in s for item in native_retina_hooks):
     anchor = "detailCanvas.id = 'detailCanvas';"
     s = s.replace(anchor, "// " + MARKER + "\n" + anchor, 1)
     PATH.write_text(s)
-    PATH.write_text(apply_solid_color_brush(apply_color_pressure_brush(apply_precise_eraser(apply_color_layer(s)))))
+    PATH.write_text(apply_direct_color_brush(apply_solid_color_brush(apply_color_pressure_brush(apply_precise_eraser(apply_color_layer(s))))))
     print('Standalone already has native retina detail rendering; added compatibility marker.')
     raise SystemExit(0)
 
@@ -1708,4 +1810,4 @@ for item in required:
 
 PATH.write_text(s)
 print('Patched exact standalone hand-selector page with retina-sharp zoom display.')
-PATH.write_text(apply_solid_color_brush(apply_color_pressure_brush(apply_precise_eraser(apply_color_layer(s)))))
+PATH.write_text(apply_direct_color_brush(apply_solid_color_brush(apply_color_pressure_brush(apply_precise_eraser(apply_color_layer(s))))))
