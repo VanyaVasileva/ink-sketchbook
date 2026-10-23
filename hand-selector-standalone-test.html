@@ -175,7 +175,11 @@
         <option value="ja">日本語</option>
         <option value="zh">中文</option>
       </select>
-      <div class="slider-group"><span data-i18n="eraserSizeLabel">Eraser size</span> <input type="range" id="eraserSizeSlider" min="10" max="200" value="60"></div>
+      <div class="slider-group">
+        <label for="eraserSizeInput" data-i18n="eraserSizeLabel">Eraser size</label>
+        <div style="display:flex;align-items:center;gap:6px;"><input type="number" id="eraserSizeInput" min="0.5" max="200" value="4" step="0.5" inputmode="decimal" style="width:76px;font:inherit;padding:6px;border:1px solid #d8d3c6;border-radius:6px;"><span>px</span></div>
+        <input type="range" id="eraserSizeSlider" min="0.5" max="200" value="4" step="0.5" aria-label="Eraser size">
+      </div>
       <label class="filebtn" for="fileInput">🖼 <span>Background / scene</span></label>
       <input type="file" id="fileInput" accept="image/*" />
       <button id="toggleRefBtn" class="active">👁</button>
@@ -1765,6 +1769,18 @@ eraseModeBtn.onclick = () => {
   drawModeBtn.classList.remove('active');
 };
 
+// precise-eraser-v1
+function getEraserSize() {
+  const size = parseFloat(eraserSizeSlider.value);
+  return Math.max(0.5, Math.min(200, Number.isFinite(size) ? size : 4));
+}
+
+function getEraserCanvasWidth() {
+  // The chosen diameter is in screen pixels. Zoom reveals finer artwork
+  // beneath the same small eraser instead of enlarging the eraser with it.
+  return getEraserSize() * getDisplayDpr() / Math.max(0.01, view.scale || 1);
+}
+
 function startStroke(e) {
   drawing = true;
   beginDetailStroke();
@@ -1788,7 +1804,7 @@ function continueStroke(e) {
   const dt = Math.max(1, p.t - prev.t);
   const dist = Math.hypot(p.x - prev.x, p.y - prev.y);
   const dpr = getDisplayDpr();
-  if (dist < 1.2 * dpr) return;
+  if (dist < (mode === 'erase' ? 0.02 * dpr / Math.max(0.01, view.scale || 1) : 1.2 * dpr)) return;
   moved = true;
 
   const thicknessMult = parseFloat(thicknessSlider.value);
@@ -1801,7 +1817,7 @@ function continueStroke(e) {
     // The eraser uses its own fixed size, not the pen's pressure/speed range —
     // a predictable, consistent eraser is more usable than one that varies
     // stroke to stroke like ink does.
-    targetWidth = parseFloat(eraserSizeSlider.value) * dpr;
+    targetWidth = getEraserCanvasWidth();
   } else if (activeLayer === 'color') {
     targetWidth = parseFloat(colorBrushSize.value) * dpr * (usingPressure ? 0.25 + Math.max(0.08, e.pressure) * 0.75 : 1);
   } else if (usingPressure) {
@@ -1815,10 +1831,10 @@ function continueStroke(e) {
   } else {
     targetWidth = minW + speedFactor * (maxW - minW);
   }
-  smoothedWidth = smoothedWidth === null ? targetWidth : smoothedWidth + (targetWidth - smoothedWidth) * 0.35;
+  smoothedWidth = mode === 'erase' || smoothedWidth === null ? targetWidth : smoothedWidth + (targetWidth - smoothedWidth) * 0.35;
 
   let x = p.x, y = p.y;
-  const streamlineStrength = Math.max(0, Math.min(1, parseFloat(streamlineSlider.value) / 100));
+  const streamlineStrength = mode === 'erase' ? 0 : Math.max(0, Math.min(1, parseFloat(streamlineSlider.value) / 100));
   if (streamlineStrength > 0) {
     const follow = 1 - streamlineStrength * 0.82;
     streamlinedPoint.x += (x - streamlinedPoint.x) * follow;
@@ -1875,7 +1891,7 @@ function endStroke() {
     const maxW = parseFloat(maxSlider.value) * dpr * thicknessMult;
     const pressure = usingPressure ? Math.max(0.08, lastPressure) : 0.5;
     const width = mode === 'erase'
-      ? parseFloat(eraserSizeSlider.value) * dpr
+      ? getEraserCanvasWidth()
       : activeLayer === 'color' ? parseFloat(colorBrushSize.value) * dpr * (usingPressure ? 0.25 + pressure * 0.75 : 1)
       : minW + pressure * (maxW - minW);
     const p = points[0];
@@ -1958,7 +1974,9 @@ drawCanvas.addEventListener('pointermove', (e) => {
     gesture.prevMid = newMid;
   } else if (activePointers.size === 1) {
     e.preventDefault();
-    continueStroke(e);
+    const samples = mode === 'erase' && typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : null;
+    if (samples && samples.length) for (const sample of samples) continueStroke(sample);
+    else continueStroke(e);
   } else if (activePointers.size === 3 && tapCandidate3) {
     const start = tapCandidate3.initial.get(e.pointerId);
     const now = activePointers.get(e.pointerId);
@@ -2007,6 +2025,7 @@ function onPointerEnd(e) {
   }
 
   if (activePointers.size === 0) {
+    if (drawing && mode === 'erase' && e.type === 'pointerup') continueStroke(e);
     endStroke();
   }
 }
@@ -2681,6 +2700,48 @@ loadBtn.onclick = () => {
 document.getElementById('closeLoadBtn').onclick = () => {
   document.getElementById('loadOverlay').classList.remove('show');
 };
+
+// The eraser outline is a private UI aid; export/recording use artwork only.
+const eraserSizeInput = document.getElementById('eraserSizeInput');
+const eraserCursor = document.createElement('div');
+eraserCursor.id = 'eraserCursor';
+eraserCursor.setAttribute('aria-hidden', 'true');
+eraserCursor.style.cssText = 'position:absolute;z-index:6;pointer-events:none;display:none;outline:1px solid #2a2620;border-radius:50%;box-shadow:0 0 0 2px #fff;transform:translate(-50%,-50%);';
+wrap.appendChild(eraserCursor);
+function syncEraserSize() {
+  eraserSizeInput.value = String(getEraserSize());
+  eraserCursor.style.width = eraserCursor.style.height = getEraserSize() + 'px';
+}
+eraserSizeSlider.addEventListener('input', syncEraserSize);
+eraserSizeSlider.addEventListener('change', syncEraserSize);
+eraserSizeInput.addEventListener('input', () => {
+  const size = parseFloat(eraserSizeInput.value);
+  if (!Number.isFinite(size) || size < 0.5 || size > 200) return;
+  eraserSizeSlider.value = String(size);
+  eraserCursor.style.width = eraserCursor.style.height = getEraserSize() + 'px';
+});
+eraserSizeInput.addEventListener('change', () => {
+  const size = parseFloat(eraserSizeInput.value);
+  eraserSizeSlider.value = String(Number.isFinite(size) ? Math.max(0.5, Math.min(200, size)) : 4);
+  syncEraserSize();
+});
+function hideEraserCursor() { eraserCursor.style.display = 'none'; }
+function showEraserCursor(e) {
+  if (mode !== 'erase' || guideMoveMode || activePointers.size > 1) { hideEraserCursor(); return; }
+  const rect = wrap.getBoundingClientRect();
+  eraserCursor.style.left = (e.clientX - rect.left) + 'px';
+  eraserCursor.style.top = (e.clientY - rect.top) + 'px';
+  eraserCursor.style.display = 'block';
+}
+drawCanvas.addEventListener('pointerdown', showEraserCursor);
+drawCanvas.addEventListener('pointermove', showEraserCursor);
+drawCanvas.addEventListener('pointerleave', hideEraserCursor);
+drawCanvas.addEventListener('pointercancel', hideEraserCursor);
+drawCanvas.addEventListener('pointerup', e => { if (e.pointerType === 'touch') hideEraserCursor(); });
+drawModeBtn.addEventListener('click', () => { drawCanvas.style.cursor = ''; hideEraserCursor(); });
+eraseModeBtn.addEventListener('click', () => { drawCanvas.style.cursor = 'none'; });
+syncEraserSize();
+
 </script>
 </body>
 </html>
