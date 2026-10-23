@@ -913,6 +913,101 @@ function paintRecordingInk(source) {
     return text
 
 
+def apply_precise_eraser(text: str) -> str:
+    """Use an exact screen-sized eraser that follows the pointer directly."""
+    if '// precise-eraser-v1' in text:
+        return text
+
+    def change(old: str, new: str, label: str) -> None:
+        nonlocal text
+        text = replace_one(text, old, new, 'Precise eraser: ' + label)
+
+    change('''<div class="slider-group"><span data-i18n="eraserSizeLabel">Eraser size</span> <input type="range" id="eraserSizeSlider" min="10" max="200" value="60"></div>''',
+           '''<div class="slider-group">
+        <label for="eraserSizeInput" data-i18n="eraserSizeLabel">Eraser size</label>
+        <div style="display:flex;align-items:center;gap:6px;"><input type="number" id="eraserSizeInput" min="0.5" max="200" value="4" step="0.5" inputmode="decimal" style="width:76px;font:inherit;padding:6px;border:1px solid #d8d3c6;border-radius:6px;"><span>px</span></div>
+        <input type="range" id="eraserSizeSlider" min="0.5" max="200" value="4" step="0.5" aria-label="Eraser size">
+      </div>''', 'size control')
+    change('function startStroke(e) {', r'''// precise-eraser-v1
+function getEraserSize() {
+  const size = parseFloat(eraserSizeSlider.value);
+  return Math.max(0.5, Math.min(200, Number.isFinite(size) ? size : 4));
+}
+
+function getEraserCanvasWidth() {
+  // The chosen diameter is in screen pixels. Zoom reveals finer artwork
+  // beneath the same small eraser instead of enlarging the eraser with it.
+  return getEraserSize() * getDisplayDpr() / Math.max(0.01, view.scale || 1);
+}
+
+function startStroke(e) {''', 'size conversion')
+    change('  if (dist < 1.2 * dpr) return;',
+           "  if (dist < (mode === 'erase' ? 0.02 * dpr / Math.max(0.01, view.scale || 1) : 1.2 * dpr)) return;", 'small movements')
+    change('    targetWidth = parseFloat(eraserSizeSlider.value) * dpr;',
+           '    targetWidth = getEraserCanvasWidth();', 'moving diameter')
+    change('      ? parseFloat(eraserSizeSlider.value) * dpr',
+           '      ? getEraserCanvasWidth()', 'tap diameter')
+    change('  smoothedWidth = smoothedWidth === null ? targetWidth : smoothedWidth + (targetWidth - smoothedWidth) * 0.35;',
+           "  smoothedWidth = mode === 'erase' || smoothedWidth === null ? targetWidth : smoothedWidth + (targetWidth - smoothedWidth) * 0.35;", 'fixed diameter')
+    change('  const streamlineStrength = Math.max(0, Math.min(1, parseFloat(streamlineSlider.value) / 100));',
+           "  const streamlineStrength = mode === 'erase' ? 0 : Math.max(0, Math.min(1, parseFloat(streamlineSlider.value) / 100));", 'direct pointer path')
+    change('''    continueStroke(e);
+  } else if (activePointers.size === 3''',
+           '''    const samples = mode === 'erase' && typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : null;
+    if (samples && samples.length) for (const sample of samples) continueStroke(sample);
+    else continueStroke(e);
+  } else if (activePointers.size === 3''', 'precise pointer samples')
+    change('''  if (activePointers.size === 0) {
+    endStroke();''',
+           '''  if (activePointers.size === 0) {
+    if (drawing && mode === 'erase' && e.type === 'pointerup') continueStroke(e);
+    endStroke();''', 'final pointer position')
+    controls = r'''
+// The eraser outline is a private UI aid; export/recording use artwork only.
+const eraserSizeInput = document.getElementById('eraserSizeInput');
+const eraserCursor = document.createElement('div');
+eraserCursor.id = 'eraserCursor';
+eraserCursor.setAttribute('aria-hidden', 'true');
+eraserCursor.style.cssText = 'position:absolute;z-index:6;pointer-events:none;display:none;outline:1px solid #2a2620;border-radius:50%;box-shadow:0 0 0 2px #fff;transform:translate(-50%,-50%);';
+wrap.appendChild(eraserCursor);
+function syncEraserSize() {
+  eraserSizeInput.value = String(getEraserSize());
+  eraserCursor.style.width = eraserCursor.style.height = getEraserSize() + 'px';
+}
+eraserSizeSlider.addEventListener('input', syncEraserSize);
+eraserSizeSlider.addEventListener('change', syncEraserSize);
+eraserSizeInput.addEventListener('input', () => {
+  const size = parseFloat(eraserSizeInput.value);
+  if (!Number.isFinite(size) || size < 0.5 || size > 200) return;
+  eraserSizeSlider.value = String(size);
+  eraserCursor.style.width = eraserCursor.style.height = getEraserSize() + 'px';
+});
+eraserSizeInput.addEventListener('change', () => {
+  const size = parseFloat(eraserSizeInput.value);
+  eraserSizeSlider.value = String(Number.isFinite(size) ? Math.max(0.5, Math.min(200, size)) : 4);
+  syncEraserSize();
+});
+function hideEraserCursor() { eraserCursor.style.display = 'none'; }
+function showEraserCursor(e) {
+  if (mode !== 'erase' || guideMoveMode || activePointers.size > 1) { hideEraserCursor(); return; }
+  const rect = wrap.getBoundingClientRect();
+  eraserCursor.style.left = (e.clientX - rect.left) + 'px';
+  eraserCursor.style.top = (e.clientY - rect.top) + 'px';
+  eraserCursor.style.display = 'block';
+}
+drawCanvas.addEventListener('pointerdown', showEraserCursor);
+drawCanvas.addEventListener('pointermove', showEraserCursor);
+drawCanvas.addEventListener('pointerleave', hideEraserCursor);
+drawCanvas.addEventListener('pointercancel', hideEraserCursor);
+drawCanvas.addEventListener('pointerup', e => { if (e.pointerType === 'touch') hideEraserCursor(); });
+drawModeBtn.addEventListener('click', () => { drawCanvas.style.cursor = ''; hideEraserCursor(); });
+eraseModeBtn.addEventListener('click', () => { drawCanvas.style.cursor = 'none'; });
+syncEraserSize();
+'''
+    change('</script>\n</body>', controls + '\n</script>\n</body>', 'private size outline')
+    return text
+
+
 native_retina_hooks = [
     "detailCanvas.id = 'detailCanvas'",
     'const DETAIL_ZOOM_THRESHOLD = 1.12;',
@@ -920,14 +1015,14 @@ native_retina_hooks = [
     "drawCanvas.style.opacity = '0';",
 ]
 if MARKER in s:
-    PATH.write_text(apply_color_layer(s))
+    PATH.write_text(apply_precise_eraser(apply_color_layer(s)))
     print('Standalone defaults checked; retina layer already present.')
     raise SystemExit(0)
 if all(item in s for item in native_retina_hooks):
     anchor = "detailCanvas.id = 'detailCanvas';"
     s = s.replace(anchor, "// " + MARKER + "\n" + anchor, 1)
     PATH.write_text(s)
-    PATH.write_text(apply_color_layer(s))
+    PATH.write_text(apply_precise_eraser(apply_color_layer(s)))
     print('Standalone already has native retina detail rendering; added compatibility marker.')
     raise SystemExit(0)
 
@@ -1323,4 +1418,4 @@ for item in required:
 
 PATH.write_text(s)
 print('Patched exact standalone hand-selector page with retina-sharp zoom display.')
-PATH.write_text(apply_color_layer(s))
+PATH.write_text(apply_precise_eraser(apply_color_layer(s)))
