@@ -1008,6 +1008,193 @@ syncEraserSize();
     return text
 
 
+def apply_color_pressure_brush(text: str) -> str:
+    """Paint a continuous pressure-shaped fill on the color layer."""
+    if '// color-pressure-brush-v1' in text:
+        return text
+
+    def change(old: str, new: str, label: str) -> None:
+        nonlocal text
+        text = replace_one(text, old, new, 'Pressure color brush: ' + label)
+
+    geometry = Path('scripts/perfect-freehand-1.2.3.js').read_text()
+    helpers = r'''// color-pressure-brush-v1
+let colorBrushStroke = null;
+let colorBrushRAF = null;
+
+function paintColorBrushShape(target, op) {
+  const outline = op.outline;
+  if (!outline || outline.length < 3) return;
+  target.save();
+  target.globalCompositeOperation = 'source-over';
+  target.fillStyle = op.color;
+  const last = outline[outline.length - 1], first = outline[0];
+  target.beginPath();
+  target.moveTo((last[0] + first[0]) / 2, (last[1] + first[1]) / 2);
+  for (let i = 0; i < outline.length; i++) {
+    const point = outline[i], next = outline[(i + 1) % outline.length];
+    target.quadraticCurveTo(point[0], point[1], (point[0] + next[0]) / 2, (point[1] + next[1]) / 2);
+  }
+  target.closePath();
+  target.fill();
+  target.restore();
+}
+
+function beginColorBrush(e) {
+  const base = document.createElement('canvas');
+  base.width = colorCanvas.width; base.height = colorCanvas.height;
+  base.getContext('2d').drawImage(colorCanvas, 0, 0);
+  const p = points[0];
+  const pressure = usingPressure ? Math.max(0.005, Math.min(1, e.pressure || 0.005)) : 1;
+  colorBrushStroke = {
+    base, samples:[[p.x, p.y, Math.pow(pressure, 1.2)]],
+    size:Math.max(2, parseFloat(colorBrushSize.value) || 28) * getDisplayDpr(),
+    pressure:usingPressure, color:currentColor, bounds:null, length:0,
+    dirty:true,op:{kind:'brush',mode:'draw',color:currentColor,outline:[]}
+  };
+  scheduleColorBrushUpdate();
+}
+
+function scheduleColorBrushUpdate() {
+  if (!colorBrushStroke) return;
+  colorBrushStroke.dirty=true;
+  if (colorBrushRAF === null) colorBrushRAF = requestAnimationFrame(() => {
+    colorBrushRAF = null;
+    renderColorBrushNow();
+  });
+}
+
+function updateColorBrushShape(finished) {
+  const stroke = colorBrushStroke;
+  if (!stroke) return;
+  stroke.dirty=false;
+  if (finished && !moved) {
+    const p = stroke.samples[0];
+    stroke.op = {kind:'dot',mode:'draw',color:stroke.color,x:p[0],y:p[1],width:Math.max(0.4,stroke.size*p[2])};
+  } else {
+    stroke.op = {
+      kind:'brush',mode:'draw',color:stroke.color,
+      outline:getColorStrokeOutline(stroke.samples, {
+        size:stroke.size / 2, thinning:1, smoothing:.55,
+        streamline:Math.max(0, Math.min(.45, (parseFloat(streamlineSlider.value) || 0) / 250)),
+        simulatePressure:false, last:true,
+        start:{cap:false,taper:Math.min(stroke.size*.35, stroke.length*.2)},
+        end:{cap:false,taper:finished ? Math.min(stroke.size*.4, stroke.length*.25) : 0}
+      })
+    };
+  }
+  if (detailVectorValid && activeDetailStroke) activeDetailStroke.ops = [stroke.op];
+  artworkRevision++;
+  scheduleDetailRender();
+}
+
+function renderColorBrushNow() {
+  const stroke = colorBrushStroke;
+  if (!stroke) return;
+  if (stroke.dirty) updateColorBrushShape(false);
+  let bounds = stroke.bounds;
+  const include = (x, y) => {
+    if (!bounds) bounds = {left:x,top:y,right:x,bottom:y};
+    else { bounds.left=Math.min(bounds.left,x);bounds.top=Math.min(bounds.top,y);bounds.right=Math.max(bounds.right,x);bounds.bottom=Math.max(bounds.bottom,y); }
+  };
+  if (stroke.op.kind === 'dot') {
+    const op = stroke.op;
+    include(op.x-op.width/2,op.y-op.width/2); include(op.x+op.width/2,op.y+op.width/2);
+  } else for (const p of stroke.op.outline) include(p[0],p[1]);
+  if (!bounds) return;
+  stroke.bounds = bounds;
+  const x=Math.max(0,Math.floor(bounds.left)-2),y=Math.max(0,Math.floor(bounds.top)-2);
+  const w=Math.min(colorCanvas.width,Math.ceil(bounds.right)+2)-x;
+  const h=Math.min(colorCanvas.height,Math.ceil(bounds.bottom)+2)-y;
+  if (w<=0 || h<=0) return;
+  colorCtx.save();
+  colorCtx.setTransform(1,0,0,1,0,0);
+  colorCtx.globalCompositeOperation='source-over';
+  colorCtx.beginPath();colorCtx.rect(x,y,w,h);colorCtx.clip();
+  // Restore the previous paint before replacing the active outline. This
+  // prevents old broad tips or overlapping round segments from accumulating.
+  colorCtx.clearRect(x,y,w,h);
+  colorCtx.drawImage(stroke.base,x,y,w,h,x,y,w,h);
+  paintDetailOp(stroke.op,colorCtx);
+  colorCtx.restore();
+}
+
+function continueColorBrush(e) {
+  const stroke=colorBrushStroke;
+  if (!stroke) return;
+  const p=getPos(e),previous=stroke.samples[stroke.samples.length-1];
+  const distance=Math.hypot(p.x-previous[0],p.y-previous[1]);
+  const rawPressure=stroke.pressure
+    ? (e.type==='pointerup' || !(e.pressure>0) ? Math.pow(previous[2],1/1.2) : Math.min(1,e.pressure)) : 1;
+  const pressure=Math.pow(Math.max(.005,rawPressure),1.2);
+  if (distance < .02 * getDisplayDpr() / Math.max(1,view.scale)) {
+    if (Math.abs(pressure-previous[2])>.002) {
+      previous[2]=pressure;scheduleColorBrushUpdate();
+    }
+    return;
+  }
+  stroke.samples.push([p.x,p.y,pressure]);
+  stroke.length+=distance;
+  moved=true;lastPressure=e.pressure;
+  points.push(p);lastRenderedPoint={x:p.x,y:p.y};lastPenPos={x:p.x,y:p.y};
+  scheduleColorBrushUpdate();
+}
+
+function finishColorBrush(cancel = false) {
+  if (!colorBrushStroke) return;
+  if (cancel) {
+    colorBrushStroke.dirty=false;
+    colorBrushStroke.op={kind:'brush',mode:'draw',color:colorBrushStroke.color,outline:[]};
+    activeDetailStroke=null;
+    artworkRevision++;
+  } else updateColorBrushShape(true);
+  if (colorBrushRAF !== null) cancelAnimationFrame(colorBrushRAF);
+  colorBrushRAF=null;
+  renderColorBrushNow();
+  colorBrushStroke=null;
+  scheduleDetailRender();
+}
+
+'''
+    change('function startStroke(e) {', geometry + '\n' + helpers + 'function startStroke(e) {', 'brush controller')
+    change("  if (!op) return;\n  if (op.kind === 'clear')",
+           "  if (!op) return;\n  if (op.kind === 'brush') { paintColorBrushShape(target, op); return; }\n  if (op.kind === 'clear')", 'sharp display outline')
+    change("      const paint = op => {\n        if (op.kind === 'clear')",
+           "      const paint = op => {\n        if (op.kind === 'brush') { paintColorBrushShape(target, op); return; }\n        if (op.kind === 'clear')", 'recorded outline')
+    change('''  lastPenPos = { x: points[0].x, y: points[0].y };
+}''', '''  lastPenPos = { x: points[0].x, y: points[0].y };
+  if (activeLayer === 'color' && mode === 'draw') beginColorBrush(e);
+}''', 'begin color stroke')
+    change('''function continueStroke(e) {
+  if (!drawing) return;''', '''function continueStroke(e) {
+  if (!drawing) return;
+  if (colorBrushStroke) { continueColorBrush(e); return; }''', 'route color strokes')
+    change('''function endStroke() {
+  if (!drawing) return;''', '''function endStroke() {
+  if (!drawing) return;
+  if (colorBrushStroke) {
+    finishColorBrush();drawing=false;commitDetailStroke();saveHistory();return;
+  }''', 'finish color stroke')
+    change('''  } else if (activePointers.size === 2) {
+    if (drawing && activeDetailStroke''', '''  } else if (activePointers.size === 2) {
+    if (colorBrushStroke) {
+      const painted=moved;
+      finishColorBrush(!painted);
+      if (painted && !detailVectorValid) saveHistory();
+    }
+    if (drawing && activeDetailStroke''', 'pinch during color stroke')
+    change("const samples = mode === 'erase' && typeof e.getCoalescedEvents === 'function'",
+           "const samples = (mode === 'erase' || colorBrushStroke) && typeof e.getCoalescedEvents === 'function'", 'stylus pressure samples')
+    change("if (drawing && mode === 'erase' && e.type === 'pointerup') continueStroke(e);",
+           "if (drawing && (mode === 'erase' || colorBrushStroke) && e.type === 'pointerup') continueStroke(e);", 'final color sample')
+    change('Paint here to keep color beneath your ink lines.',
+           'Light pressure makes a fine tip; press harder for broad, smooth color beneath your ink lines.', 'brush help')
+    # The English fallback is used by the existing data-i18n control.
+    change('colorLayerHint: "Paint here to keep color beneath your ink lines."',
+           'colorLayerHint: "Light pressure makes a fine tip; press harder for broad, smooth color beneath your ink lines."', 'translated brush help')
+    return text
+
+
 # Vanya prefers an unobstructed tip while erasing. The pointer handlers can set
 # inline display values, so keep the outline hidden for every input device.
 eraser_cursor_style = '<style id="eraserCursorVisibility">#eraserCursor{display:none!important}</style>'
@@ -1022,14 +1209,14 @@ native_retina_hooks = [
     "drawCanvas.style.opacity = '0';",
 ]
 if MARKER in s:
-    PATH.write_text(apply_precise_eraser(apply_color_layer(s)))
+    PATH.write_text(apply_color_pressure_brush(apply_precise_eraser(apply_color_layer(s))))
     print('Standalone defaults checked; retina layer already present.')
     raise SystemExit(0)
 if all(item in s for item in native_retina_hooks):
     anchor = "detailCanvas.id = 'detailCanvas';"
     s = s.replace(anchor, "// " + MARKER + "\n" + anchor, 1)
     PATH.write_text(s)
-    PATH.write_text(apply_precise_eraser(apply_color_layer(s)))
+    PATH.write_text(apply_color_pressure_brush(apply_precise_eraser(apply_color_layer(s))))
     print('Standalone already has native retina detail rendering; added compatibility marker.')
     raise SystemExit(0)
 
@@ -1425,4 +1612,4 @@ for item in required:
 
 PATH.write_text(s)
 print('Patched exact standalone hand-selector page with retina-sharp zoom display.')
-PATH.write_text(apply_precise_eraser(apply_color_layer(s)))
+PATH.write_text(apply_color_pressure_brush(apply_precise_eraser(apply_color_layer(s))))
