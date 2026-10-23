@@ -143,7 +143,7 @@
       <button id="recordBtn">⏺ <span data-i18n="recordBtn">Record</span></button>
       <button id="panelToggleBtn" data-i18n="moreSettingsBtn">More settings ▼</button>
     </div>
-  </header><div id="recordingInfoNote" style="width:100%;padding:7px 14px;background:#fffaf0;border-bottom:1px solid #e5e1d8;color:#6b6558;font-size:12px;line-height:1.4;text-align:center;">ⓘ The illustrated hand appears in recordings only. Background can be included in the recording. The sketch overlay always stays private and is never recorded.</div>
+  </header><div id="recordingInfoNote" style="width:100%;padding:7px 14px;background:#fffaf0;border-bottom:1px solid #e5e1d8;color:#6b6558;font-size:12px;line-height:1.4;text-align:center;">ⓘ The illustrated hand appears in recordings only. Background can be included in the recording. The sketch overlay always stays private and is never recorded. Zoom and pan are included in recordings.</div>
   <div class="main-row">
     <div class="canvas-wrap">
       <canvas id="refCanvas"></canvas>
@@ -324,7 +324,7 @@ const TRANSLATIONS = {
     loadBtn: "My Drawings", exportBtn: "Export", closeBtn: "Close",
     myDrawingsHeading: "My Drawings", noDrawings: "Nothing saved yet.",
     hintDefault: "Upload a reference to trace, or just draw freehand. Pinch to zoom · two-finger tap to undo.",
-    recordBtn: "Record", stopRecordBtn: "Stop", recordingHintMsg: "Recording — only your paper and ink lines are captured, your reference stays private.",
+    recordBtn: "Record", stopRecordBtn: "Stop", recordingHintMsg: "Recording — zoom and pan are captured. The sketch overlay stays private.",
     recordingSavedMsg: "Recording saved to your downloads.",
     exportInstructions: 'On iPad: press and hold the image, then choose "Add to Photos." On desktop: right-click and choose "Save Image As."',
     referenceLoadedMsg: "Trace your outline on top, or fade/hide the reference to check your work.",
@@ -1130,6 +1130,25 @@ let mediaRecorder = null;
 let recordedChunks = [];
 let recordCanvas = null;
 let recordSourceRect = null;
+let recordViewport = null;
+
+function getLiveRecordingSourceRect() {
+  if (!recordViewport) {
+    return recordSourceRect || { x: 0, y: 0, width: drawCanvas.width, height: drawCanvas.height };
+  }
+  const canvasRect = drawCanvas.getBoundingClientRect();
+  const wrapRect = wrap.getBoundingClientRect();
+  const sx = drawCanvas.width / Math.max(1, canvasRect.width);
+  const sy = drawCanvas.height / Math.max(1, canvasRect.height);
+  // Do not intersect with the canvas again: that would stretch the remaining
+  // artwork when panning past an edge. Areas outside the page stay paper-colored.
+  return {
+    x: (wrapRect.left + recordViewport.x - canvasRect.left) * sx,
+    y: (wrapRect.top + recordViewport.y - canvasRect.top) * sy,
+    width: recordViewport.width * sx,
+    height: recordViewport.height * sy
+  };
+}
 let recordingMicrophoneStream = null;
 let recordingAudioContext = null;
 let recordingAudioGain = null;
@@ -1222,7 +1241,11 @@ function paintRecordingInk(source) {
     ink.clearRect(0, 0, recordingInkLayer.width, recordingInkLayer.height);
     const sx = recordCanvas.width / source.width;
     const sy = recordCanvas.height / source.height;
+    ink.save();
     ink.setTransform(sx, 0, 0, sy, -source.x * sx, -source.y * sy);
+    ink.beginPath();
+    ink.rect(0, 0, drawCanvas.width, drawCanvas.height);
+    ink.clip();
     const paint = op => {
       ink.globalCompositeOperation = op.mode === 'erase' ? 'destination-out' : 'source-over';
       ink.lineCap = 'round'; ink.lineJoin = 'round';
@@ -1241,6 +1264,7 @@ function paintRecordingInk(source) {
     for (let i = 0; i < detailVisibleCount; i++)
       for (const op of detailStrokes[i].ops) paint(op);
     if (activeDetailStroke) for (const op of activeDetailStroke.ops) paint(op);
+    ink.restore();
     ink.setTransform(1, 0, 0, 1, 0, 0);
     ink.globalCompositeOperation = 'source-over';
     recordingInkKey = key;
@@ -1251,7 +1275,7 @@ function paintRecordingInk(source) {
 function compositeRecordFrame() {
   recordCtx.fillStyle = paperColorPicker.value || '#ffffff';
   recordCtx.fillRect(0, 0, recordCanvas.width, recordCanvas.height);
-  const source = recordSourceRect || { x: 0, y: 0, width: drawCanvas.width, height: drawCanvas.height };
+  const source = getLiveRecordingSourceRect();
   if (recordReferenceInVideo && refVisible && (refImage || backgroundVideoReady)) {
     const activeRecordingRef = backgroundVideoReady ? backgroundVideo : refImage;
     const iw = backgroundVideoReady ? backgroundVideo.videoWidth : (refImage.naturalWidth || refImage.width);
@@ -1275,6 +1299,9 @@ function compositeRecordFrame() {
       recordCtx.imageSmoothingEnabled = true;
       recordCtx.imageSmoothingQuality = 'high';
       recordCtx.setTransform(mapX, 0, 0, mapY, -cropX * mapX, -cropY * mapY);
+      recordCtx.beginPath();
+      recordCtx.rect(0, 0, cw, ch);
+      recordCtx.clip();
       try { recordCtx.drawImage(activeRecordingRef, refX, refY, refW, refH); } catch (_) {}
       recordCtx.restore();
     }
@@ -1293,7 +1320,8 @@ function compositeRecordFrame() {
     const selected = recordingHands[selectedRecordingHand] || recordingHands.human;
     if (selected && selected.ready) {
       const baseDisplayW = Math.min(recordCanvas.width * 0.66, recordCanvas.height * 1.10);
-      const displayW = baseDisplayW * selected.scale * recordingHandUserScale;
+      const cameraScale = recordSourceRect ? recordSourceRect.width / source.width : 1;
+      const displayW = baseDisplayW * selected.scale * recordingHandUserScale * cameraScale;
       const scale = displayW / selected.srcW;
       const drawX = recordPenX - selected.tipX * scale;
       const drawY = recordPenY - selected.tipY * scale;
@@ -1338,6 +1366,12 @@ recordBtn.onclick = async () => {
   const visibleBottom = Math.min(canvasRectForRecording.bottom, wrapRectForRecording.bottom);
   const visibleWidth = Math.max(1, visibleRight - visibleLeft);
   const visibleHeight = Math.max(1, visibleBottom - visibleTop);
+  recordViewport = {
+    x: visibleLeft - wrapRectForRecording.left,
+    y: visibleTop - wrapRectForRecording.top,
+    width: visibleWidth,
+    height: visibleHeight
+  };
   recordSourceRect = {
     x: (visibleLeft - canvasRectForRecording.left) * drawCanvas.width / canvasRectForRecording.width,
     y: (visibleTop - canvasRectForRecording.top) * drawCanvas.height / canvasRectForRecording.height,
