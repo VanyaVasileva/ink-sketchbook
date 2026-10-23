@@ -1412,7 +1412,7 @@ function compositeRecordFrame() {
 function showRecordingResult(blob, outputMime) {
   const fileExt = outputMime.includes('mp4') ? 'mp4' : 'webm';
   const fileName = `ink-sketchbook-recording.${fileExt}`;
-  const recordingFile = new File([blob], fileName, { type: outputMime });
+  const recordingFile = new File([blob], fileName, { type: outputMime.split(';')[0] });
   const url = URL.createObjectURL(blob);
   if (lastRecordingUrl) URL.revokeObjectURL(lastRecordingUrl);
   lastRecordingUrl = url;
