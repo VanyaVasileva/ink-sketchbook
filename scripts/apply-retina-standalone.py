@@ -522,6 +522,14 @@ recordBtn.onclick = async () => {
     s = s[:controller_start] + result_helper + '\n' + controller + s[controller_end:]
     PATH.write_text(s)
 
+# Native share sheets identify the file by its container MIME, without codecs.
+s = s.replace(
+    'const recordingFile = new File([blob], fileName, { type: outputMime });',
+    "const recordingFile = new File([blob], fileName, { type: outputMime.split(';')[0] });",
+    1,
+)
+PATH.write_text(s)
+
 native_retina_hooks = [
     "detailCanvas.id = 'detailCanvas'",
     'const DETAIL_ZOOM_THRESHOLD = 1.12;',
