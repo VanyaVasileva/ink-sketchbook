@@ -65,22 +65,27 @@ document.getElementById('run').onclick = async () => {
       const t=key=>({recordBtn:'Record',stopRecordBtn:'Stop',recordingHintMsg:'Recording'})[key];
     `;
     const context = { button, drawing, wrap:fixture, hint, audioStream:null };
-    const api = new Function('fixture', setup + recorderCode + `;
+    let frameCount = 0;
+    const countedFrame = callback => requestAnimationFrame(time => { frameCount++; callback(time); });
+    const api = new Function('fixture', 'requestAnimationFrame', setup + recorderCode + `;
       return {
         start:recordBtn.onclick, stop:stopRecording,
         info:()=>({mime:mediaRecorder&&mediaRecorder.mimeType,bytes:recordedChunks.reduce((n,b)=>n+b.size,0)})
       };
-    `)(context);
+    `)(context, countedFrame);
     log('Loaded the deployed recording controller and compositor.');
     await api.start();
     const mime = api.info().mime;
     if (!mime) throw Error('Recorder did not start: ' + hint.textContent);
     log('Encoding ' + mime);
     await delay(700);
+    await until(() => frameCount >= 2);
+    const beforeZoomFrames = frameCount;
     drawing.style.width = '600px';
     drawing.style.height = '800px';
     drawing.style.transform = 'translate(-150px,-200px)';
     await delay(900);
+    await until(() => frameCount >= beforeZoomFrames + 3);
     api.stop();
     await until(() => document.querySelector('#recordingResultPanel h2')?.textContent === 'Your recording is ready');
     const video = document.querySelector('#recordingResultPanel video');
@@ -100,7 +105,7 @@ document.getElementById('run').onclick = async () => {
       return [...ctx.getImageData(Math.round(decoded.width/2+50), Math.round(decoded.height/2), 1, 1).data];
     };
     const before = await sample(Math.min(.3, video.duration * .15));
-    const after = await sample(video.duration * .85);
+    const after = await sample(video.duration);
     if (!(before[0]>200 && before[1]>200 && before[2]>200)) throw Error('Initial exported frame was not the unzoomed drawing: ' + before);
     if (!(after[0]>160 && after[1]<100 && after[2]<100)) throw Error('The exported video did not include the zoom: ' + after);
     if (!mime.startsWith('video/mp4')) throw Error('The browser did not select MP4');
