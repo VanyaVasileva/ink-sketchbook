@@ -193,7 +193,7 @@
       <div id="colorBrushControls" class="slider-group" hidden>
         <span><span data-i18n="colorBrushLabel">Color brush size</span> <b id="colorBrushSizeValue">80</b></span>
         <input type="range" id="colorBrushSize" min="2" max="240" step="1" value="80" aria-label="Color brush size">
-        <small data-i18n="colorLayerHint">Light pressure makes a fine tip; press harder for broad, smooth color beneath your ink lines.</small>
+        <small data-i18n="colorLayerHint">A tapered oval brush that follows your Pencil directly; press harder for broader color beneath your ink lines.</small>
       </div>
       <div class="row palette" id="palette"></div>
       <input type="color" id="colorPicker" value="#2a2620" style="width:32px; height:32px; border:2px solid #d8d3c6; border-radius:6px; padding:0; cursor:pointer;">
@@ -354,7 +354,7 @@ const langSelect = document.getElementById('langSelect');
 const TRANSLATIONS = {
   en: {
     layerLabel: "Layer", inkLayerLabel: "Ink", colorLayerLabel: "Color",
-    colorBrushLabel: "Color brush size", colorLayerHint: "Light pressure makes a fine tip; press harder for broad, smooth color beneath your ink lines.",
+    colorBrushLabel: "Color brush size", colorLayerHint: "A tapered oval brush that follows your Pencil directly; press harder for broader color beneath your ink lines.",
     clearInkLayer: "Clear ink layer", clearColorLayer: "Clear color layer",
     lockText: "Enter the access code from your purchase to unlock the tool.",
     unlockBtn: "Unlock", passcodePlaceholder: "Access code",
@@ -1817,59 +1817,76 @@ Object.defineProperties(exports,{__esModule:{value:!0},[Symbol.toStringTag]:{val
 let colorBrushStroke = null;
 let colorBrushRAF = null;
 
-function paintColorBrushShape(target, op) {
+function colorBrushTangent(sweep,index) {
+  if(sweep.length<2) return [Math.SQRT1_2,-Math.SQRT1_2];
+  let before=Math.max(0,index-1),after=Math.min(sweep.length-1,index+1);
+  while(before>0 && sweep[before][0]===sweep[index][0] && sweep[before][1]===sweep[index][1]) before--;
+  while(after<sweep.length-1 && sweep[after][0]===sweep[index][0] && sweep[after][1]===sweep[index][1]) after++;
+  const dx=sweep[after][0]-sweep[before][0],dy=sweep[after][1]-sweep[before][1];
+  const distance=Math.hypot(dx,dy);
+  return distance>.00001 ? [dx/distance,dy/distance] : [Math.SQRT1_2,-Math.SQRT1_2];
+}
+
+function paintColorBrushShape(target,op) {
   // solid-color-brush-v2
+  // direct-color-brush-v3
+  // oval-color-brush-v4
   const sweep=op.sweep,outline=op.outline;
-  if (!sweep && (!outline || outline.length<3)) return;
-  target.save();
-  target.globalCompositeOperation='source-over';
-  target.globalAlpha=1;
-  target.fillStyle=op.color;
-  target.beginPath();
-  if (sweep) {
-    for(let i=0;i<sweep.length;i++) {
-      const p=sweep[i],r=p[2];
-      if(r>0) {
-        target.moveTo(p[0]+r,p[1]);
-        target.arc(p[0],p[1],r,0,Math.PI*2);
-        target.closePath();
-      }
-      if(i===0) continue;
-      const a=sweep[i-1],distance=Math.hypot(p[0]-a[0],p[1]-a[1]);
-      if(distance<.00001) continue;
-      const nx=-(p[1]-a[1])/distance,ny=(p[0]-a[0])/distance;
-      // This vertex order matches the circles' winding even when the brush
-      // reverses direction. Fill the entire union once to avoid seam pixels.
-      target.moveTo(a[0]+nx*a[2],a[1]+ny*a[2]);
-      target.lineTo(a[0]-nx*a[2],a[1]-ny*a[2]);
-      target.lineTo(p[0]-nx*r,p[1]-ny*r);
-      target.lineTo(p[0]+nx*r,p[1]+ny*r);
-      target.closePath();
-    }
-  } else {
-    // Retain support for the earlier outline format in recording fixtures.
+  if(!sweep) {
+    if(!outline || outline.length<3) return;
+    target.save();target.globalCompositeOperation='source-over';target.globalAlpha=1;
+    target.fillStyle=op.color;target.beginPath();
     const last=outline[outline.length-1],first=outline[0];
     target.moveTo((last[0]+first[0])/2,(last[1]+first[1])/2);
     for(let i=0;i<outline.length;i++) {
       const p=outline[i],next=outline[(i+1)%outline.length];
       target.quadraticCurveTo(p[0],p[1],(p[0]+next[0])/2,(p[1]+next[1])/2);
     }
+    target.closePath();target.fill('nonzero');target.restore();return;
+  }
+  if(!sweep.length) return;
+  target.save();target.globalCompositeOperation='source-over';target.globalAlpha=1;
+  target.fillStyle=op.color;target.beginPath();
+  for(let i=0;i<sweep.length;i++) {
+    const p=sweep[i],r=Math.max(.01,p[2]);
+    const tangent=colorBrushTangent(sweep,i),angle=Math.atan2(tangent[1],tangent[0]);
+    // A flattened oval nib gives the stroke a slim, tapered entrance instead
+    // of the large circular blob made by a monoline brush.
+    const along=Math.max(.35,r*.34);
+    target.moveTo(p[0]+tangent[0]*along,p[1]+tangent[1]*along);
+    target.ellipse(p[0],p[1],along,r,angle,0,Math.PI*2);
+    target.closePath();
+    if(i===0) continue;
+    const a=sweep[i-1],dx=p[0]-a[0],dy=p[1]-a[1],distance=Math.hypot(dx,dy);
+    if(distance<.00001) continue;
+    const nx=-dy/distance,ny=dx/distance;
+    // Join every pair of ovals with a solid ribbon. Even a very fast Pencil
+    // jump is filled continuously; repeated stamps can never leave gaps.
+    target.moveTo(a[0]+nx*a[2],a[1]+ny*a[2]);
+    target.lineTo(a[0]-nx*a[2],a[1]-ny*a[2]);
+    target.lineTo(p[0]-nx*r,p[1]-ny*r);
+    target.lineTo(p[0]+nx*r,p[1]+ny*r);
     target.closePath();
   }
-  target.fill('nonzero');
-  target.restore();
+  target.fill('nonzero');target.restore();
+}
+
+function colorBrushSmoothstep(value) {
+  const t=Math.max(0,Math.min(1,value));
+  return t*t*(3-2*t);
 }
 
 function beginColorBrush(e) {
-  // direct-color-brush-v3
   const base=document.createElement('canvas');
   base.width=colorCanvas.width;base.height=colorCanvas.height;
   base.getContext('2d').drawImage(colorCanvas,0,0);
   const p=points[0],pressure=usingPressure ? Math.max(.005,Math.min(1,e.pressure || .005)) : 1;
   const size=Math.max(2,parseFloat(colorBrushSize.value) || 80)*getDisplayDpr();
-  const sample=[p.x,p.y,size*.5*pressure];
+  const tipRadius=Math.max(.65*getDisplayDpr(),size*.04);
+  const targetRadius=Math.max(tipRadius,size*.5*pressure);
+  const sample=[p.x,p.y,tipRadius,targetRadius,0];
   const op={kind:'brush',mode:'draw',color:currentColor,sweep:[sample]};
-  colorBrushStroke={base,size,pressure:usingPressure,color:currentColor,op,bounds:null};
+  colorBrushStroke={base,size,tipRadius,pressure:usingPressure,color:currentColor,op,bounds:null,length:0};
   if(detailVectorValid && activeDetailStroke) activeDetailStroke.ops=[op];
   paintColorBrushLive([sample]);
 }
@@ -1885,13 +1902,11 @@ function includeColorBrushBounds(sample) {
 
 function paintColorBrushLive(sweep) {
   const stroke=colorBrushStroke;
-  // Only the newest section is painted while moving. No delayed follow point,
-  // whole-stroke geometry rebuild, or second animation frame for zoomed paint.
   for(const sample of sweep) includeColorBrushBounds(sample);
   const op={kind:'brush',mode:'draw',color:stroke.color,sweep};
-  paintColorBrushShape(colorCtx,op);
-  drawDetailOpLive(op);
-  artworkRevision++;
+  // Draw the newest Pencil section synchronously on both native and zoomed
+  // canvases. There is no smoothing follower or animation-frame queue.
+  paintColorBrushShape(colorCtx,op);drawDetailOpLive(op);artworkRevision++;
 }
 
 function renderColorBrushNow() {
@@ -1904,12 +1919,8 @@ function renderColorBrushNow() {
   colorCtx.save();colorCtx.setTransform(1,0,0,1,0,0);
   colorCtx.globalCompositeOperation='source-over';
   colorCtx.beginPath();colorCtx.rect(x,y,w,h);colorCtx.clip();
-  colorCtx.clearRect(x,y,w,h);
-  colorCtx.drawImage(stroke.base,x,y,w,h,x,y,w,h);
-  // On release, union the complete stroke once for consistent clean edges
-  // in the native artwork, sharp zoom display, exports and recordings.
-  paintColorBrushShape(colorCtx,stroke.op);
-  colorCtx.restore();
+  colorCtx.clearRect(x,y,w,h);colorCtx.drawImage(stroke.base,x,y,w,h,x,y,w,h);
+  paintColorBrushShape(colorCtx,stroke.op);colorCtx.restore();
 }
 
 function continueColorBrush(e) {
@@ -1917,34 +1928,52 @@ function continueColorBrush(e) {
   if(!stroke) return;
   const p=getPos(e),sweep=stroke.op.sweep,previous=sweep[sweep.length-1];
   const distance=Math.hypot(p.x-previous[0],p.y-previous[1]);
-  const pressure=stroke.pressure
-    ? (e.type==='pointerup' || !(e.pressure>0) ? previous[2]/(stroke.size*.5) : Math.min(1,e.pressure)) : 1;
-  const sample=[p.x,p.y,stroke.size*.5*Math.max(.005,pressure)];
+  const pressure=stroke.pressure ? Math.max(.005,Math.min(1,e.pressure || .005)) : 1;
+  const targetRadius=Math.max(stroke.tipRadius,stroke.size*.5*pressure);
   if(distance<.00001) {
-    // Keep pressure changes at a stationary tip; moving samples are never
-    // filtered, resampled or pulled toward an earlier position.
-    if(Math.abs(sample[2]-previous[2])>.001) {
-      previous[2]=sample[2];includeColorBrushBounds(previous);renderColorBrushNow();
+    if(Math.abs(targetRadius-previous[3])>.001 && sweep.length>1) {
+      previous[3]=targetRadius;
+      const ramp=colorBrushSmoothstep(previous[4]/Math.max(4,stroke.size*.3));
+      previous[2]=stroke.tipRadius+(targetRadius-stroke.tipRadius)*ramp;
+      includeColorBrushBounds(previous);renderColorBrushNow();
       artworkRevision++;scheduleDetailRender();
     }
     return;
   }
+  stroke.length+=distance;
+  const ramp=colorBrushSmoothstep(stroke.length/Math.max(4,stroke.size*.3));
+  const radius=stroke.tipRadius+(targetRadius-stroke.tipRadius)*ramp;
+  const sample=[p.x,p.y,radius,targetRadius,stroke.length];
   sweep.push(sample);moved=true;lastPressure=e.pressure;
   points.push(p);lastRenderedPoint={x:p.x,y:p.y};lastPenPos={x:p.x,y:p.y};
   paintColorBrushLive([previous,sample]);
+}
+
+function taperColorBrushEnd(stroke) {
+  const sweep=stroke.op.sweep;
+  if(sweep.length<2) return;
+  let travelled=0;
+  const taperLength=Math.max(5*getDisplayDpr(),stroke.size*.42);
+  for(let i=sweep.length-1;i>=0;i--) {
+    if(i<sweep.length-1) travelled+=Math.hypot(sweep[i+1][0]-sweep[i][0],sweep[i+1][1]-sweep[i][1]);
+    const mix=colorBrushSmoothstep(travelled/taperLength);
+    const target=sweep[i][3] === undefined ? sweep[i][2] : sweep[i][3];
+    sweep[i][2]=stroke.tipRadius+(target-stroke.tipRadius)*mix;
+    if(mix>=1) break;
+  }
 }
 
 function finishColorBrush(cancel=false) {
   const stroke=colorBrushStroke;
   if(!stroke) return;
   if(cancel) {
-    stroke.op={kind:'brush',mode:'draw',color:stroke.color,sweep:[]};
-    activeDetailStroke=null;
+    stroke.op={kind:'brush',mode:'draw',color:stroke.color,sweep:[]};activeDetailStroke=null;
+  } else {
+    taperColorBrushEnd(stroke);
+    if(detailVectorValid && activeDetailStroke) activeDetailStroke.ops=[stroke.op];
   }
-  renderColorBrushNow();
-  stroke.base.width=stroke.base.height=0;
-  colorBrushStroke=null;
-  artworkRevision++;scheduleDetailRender();
+  renderColorBrushNow();stroke.base.width=stroke.base.height=0;
+  colorBrushStroke=null;artworkRevision++;scheduleDetailRender();
 }
 
 function startStroke(e) {
@@ -2083,6 +2112,15 @@ function endStroke() {
   saveHistory();
 }
 
+function continueStrokeWithLatestPointer(e) {
+  const samples=(mode==='erase' || colorBrushStroke) && typeof e.getCoalescedEvents==='function'
+    ? e.getCoalescedEvents() : null;
+  if(samples && samples.length) for(const sample of samples) continueStroke(sample);
+  // getCoalescedEvents may contain only the older positions. Always process
+  // the dispatch event too so the paint reaches the current Pencil tip now.
+  continueStroke(e);
+}
+
 const activePointers = new Map();
 let gesture = null;
 let tapCandidate = null;
@@ -2150,9 +2188,7 @@ drawCanvas.addEventListener('pointermove', (e) => {
     gesture.prevMid = newMid;
   } else if (activePointers.size === 1) {
     e.preventDefault();
-    const samples = (mode === 'erase' || colorBrushStroke) && typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : null;
-    if (samples && samples.length) for (const sample of samples) continueStroke(sample);
-    else continueStroke(e);
+    continueStrokeWithLatestPointer(e);
   } else if (activePointers.size === 3 && tapCandidate3) {
     const start = tapCandidate3.initial.get(e.pointerId);
     const now = activePointers.get(e.pointerId);
