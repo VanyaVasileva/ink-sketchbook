@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Color layer verification</title>
+<style>
+  body { font:16px system-ui; background:#f6f4f0; color:#292620; padding:16px; }
+  button { padding:12px 20px; }
+  pre { white-space:pre-wrap; }
+</style>
+<h1>Color layer verification</h1>
+<button id="run">Run layer tests</button>
+<pre id="status">Checks the deployed drawing, undo, eraser, zoom, recording, export and save/load code using synthetic artwork. Your saved drawings and microphone are not used.</pre>
+<script>
+async function runColorLayerChecks(source, log) {
+  const between = (start, end) => {
+    const first = source.indexOf(start);
+    const last = source.indexOf(end, first);
+    if (first < 0 || last < first) throw Error('Source hook missing: ' + start);
+    return source.slice(first, last);
+  };
+  if (!source.includes('// artwork-color-layer-v1')) throw Error('The color layer has not finished deploying');
+  const code =
+    between('function detailZoomIsActive()', 'function resize()') +
+    between('function saveHistory(changedLayer', 'function getPos(e)') +
+    between('function applyView()', 'drawModeBtn.onclick') +
+    between('function startStroke(e)', 'const activePointers =') +
+    between('undoBtn.onclick =', 'function showExportImage(') +
+    between('function dataUrlToBytes(', '// Shared so the info text') +
+    between("document.getElementById('exportPngBtn').onclick", '// Builds a minimal') +
+    between('saveBtn.onclick =', 'function renderDrawingsList()') +
+    between('let recordingInkLayer = null;', 'function compositeRecordFrame()');
+  function fixture(width = 600, height = 400) {
+    const canvas = () => { const c = document.createElement('canvas'); c.width=width; c.height=height; return c; };
+    const drawCanvas = canvas(), colorCanvas = canvas(), detailCanvas = canvas(), detailColorCanvas = canvas();
+    const ids = new Map();
+    const element = id => {
+      if (!ids.has(id)) ids.set(id, document.createElement('button'));
+      return ids.get(id);
+    };
+    const store = new Map();
+    const environment = {
+      drawCanvas, colorCanvas, detailCanvas, detailColorCanvas,
+      document:{createElement:tag=>document.createElement(tag), getElementById:element, querySelectorAll:()=>[]},
+      localStorage:{getItem:key=>store.get(key)||null,setItem:(key,value)=>store.set(key,value)},
+      element, store, width, height
+    };
+    return new Function('fixture', `
+      const document=fixture.document, localStorage=fixture.localStorage;
+      const drawCanvas=fixture.drawCanvas, colorCanvas=fixture.colorCanvas;
+      const inkCtx=drawCanvas.getContext('2d'), colorCtx=colorCanvas.getContext('2d');
+      let ctx=inkCtx, activeLayer='ink', artworkRevision=0;
+      const layerColors={ink:'#000000',color:'#ff0000'};
+      const detailCanvas=fixture.detailCanvas, detailColorCanvas=fixture.detailColorCanvas;
+      const detailCtx=detailCanvas.getContext('2d'), detailColorCtx=detailColorCanvas.getContext('2d');
+      let detailStrokes=[],detailVisibleCount=0,activeDetailStroke=null,detailHistory=[],detailRedoCounts=[];
+      let detailVectorValid=true,detailRenderRAF=null,detailPixelRatio=1;
+      const DETAIL_ZOOM_THRESHOLD=1.12;
+      const wrap={getBoundingClientRect:()=>({width:600,height:400})};
+      let view={scale:1,x:0,y:0,rotation:0};
+      let canvasDisplayCssW=600,canvasDisplayCssH=400,canvasBaseCssW=600,canvasBaseCssH=400;
+      let canvasDisplayLeft=0,canvasDisplayTop=0;
+      const refCanvas=document.createElement('canvas'),guideCanvas=document.createElement('canvas'),refDomLayer=document.createElement('div');
+      let history=[],redoStack=[],drawing=false,points=[],moved=false,usingPressure=false,lastPressure=.5,smoothedWidth=null;
+      let smoothedWobbleX=0,smoothedWobbleY=0,streamlinedPoint=null,lastRenderedPoint=null,lastPenPos=null;
+      let mode='draw',currentColor='#000000';
+      const colorPicker={value:'#000000'},colorBrushSize={value:'28'},colorBrushSizeValue={textContent:''},colorBrushControls={hidden:true};
+      const inkLayerBtn=fixture.element('inkLayerBtn'),colorLayerBtn=fixture.element('colorLayerBtn');
+      const clearBtn=fixture.element('clearBtn'),undoBtn=fixture.element('undoBtn'),redoBtn=fixture.element('redoBtn'),saveBtn=fixture.element('saveBtn');
+      const hintText={textContent:''},inputModeEl={textContent:''},paperColorPicker={value:'#ffffff'};
+      const thicknessSlider={value:'1'},minSlider={value:'4'},maxSlider={value:'4'},wobbleSlider={value:'0'},streamlineSlider={value:'0'},eraserSizeSlider={value:'12'};
+      const requestAnimationFrame=()=>1;
+      const window={devicePixelRatio:1};
+      const t=key=>key;
+      const getDisplayDpr=()=>fixture.width/600;
+      const getPos=e=>({x:e.x*getDisplayDpr(),y:e.y*getDisplayDpr(),t:e.time||0});
+      const updateExportSizeInfo=()=>{};
+      let exported='';
+      const showExportImage=url=>{exported=url;};
+      const recordCanvas=document.createElement('canvas'); recordCanvas.width=600;recordCanvas.height=400;
+      const recordCtx=recordCanvas.getContext('2d');
+      ${code}
+      const pointer=(x,y,time=0)=>({x,y,time,pressure:.5,pointerType:'mouse'});
+      return {
+        layer:selectArtworkLayer,
+        color:value=>{currentColor=value;colorPicker.value=value;},
+        mode:value=>{mode=value;},
+        dot:(x,y)=>{startStroke(pointer(x,y));endStroke();},
+        line:(x1,y1,x2,y2)=>{startStroke(pointer(x1,y1));continueStroke(pointer(x2,y2,100));endStroke();},
+        undo:()=>undoBtn.onclick(),redo:()=>redoBtn.onclick(),clear:()=>clearBtn.onclick(),
+        compose:composeArtworkCanvas,flatten:flattenOntoBackground,
+        zoom:scale=>{view.scale=scale;view.x=-50;view.y=-20;applyView();renderDetailView();},
+        detail:()=>{const c=document.createElement('canvas');c.width=600;c.height=400;const x=c.getContext('2d');x.drawImage(detailColorCanvas,0,0);x.drawImage(detailCanvas,0,0);return c;},
+        record:(source={x:0,y:0,width:fixture.width,height:fixture.height})=>{
+          recordCtx.clearRect(0,0,recordCanvas.width,recordCanvas.height);
+          if (!paintRecordingInk(source)) {
+            recordCtx.drawImage(colorCanvas,source.x,source.y,source.width,source.height,0,0,600,400);
+            recordCtx.drawImage(drawCanvas,source.x,source.y,source.width,source.height,0,0,600,400);
+          }
+          return recordCanvas;
+        },
+        png:()=>{document.getElementById('exportPngBtn').onclick();return exported;},
+        jpg:()=>{document.getElementById('exportJpgBtn').onclick();return exported;},
+        save:()=>{saveBtn.onclick();const ids=JSON.parse(localStorage.getItem('drawings_index'));return JSON.parse(localStorage.getItem(ids[0]));},
+        load:loadArtworkEntry,
+        state:()=>({ink:drawCanvas,color:colorCanvas,activeLayer,colorBrushControls,history,detailStrokes,detailVisibleCount})
+      };
+    `)(environment);
+  }
+  const assert = (condition, message) => { if (!condition) throw Error(message); };
+  const pixel = (canvas,x,y) => Array.from(canvas.getContext('2d').getImageData(x,y,1,1).data);
+  const black = value => value[0]<5 && value[1]<5 && value[2]<5 && value[3]===255;
+  const red = value => value[0]>250 && value[1]<5 && value[2]<5 && value[3]===255;
+  const transparent = value => value[3]===0;
+  const f = fixture();
+  f.line(70,100,130,100);
+  f.layer('color'); f.color('#ff0000'); f.line(100,70,100,130);
+  assert(black(pixel(f.compose(),100,100)), 'Color covered existing ink');
+  assert(red(pixel(f.compose(),100,110)), 'Color layer did not draw');
+  assert(transparent(pixel(f.state().ink,100,110)), 'Color was painted onto the ink canvas');
+  log('PASS: broad color strokes stay beneath existing ink.');
+  f.undo(); assert(transparent(pixel(f.compose(),100,110)), 'Undo did not remove the color stroke');
+  assert(black(pixel(f.compose(),100,100)), 'Undo changed ink');
+  f.redo(); assert(red(pixel(f.compose(),100,110)), 'Redo did not restore color');
+  log('PASS: undo/redo preserve each layer and chronological order.');
+  f.mode('erase');f.dot(100,100);
+  assert(black(pixel(f.compose(),100,100)), 'Color eraser damaged ink');
+  assert(transparent(pixel(f.state().color,100,100)), 'Color eraser did not erase color');
+  f.undo();f.layer('ink');f.dot(100,100);
+  assert(red(pixel(f.compose(),100,100)), 'Ink eraser damaged the underlying color');
+  f.undo();f.mode('draw');
+  log('PASS: the eraser affects only the selected layer.');
+  f.layer('color');f.clear();
+  assert(black(pixel(f.compose(),100,100)), 'Clear color damaged ink');
+  assert(transparent(pixel(f.compose(),100,110)), 'Clear color left color behind');
+  f.undo();assert(red(pixel(f.compose(),100,110)), 'Clear was not undoable');
+  f.redo();f.undo();
+  f.zoom(2);
+  assert(black(pixel(f.detail(),150,180)), 'Zoom replay put color over ink');
+  assert(red(pixel(f.detail(),150,200)), 'Zoom replay lost color');
+  assert(black(pixel(f.record(),100,100)), 'Recording put color over ink');
+  assert(red(pixel(f.record(),100,110)), 'Recording lost color');
+  f.clear();assert(transparent(pixel(f.record(),100,110)), 'Recording did not clear color');
+  assert(black(pixel(f.record(),100,100)), 'Recording clear damaged ink');
+  f.undo();
+  log('PASS: zoom and recording preserve stacking, clear, and undo.');
+  f.layer('ink');f.dot(160,100);f.undo();
+  f.layer('color');f.dot(100,160);
+  f.redo();assert(transparent(pixel(f.state().ink,160,100)), 'A new color stroke failed to discard the undone ink future');
+  log('PASS: switching layers and drawing correctly starts a new undo branch.');
+  const saved=f.save();
+  assert(saved.version===2 && saved.inkDataUrl && saved.colorDataUrl, 'Save flattened the layers');
+  f.layer('ink');f.clear();f.layer('color');f.clear();
+  await f.load(saved);
+  assert(black(pixel(f.compose(),100,100)), 'Save/load lost ink');
+  assert(red(pixel(f.compose(),100,110)), 'Save/load lost color');
+  f.layer('color');f.clear();
+  assert(black(pixel(f.compose(),100,100)), 'Loaded layers are no longer independent');
+  await f.load({dataUrl:saved.inkDataUrl});
+  assert(black(pixel(f.compose(),100,100)) && transparent(pixel(f.state().color,100,110)), 'Legacy drawing did not load as ink');
+  f.layer('color');f.color('#ff0000');f.dot(100,100);
+  assert(black(pixel(f.record(),100,100)), 'Loaded raster ink is not above new recorded color');
+  log('PASS: save/load retains editable layers and supports older drawings.');
+  const large=fixture(3000,2000);
+  large.dot(100,100);large.layer('color');large.dot(100,100);
+  const beforePng=large.png(),beforeJpg=large.jpg();
+  for (const scale of [1.25,2,4,1]) {
+    large.zoom(scale);
+    assert(large.png()===beforePng && large.jpg()===beforeJpg, 'Zoom changed the native-resolution export');
+  }
+  const exported=await new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>resolve(image);image.onerror=reject;image.src=beforePng;});
+  assert(exported.width===3000 && exported.height===2000, 'Export lost original pixel dimensions');
+  assert(black(pixel(large.flatten('#ffffff'),500,500)), 'Opaque export put color over ink');
+  log('PASS: PNG/JPEG exports stay at 3000×2000 and are identical through 4× zoom.');
+  log('ALL COLOR LAYER CHECKS PASSED');
+}
+
+document.getElementById('run').onclick = async () => {
+  const button=document.getElementById('run'),status=document.getElementById('status');
+  button.disabled=true;status.textContent='Loading the deployed drawing source…';
+  try {
+    const response=await fetch('../hand-selector-standalone-test.html?layers='+Date.now(),{cache:'no-store'});
+    if (!response.ok) throw Error('Could not load drawing source');
+    await runColorLayerChecks(await response.text(), message=>{status.textContent+='\n'+message;});
+  } catch (error) { status.textContent+='\nFAIL: '+error.message;button.disabled=false; }
+};
+</script>
+</html>
