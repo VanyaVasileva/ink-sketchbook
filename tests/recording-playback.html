@@ -41,8 +41,10 @@ document.getElementById('run').onclick = async () => {
     // Exercise the deployed implementation, including its real MediaRecorder
     // and result panel, against a synthetic drawing. Exclude the access gate,
     // the drawing UI, and embedded hand assets from this isolated fixture.
-    const brushPainter = source.includes('function paintColorBrushShape(')
-      ? source.slice(source.indexOf('function paintColorBrushShape('), source.indexOf('function beginColorBrush(')) : '';
+    const brushPainterStart = source.includes('function colorBrushTangent(')
+      ? source.indexOf('function colorBrushTangent(') : source.indexOf('function paintColorBrushShape(');
+    const brushPainter = brushPainterStart >= 0
+      ? source.slice(brushPainterStart, source.indexOf('function beginColorBrush(')) : '';
     const recorderCode = brushPainter + source.slice(source.indexOf('// recording-playback-v2'), source.indexOf('// Hand+pencil overlay')) +
       source.slice(source.indexOf('let selectedRecordingHand ='), source.indexOf('function saveHistory('));
     const fixture = document.getElementById('fixture');
