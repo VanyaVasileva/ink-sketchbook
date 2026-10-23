@@ -42,7 +42,7 @@ document.getElementById('run').onclick = async () => {
     // and result panel, against a synthetic drawing. Exclude the access gate,
     // the drawing UI, and embedded hand assets from this isolated fixture.
     const recorderCode = source.slice(source.indexOf('// recording-playback-v2'), source.indexOf('// Hand+pencil overlay')) +
-      source.slice(source.indexOf('let selectedRecordingHand ='), source.indexOf('function saveHistory()'));
+      source.slice(source.indexOf('let selectedRecordingHand ='), source.indexOf('function saveHistory('));
     const fixture = document.getElementById('fixture');
     const drawing = document.getElementById('drawing');
     const button = document.createElement('button');
@@ -59,6 +59,8 @@ document.getElementById('run').onclick = async () => {
         }
       };
       const recordBtn=fixture.button, isCreatorMode=true, drawCanvas=fixture.drawing, wrap=fixture.wrap, hintText=fixture.hint;
+      const colorCanvas=document.createElement('canvas'); colorCanvas.width=drawCanvas.width; colorCanvas.height=drawCanvas.height;
+      const artworkRevision=0;
       const recordingHandSelect=null, recordingHandSize=null, recordingHandSizeValue=null, recordReferenceBtn=null, recordingHands={};
       const paperColorPicker={value:'#ffffff'}, refVisible=false, refImage=null, backgroundVideoReady=false;
       const detailVectorValid=true, detailStrokes=[{ops:[{kind:'dot',x:600,y:800,width:80,color:'#ff0000',mode:'draw'}]}], detailVisibleCount=1, activeDetailStroke=null;
