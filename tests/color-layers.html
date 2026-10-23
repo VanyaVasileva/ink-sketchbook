@@ -70,6 +70,7 @@ async function runColorLayerChecks(source, log) {
       const hintText={textContent:''},inputModeEl={textContent:''},paperColorPicker={value:'#ffffff'};
       const thicknessSlider={value:'1'},minSlider={value:'4'},maxSlider={value:'4'},wobbleSlider={value:'0'},streamlineSlider={value:'0'},eraserSizeSlider={value:'12'};
       const requestAnimationFrame=()=>1;
+      const cancelAnimationFrame=()=>{};
       const window={devicePixelRatio:1};
       const t=key=>key;
       const getDisplayDpr=()=>fixture.width/600;
@@ -86,9 +87,21 @@ async function runColorLayerChecks(source, log) {
         color:value=>{currentColor=value;colorPicker.value=value;},
         mode:value=>{mode=value;},
         eraserSize:value=>{eraserSizeSlider.value=String(value);},
+        brushSize:value=>{colorBrushSize.value=String(value);},
         streamline:value=>{streamlineSlider.value=String(value);},
         dot:(x,y)=>{startStroke(pointer(x,y));endStroke();},
         line:(x1,y1,x2,y2)=>{startStroke(pointer(x1,y1));continueStroke(pointer(x2,y2,100));endStroke();},
+        penStroke:samples=>{
+          const event=(p,i)=>({...pointer(p[0],p[1],p[3]||i*16),pressure:p[2],pointerType:'pen'});
+          startStroke(event(samples[0],0));
+          for(let i=1;i<samples.length;i++)continueStroke(event(samples[i],i));
+          endStroke();
+        },
+        penBegin:(x,y,pressure)=>startStroke({...pointer(x,y),pressure,pointerType:'pen'}),
+        penMove:(x,y,pressure)=>continueStroke({...pointer(x,y,100),pressure,pointerType:'pen'}),
+        flushBrush:renderColorBrushNow,
+        penEnd:endStroke,
+        replayActive:()=>{const c=document.createElement('canvas');c.width=fixture.width;c.height=fixture.height;paintColorBrushShape(c.getContext('2d'),activeDetailStroke.ops[0]);return c;},
         undo:()=>undoBtn.onclick(),redo:()=>redoBtn.onclick(),clear:()=>clearBtn.onclick(),
         compose:composeArtworkCanvas,flatten:flattenOntoBackground,
         zoom:scale=>{view.scale=scale;view.x=-50;view.y=-20;applyView();renderDetailView();},
@@ -105,7 +118,7 @@ async function runColorLayerChecks(source, log) {
         jpg:()=>{document.getElementById('exportJpgBtn').onclick();return exported;},
         save:()=>{saveBtn.onclick();const ids=JSON.parse(localStorage.getItem('drawings_index'));return JSON.parse(localStorage.getItem(ids[0]));},
         load:loadArtworkEntry,
-        state:()=>({ink:drawCanvas,color:colorCanvas,activeLayer,colorBrushControls,history,detailStrokes,detailVisibleCount})
+        state:()=>({ink:drawCanvas,color:colorCanvas,activeLayer,colorBrushControls,history,detailStrokes,detailVisibleCount,activeDetailStroke})
       };
     `)(environment);
   }
@@ -168,6 +181,30 @@ async function runColorLayerChecks(source, log) {
   f.layer('color');f.dot(100,160);
   f.redo();assert(transparent(pixel(f.state().ink,160,100)), 'A new color stroke failed to discard the undone ink future');
   log('PASS: switching layers and drawing correctly starts a new undo branch.');
+  const pressure=fixture();pressure.layer('color');pressure.brushSize(64);pressure.color('#bf9077');
+  const samples=Array.from({length:121},(_,i)=>[60+i*4,200,.06+.9*Math.pow(Math.sin(Math.PI*i/120),1.2),i*16]);
+  pressure.penStroke(samples);
+  const span=(canvas,x)=>{
+    const data=canvas.getContext('2d').getImageData(x,100,1,200).data;
+    let count=0;for(let i=3;i<data.length;i+=4)if(data[i]>127)count++;return count;
+  };
+  const broad=span(pressure.state().color,300),tip=span(pressure.state().color,76),tail=span(pressure.state().color,528);
+  assert(broad>45 && tip<8 && tail<8, 'Pencil pressure did not produce a fine tip, broad body and tapered finish: '+[tip,broad,tail]);
+  const shape=pressure.state().detailStrokes.at(-1);
+  assert(shape.ops.length===1 && shape.ops[0].kind==='brush', 'Color is still assembled from round pen segments');
+  const slow=fixture();slow.layer('color');slow.brushSize(64);slow.color('#bf9077');
+  slow.penStroke(samples.map((p,i)=>[p[0],p[1],p[2],i*120]));
+  assert(slow.png()===pressure.png(), 'Stylus brush width changed with movement speed instead of Pencil pressure');
+  assert(pressure.record().toDataURL()===pressure.state().color.toDataURL(), 'Recorded color geometry differs from native artwork');
+  pressure.undo();assert(transparent(pixel(pressure.compose(),300,200)), 'Undo left part of a color brush stroke behind');
+  pressure.redo();assert(span(pressure.state().color,300)===broad, 'Redo changed the pressure brush shape');
+  log('PASS: Pencil pressure creates a continuous fine-to-broad brush with tapered ends; speed does not alter its width.');
+  const live=fixture();live.layer('color');live.brushSize(50);live.color('#bf9077');
+  live.penBegin(60,200,.08);live.penMove(120,200,.95);live.flushBrush();
+  live.penMove(180,200,.95);live.flushBrush();live.penMove(240,200,.08);live.flushBrush();
+  assert(live.state().color.toDataURL()===live.replayActive().toDataURL(), 'Active brush accumulated old circular caps instead of replacing its outline');
+  live.penEnd();
+  log('PASS: live pressure changes replace the stroke outline cleanly without leftover round tips.');
   const saved=f.save();
   assert(saved.version===2 && saved.inkDataUrl && saved.colorDataUrl, 'Save flattened the layers');
   f.layer('ink');f.clear();f.layer('color');f.clear();
