@@ -1008,6 +1008,13 @@ syncEraserSize();
     return text
 
 
+# Vanya prefers an unobstructed tip while erasing. The pointer handlers can set
+# inline display values, so keep the outline hidden for every input device.
+eraser_cursor_style = '<style id="eraserCursorVisibility">#eraserCursor{display:none!important}</style>'
+if eraser_cursor_style not in s:
+    s = replace_one(s, '</head>', eraser_cursor_style + '</head>', 'Hide eraser cursor')
+    PATH.write_text(s)
+
 native_retina_hooks = [
     "detailCanvas.id = 'detailCanvas'",
     'const DETAIL_ZOOM_THRESHOLD = 1.12;',
