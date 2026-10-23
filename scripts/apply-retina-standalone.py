@@ -277,6 +277,9 @@ recording_view_patches = (
      'recordingHintMsg: "Recording — zoom and pan are captured. The sketch overlay stays private."'),
 )
 for old, new in recording_view_patches:
+    if '// artwork-color-layer-v1' in s and old.startswith('    ink.setTransform('):
+        # The two-layer recorder applies the equivalent clip to each target.
+        continue
     if new in s:
         continue
     s = replace_one(s, old, new, 'Live recording view')
@@ -530,6 +533,386 @@ s = s.replace(
 )
 PATH.write_text(s)
 
+def apply_color_layer(text: str) -> str:
+    """Keep editable color below ink throughout display, history and output."""
+    if '// artwork-color-layer-v1' in text:
+        return text
+
+    def change(old: str, new: str, label: str) -> None:
+        nonlocal text
+        text = replace_one(text, old, new, 'Color layer: ' + label)
+
+    def section(start: str, end: str, new: str) -> None:
+        nonlocal text
+        first = text.index(start)
+        last = text.index(end, first)
+        text = text[:first] + new + '\n' + text[last:]
+
+    change('  #guideCanvas { z-index: 2; pointer-events: none; }',
+           '''  #colorCanvas { z-index: 2; pointer-events: none; }
+  #guideCanvas { z-index: 3; pointer-events: none; }
+  .layer-switch { display:flex; align-items:center; gap:4px; }
+  .layer-switch > span { font-size:12px; color:#6b6558; margin-right:2px; }
+  .layer-switch button { padding:7px 10px; }
+  #colorBrushControls[hidden] { display:none; }
+  #colorBrushControls small { color:#8a8373; line-height:1.4; }''', 'layer styles')
+    change('  #drawCanvas { z-index: 3; }', '  #drawCanvas { z-index: 4; }', 'ink stacking')
+    change('<canvas id="guideCanvas"></canvas>',
+           '<canvas id="colorCanvas" aria-hidden="true"></canvas>\n      <canvas id="guideCanvas"></canvas>', 'color canvas')
+    change('      <button id="drawModeBtn"',
+           '''      <div class="layer-switch" role="group" aria-label="Drawing layer">
+        <span data-i18n="layerLabel">Layer</span>
+        <button id="inkLayerBtn" class="active" type="button" aria-pressed="true" data-i18n="inkLayerLabel">Ink</button>
+        <button id="colorLayerBtn" type="button" aria-pressed="false" data-i18n="colorLayerLabel">Color</button>
+      </div>
+      <button id="drawModeBtn"''', 'layer switch')
+    change('      <div class="row palette" id="palette"></div>',
+           '''      <div id="colorBrushControls" class="slider-group" hidden>
+        <span><span data-i18n="colorBrushLabel">Color brush size</span> <b id="colorBrushSizeValue">28</b></span>
+        <input type="range" id="colorBrushSize" min="2" max="100" step="1" value="28" aria-label="Color brush size">
+        <small data-i18n="colorLayerHint">Paint here to keep color beneath your ink lines.</small>
+      </div>
+      <div class="row palette" id="palette"></div>''', 'color brush')
+    change("const ctx = drawCanvas.getContext('2d', { willReadFrequently: true });",
+           '''// artwork-color-layer-v1
+const inkCtx = drawCanvas.getContext('2d', { willReadFrequently: true });
+const colorCanvas = document.getElementById('colorCanvas');
+const colorCtx = colorCanvas.getContext('2d', { willReadFrequently: true });
+let ctx = inkCtx;
+let activeLayer = 'ink';
+let artworkRevision = 0;
+const layerColors = { ink:'#2a2620', color:'#ddb69f' };
+const inkLayerBtn = document.getElementById('inkLayerBtn');
+const colorLayerBtn = document.getElementById('colorLayerBtn');
+const colorBrushControls = document.getElementById('colorBrushControls');
+const colorBrushSize = document.getElementById('colorBrushSize');
+const colorBrushSizeValue = document.getElementById('colorBrushSizeValue');''', 'editing contexts')
+    change("detailCanvas.style.cssText = 'position:absolute;left:0;top:0;z-index:4;",
+           "detailCanvas.style.cssText = 'position:absolute;left:0;top:0;z-index:5;", 'sharp ink stacking')
+    change("const detailCtx = detailCanvas.getContext('2d');",
+           '''const detailCtx = detailCanvas.getContext('2d');
+const detailColorCanvas = document.createElement('canvas');
+detailColorCanvas.id = 'detailColorCanvas';
+detailColorCanvas.setAttribute('aria-hidden', 'true');
+detailColorCanvas.style.cssText = 'position:absolute;left:0;top:0;z-index:2;pointer-events:none;display:none;box-shadow:none;';
+wrap.appendChild(detailColorCanvas);
+const detailColorCtx = detailColorCanvas.getContext('2d');''', 'sharp color canvas')
+    change('  en: {', '''  en: {
+    layerLabel: "Layer", inkLayerLabel: "Ink", colorLayerLabel: "Color",
+    colorBrushLabel: "Color brush size", colorLayerHint: "Paint here to keep color beneath your ink lines.",
+    clearInkLayer: "Clear ink layer", clearColorLayer: "Clear color layer",''', 'labels')
+    # Keep the small new controls translated with the app's existing languages.
+    labels = {
+        'es': ('Capa', 'Tinta', 'Color', 'Tamaño del pincel', 'El color queda debajo de las líneas.', 'Borrar tinta', 'Borrar color'),
+        'fr': ('Calque', 'Encre', 'Couleur', 'Taille du pinceau', 'La couleur reste sous les traits.', "Effacer l’encre", 'Effacer la couleur'),
+        'de': ('Ebene', 'Tusche', 'Farbe', 'Pinselgröße', 'Die Farbe bleibt unter den Linien.', 'Tuscheebene leeren', 'Farbebene leeren'),
+        'it': ('Livello', 'Inchiostro', 'Colore', 'Dimensione pennello', 'Il colore rimane sotto le linee.', "Cancella inchiostro", 'Cancella colore'),
+        'pt': ('Camada', 'Tinta', 'Cor', 'Tamanho do pincel', 'A cor fica por baixo das linhas.', 'Limpar tinta', 'Limpar cor'),
+        'nl': ('Laag', 'Inkt', 'Kleur', 'Penseelgrootte', 'De kleur blijft onder de inktlijnen.', 'Inktlaag wissen', 'Kleurlaag wissen'),
+        'ja': ('レイヤー', 'インク', '色', 'ブラシサイズ', '色はインク線の下に描かれます。', 'インクを消去', '色を消去'),
+        'zh': ('图层', '墨线', '颜色', '画笔大小', '颜色始终位于墨线下方。', '清空墨线层', '清空颜色层'),
+    }
+    import json
+    for lang, values in labels.items():
+        keys = ('layerLabel', 'inkLayerLabel', 'colorLayerLabel', 'colorBrushLabel', 'colorLayerHint', 'clearInkLayer', 'clearColorLayer')
+        additions = ', '.join(f'{k}: {json.dumps(v, ensure_ascii=False)}' for k, v in zip(keys, values))
+        change(f'  {lang}: {{', f'  {lang}: {{\n    {additions},', f'{lang} labels')
+    change("  hintText.textContent = t('hintDefault');\n}",
+           "  hintText.textContent = t('hintDefault');\n  syncLayerControls();\n}", 'translated clear label')
+
+    # Both native layers retain the original full print-resolution pixel grid.
+    text = text.replace('[refCanvas, guideCanvas, drawCanvas, refDomLayer].forEach',
+                        '[refCanvas, guideCanvas, colorCanvas, drawCanvas, refDomLayer].forEach')
+    change('const prev = drawCanvas.width ? ctx.getImageData(0,0,drawCanvas.width,drawCanvas.height) : null;',
+           '''const prev = drawCanvas.width ? inkCtx.getImageData(0,0,drawCanvas.width,drawCanvas.height) : null;
+  const prevColor = colorCanvas.width ? colorCtx.getImageData(0,0,colorCanvas.width,colorCanvas.height) : null;''', 'preserve resize')
+    change('  if (prev) ctx.putImageData(prev, 0, 0);',
+           '  if (prev) inkCtx.putImageData(prev, 0, 0);\n  if (prevColor) colorCtx.putImageData(prevColor, 0, 0);\n  artworkRevision++;', 'restore resize')
+
+    section('function ensureDetailCanvasSize() {', 'function scheduleDetailRender() {', r'''function ensureDetailCanvasSize() {
+  const rect = wrap.getBoundingClientRect();
+  detailPixelRatio = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+  const w = Math.max(2, Math.round(rect.width * detailPixelRatio));
+  const h = Math.max(2, Math.round(rect.height * detailPixelRatio));
+  for (const canvas of [detailCanvas, detailColorCanvas]) {
+    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+    canvas.style.width = rect.width + 'px';
+    canvas.style.height = rect.height + 'px';
+  }
+}
+
+function setDetailTransform(target = detailCtx) {
+  const baseW = canvasDisplayCssW || canvasBaseCssW || 1;
+  const baseH = canvasDisplayCssH || canvasBaseCssH || 1;
+  target.setTransform(detailPixelRatio, 0, 0, detailPixelRatio, 0, 0);
+  target.translate(canvasDisplayLeft + view.x, canvasDisplayTop + view.y);
+  target.rotate(view.rotation * Math.PI / 180);
+  target.scale(baseW * view.scale / Math.max(1, drawCanvas.width), baseH * view.scale / Math.max(1, drawCanvas.height));
+}
+
+function paintDetailOp(op, target = detailCtx) {
+  if (!op) return;
+  if (op.kind === 'clear') { target.clearRect(0, 0, drawCanvas.width, drawCanvas.height); return; }
+  target.save();
+  target.globalCompositeOperation = op.mode === 'erase' ? 'destination-out' : 'source-over';
+  target.lineJoin = 'round'; target.lineCap = 'round'; target.lineWidth = op.width;
+  target.fillStyle = target.strokeStyle = op.mode === 'erase' ? '#000' : op.color;
+  target.beginPath();
+  if (op.kind === 'dot') {
+    target.arc(op.x, op.y, op.width / 2, 0, Math.PI * 2); target.fill();
+  } else {
+    target.moveTo(op.x1, op.y1); target.lineTo(op.x2, op.y2); target.stroke();
+  }
+  target.restore();
+}
+
+function renderDetailView() {
+  detailRenderRAF = null;
+  if (!detailZoomIsActive()) {
+    detailCanvas.style.display = detailColorCanvas.style.display = 'none';
+    drawCanvas.style.opacity = '';
+    colorCanvas.style.opacity = '';
+    return;
+  }
+  ensureDetailCanvasSize();
+  for (const [canvas, target, layer] of [[detailColorCanvas, detailColorCtx, 'color'], [detailCanvas, detailCtx, 'ink']]) {
+    target.setTransform(1, 0, 0, 1, 0, 0);
+    target.globalCompositeOperation = 'source-over';
+    target.clearRect(0, 0, canvas.width, canvas.height);
+    canvas.style.display = 'block';
+    target.save();
+    setDetailTransform(target);
+    target.beginPath(); target.rect(0, 0, drawCanvas.width, drawCanvas.height); target.clip();
+    for (let i = 0; i < detailVisibleCount; i++) {
+      const stroke = detailStrokes[i];
+      if (stroke && (stroke.layer || 'ink') === layer) for (const op of stroke.ops) paintDetailOp(op, target);
+    }
+    if (activeDetailStroke && activeDetailStroke.layer === layer)
+      for (const op of activeDetailStroke.ops) paintDetailOp(op, target);
+    target.restore();
+  }
+  drawCanvas.style.opacity = '0';
+  colorCanvas.style.opacity = '0';
+}
+''')
+    change('if (detailVectorValid) activeDetailStroke = { ops: [] };',
+           'if (detailVectorValid) activeDetailStroke = { layer:activeLayer, ops: [] };', 'tag strokes')
+    section('function drawDetailOpLive(op) {', 'function recordDetailSegment(', r'''function drawDetailOpLive(op) {
+  if (!detailZoomIsActive()) return;
+  const canvas = activeLayer === 'color' ? detailColorCanvas : detailCanvas;
+  const target = activeLayer === 'color' ? detailColorCtx : detailCtx;
+  if (canvas.style.display === 'none') { scheduleDetailRender(); return; }
+  target.save();
+  setDetailTransform(target);
+  target.beginPath(); target.rect(0, 0, drawCanvas.width, drawCanvas.height); target.clip();
+  paintDetailOp(op, target);
+  target.restore();
+}
+''')
+    change('function recordDetailSegment(x1, y1, x2, y2, width, strokeMode, color) {',
+           'function recordDetailSegment(x1, y1, x2, y2, width, strokeMode, color) {\n  artworkRevision++;', 'live segment revision')
+    change('function recordDetailDot(x, y, width, strokeMode, color) {',
+           'function recordDetailDot(x, y, width, strokeMode, color) {\n  artworkRevision++;', 'live dot revision')
+    # Some upstream pages already have this fix; preserve in-progress geometry
+    # when a second finger turns drawing into a zoom gesture on either layer.
+    interrupted_stroke = "  } else if (activePointers.size === 2) {\n    drawing = false;"
+    if interrupted_stroke in text:
+        change(interrupted_stroke, """  } else if (activePointers.size === 2) {
+    if (drawing && activeDetailStroke && activeDetailStroke.ops.length) {
+      commitDetailStroke();
+      saveHistory();
+    } else {
+      activeDetailStroke = null;
+    }
+    drawing = false;""", 'pinch during a stroke')
+
+    section('function saveHistory() {', 'function getPos(e) {', r'''function saveHistory(changedLayer = activeLayer) {
+  const previous = history[history.length - 1];
+  const capture = (layer, target) => previous && changedLayer !== layer && changedLayer !== 'both'
+    ? previous[layer] : target.getImageData(0, 0, drawCanvas.width, drawCanvas.height);
+  // Reuse the unchanged layer's snapshot instead of doubling per-stroke memory.
+  history.push({ ink:capture('ink', inkCtx), color:capture('color', colorCtx), detailCount:detailVisibleCount });
+  if (history.length > 30) history.shift();
+  redoStack = [];
+  artworkRevision++;
+  scheduleDetailRender();
+}
+saveHistory('both');
+
+function restoreArtworkState(state) {
+  inkCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+  colorCtx.clearRect(0, 0, colorCanvas.width, colorCanvas.height);
+  inkCtx.putImageData(state.ink, 0, 0);
+  colorCtx.putImageData(state.color, 0, 0);
+  detailVisibleCount = state.detailCount;
+  activeDetailStroke = null;
+  artworkRevision++;
+  scheduleDetailRender();
+}
+
+function syncLayerControls() {
+  inkLayerBtn.classList.toggle('active', activeLayer === 'ink');
+  colorLayerBtn.classList.toggle('active', activeLayer === 'color');
+  inkLayerBtn.setAttribute('aria-pressed', String(activeLayer === 'ink'));
+  colorLayerBtn.setAttribute('aria-pressed', String(activeLayer === 'color'));
+  colorBrushControls.hidden = activeLayer !== 'color';
+  clearBtn.textContent = t(activeLayer === 'color' ? 'clearColorLayer' : 'clearInkLayer');
+}
+
+function selectArtworkLayer(layer) {
+  if (layer !== 'ink' && layer !== 'color') return;
+  if (drawing) endStroke();
+  layerColors[activeLayer] = currentColor;
+  activeLayer = layer;
+  ctx = layer === 'color' ? colorCtx : inkCtx;
+  currentColor = layerColors[layer];
+  colorPicker.value = currentColor;
+  document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+  syncLayerControls();
+}
+inkLayerBtn.onclick = () => selectArtworkLayer('ink');
+colorLayerBtn.onclick = () => selectArtworkLayer('color');
+colorBrushSize.oninput = () => { colorBrushSizeValue.textContent = colorBrushSize.value; };
+syncLayerControls();
+''')
+    # A broad color brush has a dedicated size, keeping existing ink settings.
+    change("  } else if (usingPressure) {", "  } else if (activeLayer === 'color') {\n    targetWidth = parseFloat(colorBrushSize.value) * dpr * (usingPressure ? 0.25 + Math.max(0.08, e.pressure) * 0.75 : 1);\n  } else if (usingPressure) {", 'color brush width')
+    change("    if (wobbleIntensity > 0) {", "    if (activeLayer === 'ink' && wobbleIntensity > 0) {", 'color brush steadiness')
+    change('      : minW + pressure * (maxW - minW);',
+           "      : activeLayer === 'color' ? parseFloat(colorBrushSize.value) * dpr * (usingPressure ? 0.25 + pressure * 0.75 : 1)\n      : minW + pressure * (maxW - minW);", 'color brush dots')
+    section('undoBtn.onclick = () => {', 'function flattenOntoBackground(bgColor) {', r'''undoBtn.onclick = () => {
+  if (drawing) endStroke();
+  if (history.length > 1) {
+    redoStack.push(history.pop());
+    restoreArtworkState(history[history.length - 1]);
+  }
+};
+redoBtn.onclick = () => {
+  if (drawing) endStroke();
+  if (redoStack.length) {
+    const state = redoStack.pop();
+    history.push(state);
+    restoreArtworkState(state);
+  }
+};
+clearBtn.onclick = () => {
+  if (drawing) endStroke();
+  ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+  if (detailVectorValid) {
+    beginDetailStroke();
+    activeDetailStroke.ops.push({kind:'clear'});
+    commitDetailStroke();
+  }
+  saveHistory();
+};
+
+function composeArtworkCanvas() {
+  const artwork = document.createElement('canvas');
+  artwork.width = drawCanvas.width; artwork.height = drawCanvas.height;
+  const target = artwork.getContext('2d');
+  target.drawImage(colorCanvas, 0, 0);
+  target.drawImage(drawCanvas, 0, 0);
+  return artwork;
+}
+''')
+    change('  fctx.drawImage(drawCanvas, 0, 0);',
+           '  fctx.drawImage(colorCanvas, 0, 0);\n  fctx.drawImage(drawCanvas, 0, 0);', 'JPEG and PDF layers')
+    change("const rawBytes = dataUrlToBytes(drawCanvas.toDataURL('image/png'));",
+           "const rawBytes = dataUrlToBytes(composeArtworkCanvas().toDataURL('image/png'));", 'transparent PNG layers')
+    change("    const dataUrl = drawCanvas.toDataURL('image/png');",
+           "    const dataUrl = composeArtworkCanvas().toDataURL('image/png');\n    const inkDataUrl = drawCanvas.toDataURL('image/png');\n    const colorDataUrl = colorCanvas.toDataURL('image/png');", 'save independent layers')
+    change('const entry = { id, dataUrl, savedAt: new Date().toISOString() };',
+           'const entry = { id, version:2, dataUrl, inkDataUrl, colorDataUrl, savedAt: new Date().toISOString() };', 'saved file schema')
+    section('function renderDrawingsList() {', '  const listEl =', r'''async function loadArtworkEntry(entry) {
+  const decode = url => !url ? Promise.resolve(null) : new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('Saved drawing could not be loaded.'));
+    image.src = url;
+  });
+  const [ink, color] = await Promise.all([decode(entry.inkDataUrl || entry.dataUrl), decode(entry.colorDataUrl)]);
+  if (drawing) endStroke();
+  inkCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+  colorCtx.clearRect(0, 0, colorCanvas.width, colorCanvas.height);
+  if (ink) inkCtx.drawImage(ink, 0, 0, drawCanvas.width, drawCanvas.height);
+  if (color) colorCtx.drawImage(color, 0, 0, colorCanvas.width, colorCanvas.height);
+  // Legacy drawings load as ink; new drawings keep the two editable rasters.
+  resetDetailVectors(false);
+  history = [];
+  saveHistory('both');
+  selectArtworkLayer('ink');
+}
+
+function renderDrawingsList() {''')
+    section('    thumb.onclick = () => {', "    const del = document.createElement('div');", r'''    thumb.onclick = async () => {
+      try {
+        await loadArtworkEntry(entry);
+        document.getElementById('loadOverlay').classList.remove('show');
+        hintText.textContent = t('drawingLoadedMsg');
+      } catch (error) {
+        hintText.textContent = error.message;
+      }
+    };
+''')
+
+    # Record each editable layer separately so erasing never cuts through both.
+    section('let recordingInkLayer = null;', 'function compositeRecordFrame() {', r'''let recordingInkLayer = null;
+let recordingInkKey = '';
+let recordingColorLayer = null;
+let recordingColorKey = '';
+function paintRecordingInk(source) {
+  if (typeof detailVectorValid === 'undefined' || !detailVectorValid || typeof detailStrokes === 'undefined') return false;
+  for (const layer of ['color', 'ink']) {
+    let canvas = layer === 'color' ? recordingColorLayer : recordingInkLayer;
+    const oldKey = layer === 'color' ? recordingColorKey : recordingInkKey;
+    if (!canvas || canvas.width !== recordCanvas.width || canvas.height !== recordCanvas.height) {
+      canvas = document.createElement('canvas');
+      canvas.width = recordCanvas.width; canvas.height = recordCanvas.height;
+      if (layer === 'color') { recordingColorLayer = canvas; recordingColorKey = ''; }
+      else { recordingInkLayer = canvas; recordingInkKey = ''; }
+    }
+    const activeCount = activeDetailStroke ? activeDetailStroke.ops.length : 0;
+    const key = [artworkRevision, detailVisibleCount, activeCount, source.x, source.y,
+      source.width, source.height, recordCanvas.width, recordCanvas.height].join(':');
+    if (key !== oldKey) {
+      const target = canvas.getContext('2d');
+      target.setTransform(1, 0, 0, 1, 0, 0);
+      target.clearRect(0, 0, canvas.width, canvas.height);
+      const sx = recordCanvas.width / source.width, sy = recordCanvas.height / source.height;
+      target.save();
+      target.setTransform(sx, 0, 0, sy, -source.x * sx, -source.y * sy);
+      target.beginPath(); target.rect(0, 0, drawCanvas.width, drawCanvas.height); target.clip();
+      const paint = op => {
+        if (op.kind === 'clear') { target.clearRect(0, 0, drawCanvas.width, drawCanvas.height); return; }
+        target.globalCompositeOperation = op.mode === 'erase' ? 'destination-out' : 'source-over';
+        target.lineCap = 'round'; target.lineJoin = 'round'; target.lineWidth = op.width;
+        target.fillStyle = target.strokeStyle = op.mode === 'erase' ? '#000' : op.color;
+        target.beginPath();
+        if (op.kind === 'dot') { target.arc(op.x, op.y, op.width / 2, 0, Math.PI * 2); target.fill(); }
+        else { target.moveTo(op.x1, op.y1); target.lineTo(op.x2, op.y2); target.stroke(); }
+      };
+      for (let i = 0; i < detailVisibleCount; i++) {
+        const stroke = detailStrokes[i];
+        if ((stroke.layer || 'ink') === layer) for (const op of stroke.ops) paint(op);
+      }
+      if (activeDetailStroke && (activeDetailStroke.layer || 'ink') === layer)
+        for (const op of activeDetailStroke.ops) paint(op);
+      target.restore();
+      target.globalCompositeOperation = 'source-over';
+      if (layer === 'color') recordingColorKey = key; else recordingInkKey = key;
+    }
+    recordCtx.drawImage(canvas, 0, 0);
+  }
+  return true;
+}
+''')
+    change('  recordCtx.drawImage(drawCanvas, source.x, source.y, source.width, source.height, 0, 0, recordCanvas.width, recordCanvas.height);',
+           '  recordCtx.drawImage(colorCanvas, source.x, source.y, source.width, source.height, 0, 0, recordCanvas.width, recordCanvas.height);\n  recordCtx.drawImage(drawCanvas, source.x, source.y, source.width, source.height, 0, 0, recordCanvas.width, recordCanvas.height);', 'saved layer recording')
+    change("  recordingInkLayer = null;\n  recordingInkKey = '';",
+           "  recordingInkLayer = null;\n  recordingInkKey = '';\n  recordingColorLayer = null;\n  recordingColorKey = '';", 'release color recording cache')
+    return text
+
+
 native_retina_hooks = [
     "detailCanvas.id = 'detailCanvas'",
     'const DETAIL_ZOOM_THRESHOLD = 1.12;',
@@ -537,12 +920,14 @@ native_retina_hooks = [
     "drawCanvas.style.opacity = '0';",
 ]
 if MARKER in s:
+    PATH.write_text(apply_color_layer(s))
     print('Standalone defaults checked; retina layer already present.')
     raise SystemExit(0)
 if all(item in s for item in native_retina_hooks):
     anchor = "detailCanvas.id = 'detailCanvas';"
     s = s.replace(anchor, "// " + MARKER + "\n" + anchor, 1)
     PATH.write_text(s)
+    PATH.write_text(apply_color_layer(s))
     print('Standalone already has native retina detail rendering; added compatibility marker.')
     raise SystemExit(0)
 
@@ -938,3 +1323,4 @@ for item in required:
 
 PATH.write_text(s)
 print('Patched exact standalone hand-selector page with retina-sharp zoom display.')
+PATH.write_text(apply_color_layer(s))
