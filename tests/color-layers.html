@@ -23,6 +23,7 @@ async function runColorLayerChecks(source, log) {
     between('function detailZoomIsActive()', 'function resize()') +
     between('function saveHistory(changedLayer', 'function getPos(e)') +
     between('function applyView()', 'drawModeBtn.onclick') +
+    between('function getEraserSize()', 'function startStroke(e)') +
     between('function startStroke(e)', 'const activePointers =') +
     between('undoBtn.onclick =', 'function showExportImage(') +
     between('function dataUrlToBytes(', '// Shared so the info text') +
@@ -84,6 +85,8 @@ async function runColorLayerChecks(source, log) {
         layer:selectArtworkLayer,
         color:value=>{currentColor=value;colorPicker.value=value;},
         mode:value=>{mode=value;},
+        eraserSize:value=>{eraserSizeSlider.value=String(value);},
+        streamline:value=>{streamlineSlider.value=String(value);},
         dot:(x,y)=>{startStroke(pointer(x,y));endStroke();},
         line:(x1,y1,x2,y2)=>{startStroke(pointer(x1,y1));continueStroke(pointer(x2,y2,100));endStroke();},
         undo:()=>undoBtn.onclick(),redo:()=>redoBtn.onclick(),clear:()=>clearBtn.onclick(),
@@ -129,6 +132,24 @@ async function runColorLayerChecks(source, log) {
   assert(red(pixel(f.compose(),100,100)), 'Ink eraser damaged the underlying color');
   f.undo();f.mode('draw');
   log('PASS: the eraser affects only the selected layer.');
+  const precise = fixture();
+  precise.line(70,100,130,100);
+  precise.layer('color');precise.color('#ff0000');precise.line(100,70,100,130);
+  precise.layer('ink');precise.zoom(4);precise.mode('erase');precise.eraserSize(4);precise.streamline(100);
+  precise.line(100.5,90,100.5,110);
+  assert(red(pixel(precise.compose(),100,100)), 'Precise eraser did not erase exactly beneath its tip');
+  assert(black(pixel(precise.compose(),101,100)), 'Zoom enlarged the eraser and damaged the neighboring ink');
+  let erased=precise.state().detailStrokes.at(-1).ops.at(-1);
+  assert(erased.width===1 && erased.x2===100.5 && erased.y2===110, 'Eraser width or endpoint was changed by zoom or smoothing');
+  precise.undo();assert(black(pixel(precise.compose(),100,100)), 'Undo did not restore the precise erasure');
+  precise.redo();assert(red(pixel(precise.record(),100,100)), 'Recorded precise erasure did not reveal the color');
+  precise.eraserSize(.5);precise.line(120,100,120.05,100);
+  erased=precise.state().detailStrokes.at(-1).ops.at(-1);
+  assert(erased.kind==='segment' && erased.width===.125 && Math.abs(erased.x2-120.05)<.00001, 'Minimum eraser or tiny movements were not respected');
+  precise.layer('color');precise.eraserSize(4);precise.dot(100,110);
+  erased=precise.state().detailStrokes.at(-1).ops.at(-1);
+  assert(erased.kind==='dot' && erased.width===1, 'Tap eraser did not use the same precise diameter on color');
+  log('PASS: 0.5px erasing, tiny movements and exact endpoints remain precise at 4× zoom with smoothing at 100%.');
   f.layer('color');f.clear();
   assert(black(pixel(f.compose(),100,100)), 'Clear color damaged ink');
   assert(transparent(pixel(f.compose(),100,110)), 'Clear color left color behind');
