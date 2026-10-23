@@ -282,6 +282,246 @@ for old, new in recording_view_patches:
     s = replace_one(s, old, new, 'Live recording view')
 PATH.write_text(s)
 
+# Use bounded H.264 output on Apple devices, and verify the encoded result.
+# Keep the 1s timeslice: WebKit's MP4 muxer can lose frames without it.
+playback_marker = '// recording-playback-v2'
+if playback_marker not in s:
+    mime_start = s.index('function pickRecordingMimeType() {')
+    mime_end = s.index('\nconst recordingSupport =', mime_start)
+    s = s[:mime_start] + r'''// recording-playback-v2
+function recordingMimeTypes(withAudio = false) {
+  return [
+    withAudio ? 'video/mp4;codecs=avc1,mp4a.40.2' : 'video/mp4;codecs=avc1',
+    'video/mp4',
+    withAudio ? 'video/webm;codecs=vp8,opus' : 'video/webm;codecs=vp8',
+    'video/webm'
+  ].filter(type => !MediaRecorder.isTypeSupported || MediaRecorder.isTypeSupported(type));
+}
+
+function pickRecordingMimeType() {
+  return window.MediaRecorder ? (recordingMimeTypes()[0] || null) : null;
+}
+
+function usesAppleRecordingEncoder() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ||
+    (/Safari/.test(navigator.userAgent) && !/Chrome|Chromium|Android/.test(navigator.userAgent));
+}
+
+function recordingOutputSize(source) {
+  const longSide = Math.max(source.width, source.height);
+  const shortSide = Math.min(source.width, source.height);
+  const apple = usesAppleRecordingEncoder();
+  const phone = /iPhone|iPod/.test(navigator.userAgent) || Math.min(screen.width, screen.height) < 600;
+  // Stay inside a 1920x1080 pixel budget on Safari, including desktop-mode iPads.
+  // Replay ink geometry at this resolution instead of enlarging a bitmap.
+  const scale = apple
+    ? Math.min(1920 / Math.max(1, longSide), 1080 / Math.max(1, shortSide))
+    : Math.max((phone ? 1920 : 3200) / Math.max(1, longSide), 1080 / Math.max(1, shortSide));
+  const even = value => Math.max(2, Math.floor(value / 2) * 2);
+  return { width: even(source.width * scale), height: even(source.height * scale) };
+}
+
+function createRecordingEncoder(stream) {
+  let lastError;
+  for (const mimeType of recordingMimeTypes(stream.getAudioTracks().length > 0)) {
+    try {
+      return new MediaRecorder(stream, {
+        mimeType,
+        videoBitsPerSecond: usesAppleRecordingEncoder() ? 10000000 : 30000000,
+        audioBitsPerSecond: 256000
+      });
+    } catch (error) { lastError = error; }
+  }
+  throw lastError || new Error('No video encoder is available.');
+}
+''' + s[mime_end:]
+
+    state_anchor = 'let recordRAF = null;'
+    s = replace_one(s, state_anchor, state_anchor + '''
+let recordVideoTrack = null;
+let recordingStream = null;
+let recordingBusy = false;
+let recordingError = null;
+
+function releaseRecordingCapture() {
+  cancelAnimationFrame(recordRAF);
+  recordRAF = null;
+  if (recordingStream) recordingStream.getTracks().forEach(track => track.stop());
+  recordingStream = null;
+  recordVideoTrack = null;
+  if (recordingMicrophoneStream) recordingMicrophoneStream.getTracks().forEach(track => track.stop());
+  recordingMicrophoneStream = null;
+  recordingAudioGain = null;
+  if (recordingAudioContext) recordingAudioContext.close().catch(() => {});
+  recordingAudioContext = null;
+  if (recordCanvas && recordCanvas.parentNode) recordCanvas.remove();
+  recordingInkLayer = null;
+  recordingInkKey = '';
+}
+
+function resetRecordingButton() {
+  recordingBusy = false;
+  recordBtn.disabled = false;
+  recordBtn.classList.remove('recording');
+  recordBtn.querySelector('span').textContent = t('recordBtn');
+}
+''', 'Recording lifecycle state')
+
+    s = replace_one(s, 'function compositeRecordFrame() {',
+                    'function compositeRecordFrame() {\n  try {', 'Frame error handling')
+    s = replace_one(s, '  recordRAF = requestAnimationFrame(compositeRecordFrame);\n}', '''
+  if (recordVideoTrack && recordVideoTrack.readyState === 'live' && recordVideoTrack.requestFrame) {
+    recordVideoTrack.requestFrame();
+  }
+  recordRAF = requestAnimationFrame(compositeRecordFrame);
+  } catch (error) {
+    recordingError = error;
+    console.error('Recording frame failed.', error);
+    stopRecording();
+  }
+}''', 'Explicit canvas frame delivery')
+
+    # Retain the existing result panel and sharing behavior, but wait until the
+    # actual encoded first frame decodes before announcing a ready recording.
+    result_start = s.index('  const oldPanel = document.getElementById(\'recordingResultPanel\');')
+    result_end = s.index('\n};\n  mediaRecorder.start(1000);', result_start)
+    result_panel = s[result_start:result_end]
+    result_panel = result_panel.replace("title.textContent = 'Your recording is ready';", "title.textContent = 'Checking your recording…';")
+    result_panel = result_panel.replace("preview.src = url; preview.controls = true; preview.playsInline = true; preview.preload = 'metadata';",
+        "preview.controls = true; preview.playsInline = true; preview.preload = 'auto';")
+    result_panel = result_panel.replace("  const canShareFile = !!(navigator.share && navigator.canShare && navigator.canShare({ files: [recordingFile] }));", "  let canShareFile = false;\n  try { canShareFile = !!(navigator.share && navigator.canShare && navigator.canShare({ files: [recordingFile] })); } catch (_) {}")
+    result_panel = result_panel[:result_panel.index("  recordBtn.classList.remove('recording');")]
+    result_panel += r'''
+  saveShare.disabled = true;
+  download.style.pointerEvents = 'none';
+  download.style.opacity = '.5';
+  const instructions = note.textContent;
+  note.textContent = 'Checking video playback…';
+  let settled = false;
+  const finishPreview = playable => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(previewTimeout);
+    if (!overlay.isConnected) return;
+    saveShare.disabled = false;
+    download.style.pointerEvents = '';
+    download.style.opacity = '';
+    title.textContent = playable ? 'Your recording is ready' : 'Recording preview unavailable';
+    note.textContent = playable ? instructions : 'The browser could not play this preview. You can download the file, or close this window and try a new recording.';
+    hintText.textContent = playable ? 'Recording ready — play it or download it now.' : 'This recording could not be previewed.';
+  };
+  const previewTimeout = setTimeout(() => finishPreview(false), 15000);
+  preview.addEventListener('loadeddata', () => finishPreview(preview.videoWidth > 0 && preview.videoHeight > 0), { once: true });
+  preview.addEventListener('error', () => finishPreview(false), { once: true });
+  preview.src = url;
+  preview.load();
+'''
+    result_helper = r'''
+function showRecordingResult(blob, outputMime) {
+  const fileExt = outputMime.includes('mp4') ? 'mp4' : 'webm';
+  const fileName = `ink-sketchbook-recording.${fileExt}`;
+  const recordingFile = new File([blob], fileName, { type: outputMime });
+  const url = URL.createObjectURL(blob);
+  if (lastRecordingUrl) URL.revokeObjectURL(lastRecordingUrl);
+  lastRecordingUrl = url;
+''' + result_panel + '\n}\n'
+
+    controller_start = s.index('function stopRecording() {')
+    controller_end = s.index('\nfunction saveHistory() {', controller_start)
+    old_controller = s[controller_start:controller_end]
+    # Preserve the microphone capture setup, including Vanya's existing gain.
+    audio_start = old_controller.index('  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {')
+    audio_end = old_controller.index('\n  recordedChunks = [];', audio_start)
+    audio_setup = old_controller[audio_start:audio_end]
+    geometry_start = old_controller.index('  const canvasRectForRecording =')
+    geometry_end = old_controller.index('  const isPhoneRecording =', geometry_start)
+    geometry_setup = old_controller[geometry_start:geometry_end]
+    controller = r'''function stopRecording() {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    recordingBusy = true;
+    recordBtn.disabled = true;
+    recordBtn.querySelector('span').textContent = 'Saving…';
+    mediaRecorder.stop();
+  }
+}
+
+recordBtn.onclick = async () => {
+  if (!recordingSupport || recordingBusy) return;
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    stopRecording();
+    return;
+  }
+  recordingBusy = true;
+  recordBtn.disabled = true;
+  recordBtn.querySelector('span').textContent = 'Preparing…';
+  recordingError = null;
+  recordedChunks = [];
+  try {
+  recordCanvas = document.createElement('canvas');
+  recordCanvas.setAttribute('aria-hidden', 'true');
+  // Keep the capture surface attached and paintable in Safari.
+  recordCanvas.style.cssText = 'position:fixed;left:0;bottom:0;width:1px;height:1px;pointer-events:none;z-index:2147483647;box-shadow:none;';
+  document.body.appendChild(recordCanvas);
+''' + geometry_setup + r'''
+  const outputSize = recordingOutputSize(recordSourceRect);
+  recordCanvas.width = outputSize.width;
+  recordCanvas.height = outputSize.height;
+  recordCtx = recordCanvas.getContext('2d', { alpha: false });
+  if (!recordCtx) throw new Error('The recording canvas could not be created.');
+  recordCtx.fillStyle = paperColorPicker.value || '#ffffff';
+  recordCtx.fillRect(0, 0, recordCanvas.width, recordCanvas.height);
+  const stream = recordCanvas.captureStream(30);
+  recordingStream = stream;
+  recordVideoTrack = stream.getVideoTracks()[0];
+  if (!recordVideoTrack) throw new Error('No video track was created.');
+''' + audio_setup + r'''
+  const recorder = createRecordingEncoder(stream);
+  mediaRecorder = recorder;
+  recorder.ondataavailable = event => {
+    if (event.data && event.data.size > 0) recordedChunks.push(event.data);
+  };
+  recorder.onerror = event => {
+    recordingError = event.error || new Error('The video encoder stopped unexpectedly.');
+  };
+  recorder.onstop = () => {
+    const chunks = recordedChunks.slice();
+    const outputMime = recorder.mimeType || (chunks.find(chunk => chunk.type) || {}).type || recordingSupport;
+    const error = recordingError;
+    releaseRecordingCapture();
+    mediaRecorder = null;
+    resetRecordingButton();
+    const blob = new Blob(chunks, { type: outputMime });
+    if (error || !blob.size) {
+      hintText.textContent = 'The recording could not be saved. Please try recording again.';
+      console.error('Recording export failed.', error || 'No encoded video data.');
+      return;
+    }
+    showRecordingResult(blob, outputMime);
+  };
+  recorder.start(1000);
+  // Start painting AFTER capture and encoding have started, including a first
+  // explicit frame request. Do not run a second loop while awaiting the mic.
+  compositeRecordFrame();
+  if (recorder.state === 'recording') {
+    recordingBusy = false;
+    recordBtn.disabled = false;
+    recordBtn.classList.add('recording');
+    recordBtn.querySelector('span').textContent = t('stopRecordBtn');
+    hintText.textContent = t('recordingHintMsg');
+  }
+  } catch (error) {
+    releaseRecordingCapture();
+    mediaRecorder = null;
+    resetRecordingButton();
+    hintText.textContent = 'Recording could not start. Please try again.';
+    console.error('Recording startup failed.', error);
+  }
+};
+'''
+    s = s[:controller_start] + result_helper + '\n' + controller + s[controller_end:]
+    PATH.write_text(s)
+
 native_retina_hooks = [
     "detailCanvas.id = 'detailCanvas'",
     'const DETAIL_ZOOM_THRESHOLD = 1.12;',
