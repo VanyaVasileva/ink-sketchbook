@@ -193,7 +193,7 @@
       <div id="colorBrushControls" class="slider-group" hidden>
         <span><span data-i18n="colorBrushLabel">Color brush size</span> <b id="colorBrushSizeValue">28</b></span>
         <input type="range" id="colorBrushSize" min="2" max="100" step="1" value="28" aria-label="Color brush size">
-        <small data-i18n="colorLayerHint">Paint here to keep color beneath your ink lines.</small>
+        <small data-i18n="colorLayerHint">Light pressure makes a fine tip; press harder for broad, smooth color beneath your ink lines.</small>
       </div>
       <div class="row palette" id="palette"></div>
       <input type="color" id="colorPicker" value="#2a2620" style="width:32px; height:32px; border:2px solid #d8d3c6; border-radius:6px; padding:0; cursor:pointer;">
@@ -354,7 +354,7 @@ const langSelect = document.getElementById('langSelect');
 const TRANSLATIONS = {
   en: {
     layerLabel: "Layer", inkLayerLabel: "Ink", colorLayerLabel: "Color",
-    colorBrushLabel: "Color brush size", colorLayerHint: "Paint here to keep color beneath your ink lines.",
+    colorBrushLabel: "Color brush size", colorLayerHint: "Light pressure makes a fine tip; press harder for broad, smooth color beneath your ink lines.",
     clearInkLayer: "Clear ink layer", clearColorLayer: "Clear color layer",
     lockText: "Enter the access code from your purchase to unlock the tool.",
     unlockBtn: "Unlock", passcodePlaceholder: "Access code",
@@ -708,6 +708,7 @@ function setDetailTransform(target = detailCtx) {
 
 function paintDetailOp(op, target = detailCtx) {
   if (!op) return;
+  if (op.kind === 'brush') { paintColorBrushShape(target, op); return; }
   if (op.kind === 'clear') { target.clearRect(0, 0, drawCanvas.width, drawCanvas.height); return; }
   target.save();
   target.globalCompositeOperation = op.mode === 'erase' ? 'destination-out' : 'source-over';
@@ -1353,6 +1354,7 @@ function paintRecordingInk(source) {
       target.setTransform(sx, 0, 0, sy, -source.x * sx, -source.y * sy);
       target.beginPath(); target.rect(0, 0, drawCanvas.width, drawCanvas.height); target.clip();
       const paint = op => {
+        if (op.kind === 'brush') { paintColorBrushShape(target, op); return; }
         if (op.kind === 'clear') { target.clearRect(0, 0, drawCanvas.width, drawCanvas.height); return; }
         target.globalCompositeOperation = op.mode === 'erase' ? 'destination-out' : 'source-over';
         target.lineCap = 'round'; target.lineJoin = 'round'; target.lineWidth = op.width;
@@ -1781,6 +1783,172 @@ function getEraserCanvasWidth() {
   return getEraserSize() * getDisplayDpr() / Math.max(0.01, view.scale || 1);
 }
 
+/* perfect-freehand 1.2.3 — https://github.com/steveruizok/perfect-freehand
+MIT License
+
+Copyright (c) 2021 Stephen Ruiz Ltd
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
+const getColorStrokeOutline = (() => {
+  const exports = {};
+Object.defineProperties(exports,{__esModule:{value:!0},[Symbol.toStringTag]:{value:`Module`}});const{PI:e}=Math,t=e+1e-4,n=.5,r=[1,1];function i(e,t,n,r=e=>e){return e*r(.5-t*(.5-n))}const{min:a}=Math;function o(e,t,n){let r=a(1,t/n);return a(1,e+(a(1,1-r)-e)*(r*.275))}function s(e){return[-e[0],-e[1]]}function c(e,t){return[e[0]+t[0],e[1]+t[1]]}function l(e,t,n){return e[0]=t[0]+n[0],e[1]=t[1]+n[1],e}function u(e,t){return[e[0]-t[0],e[1]-t[1]]}function d(e,t,n){return e[0]=t[0]-n[0],e[1]=t[1]-n[1],e}function f(e,t){return[e[0]*t,e[1]*t]}function p(e,t,n){return e[0]=t[0]*n,e[1]=t[1]*n,e}function m(e,t){return[e[0]/t,e[1]/t]}function h(e){return[e[1],-e[0]]}function g(e,t){let n=t[0];return e[0]=t[1],e[1]=-n,e}function ee(e,t){return e[0]*t[0]+e[1]*t[1]}function _(e,t){return e[0]===t[0]&&e[1]===t[1]}function v(e){return Math.hypot(e[0],e[1])}function y(e,t){let n=e[0]-t[0],r=e[1]-t[1];return n*n+r*r}function b(e){return m(e,v(e))}function x(e,t){return Math.hypot(e[1]-t[1],e[0]-t[0])}function S(e,t,n){let r=Math.sin(n),i=Math.cos(n),a=e[0]-t[0],o=e[1]-t[1],s=a*i-o*r,c=a*r+o*i;return[s+t[0],c+t[1]]}function C(e,t,n,r){let i=Math.sin(r),a=Math.cos(r),o=t[0]-n[0],s=t[1]-n[1],c=o*a-s*i,l=o*i+s*a;return e[0]=c+n[0],e[1]=l+n[1],e}function w(e,t,n){return c(e,f(u(t,e),n))}function te(e,t,n,r){let i=n[0]-t[0],a=n[1]-t[1];return e[0]=t[0]+i*r,e[1]=t[1]+a*r,e}function T(e,t,n){return c(e,f(t,n))}const E=[0,0],D=[0,0],O=[0,0];function k(e,n){let r=T(e,b(h(u(e,c(e,[1,1])))),-n),i=[],a=1/13;for(let n=a;n<=1;n+=a)i.push(S(r,e,t*2*n));return i}function A(e,n,r){let i=[],a=1/r;for(let r=a;r<=1;r+=a)i.push(S(n,e,t*r));return i}function j(e,t,n){let r=u(t,n),i=f(r,.5),a=f(r,.51);return[u(e,i),u(e,a),c(e,a),c(e,i)]}function M(e,n,r,i){let a=[],o=T(e,n,r),s=1/i;for(let n=s;n<1;n+=s)a.push(S(o,e,t*3*n));return a}function ne(e,t,n){return[c(e,f(t,n)),c(e,f(t,n*.99)),u(e,f(t,n*.99)),u(e,f(t,n))]}function N(e,t,n){return e===!1||e===void 0?0:e===!0?Math.max(t,n):e}function re(e,t,n){return e.slice(0,10).reduce((e,r)=>{let i=r.pressure;return t&&(i=o(e,r.distance,n)),(e+i)/2},e[0].pressure)}function P(e,n={}){let{size:r=16,smoothing:a=.5,thinning:f=.5,simulatePressure:m=!0,easing:_=e=>e,start:v={},end:b={},last:x=!1}=n,{cap:S=!0,easing:w=e=>e*(2-e)}=v,{cap:T=!0,easing:P=e=>--e*e*e+1}=b;if(e.length===0||r<=0)return[];let F=e[e.length-1].runningLength,I=N(v.taper,r,F),L=N(b.taper,r,F),R=(r*a)**2,z=[],B=[],V=re(e,m,r),H=i(r,f,e[e.length-1].pressure,_),U,W=e[0].vector,G=e[0].point,K=G,q=G,J=K,Y=!1;for(let n=0;n<e.length;n++){let{pressure:a}=e[n],{point:s,vector:h,distance:v,runningLength:b}=e[n],x=n===e.length-1;if(!x&&F-b<3)continue;f?(m&&(a=o(V,v,r)),H=i(r,f,a,_)):H=r/2,U===void 0&&(U=H);let S=b<I?w(b/I):1,T=F-b<L?P((F-b)/L):1;H=Math.max(.01,H*Math.min(S,T));let k=(x?e[n]:e[n+1]).vector,A=x?1:ee(h,k),j=ee(h,W)<0&&!Y,M=A!==null&&A<0;if(j||M){g(E,W),p(E,E,H);for(let e=0;e<=1;e+=.07692307692307693)d(D,s,E),C(D,D,s,t*e),q=[D[0],D[1]],z.push(q),l(O,s,E),C(O,O,s,t*-e),J=[O[0],O[1]],B.push(J);G=q,K=J,M&&(Y=!0);continue}if(Y=!1,x){g(E,h),p(E,E,H),z.push(u(s,E)),B.push(c(s,E));continue}te(E,k,h,A),g(E,E),p(E,E,H),d(D,s,E),q=[D[0],D[1]],(n<=1||y(G,q)>R)&&(z.push(q),G=q),l(O,s,E),J=[O[0],O[1]],(n<=1||y(K,J)>R)&&(B.push(J),K=J),V=a,W=h}let X=[e[0].point[0],e[0].point[1]],Z=e.length>1?[e[e.length-1].point[0],e[e.length-1].point[1]]:c(e[0].point,[1,1]),Q=[],$=[];if(e.length===1){if(!(I||L)||x)return k(X,U||H)}else{I||L&&e.length===1||(S?Q.push(...A(X,B[0],13)):Q.push(...j(X,z[0],B[0])));let t=h(s(e[e.length-1].vector));L||I&&e.length===1?$.push(Z):T?$.push(...M(Z,t,H,29)):$.push(...ne(Z,t,H))}return z.concat($,B.reverse(),Q)}const F=[0,0];function I(e){return e!=null&&e>=0}function L(e,t={}){let{streamline:i=.5,size:a=16,last:o=!1}=t;if(e.length===0)return[];let s=.15+(1-i)*.85,l=Array.isArray(e[0])?e:e.map(({x:e,y:t,pressure:r=n})=>[e,t,r]);if(l.length===2){let e=l[1];l=l.slice(0,-1);for(let t=1;t<5;t++)l.push(w(l[0],e,t/4))}l.length===1&&(l=[...l,[...c(l[0],r),...l[0].slice(2)]]);let u=[{point:[l[0][0],l[0][1]],pressure:I(l[0][2])?l[0][2]:.25,vector:[...r],distance:0,runningLength:0}],f=!1,p=0,m=u[0],h=l.length-1;for(let e=1;e<l.length;e++){let t=o&&e===h?[l[e][0],l[e][1]]:w(m.point,l[e],s);if(_(m.point,t))continue;let r=x(t,m.point);if(p+=r,e<h&&!f){if(p<a)continue;f=!0}d(F,m.point,t),m={point:t,pressure:I(l[e][2])?l[e][2]:n,vector:b(F),distance:r,runningLength:p},u.push(m)}return u[0].vector=u[1]?.vector||[0,0],u}function R(e,t={}){return P(L(e,t),t)}var z=R;exports.default=z,exports.getStroke=R,exports.getStrokeOutlinePoints=P,exports.getStrokePoints=L;
+  return exports.getStroke;
+})();
+
+// color-pressure-brush-v1
+let colorBrushStroke = null;
+let colorBrushRAF = null;
+
+function paintColorBrushShape(target, op) {
+  const outline = op.outline;
+  if (!outline || outline.length < 3) return;
+  target.save();
+  target.globalCompositeOperation = 'source-over';
+  target.fillStyle = op.color;
+  const last = outline[outline.length - 1], first = outline[0];
+  target.beginPath();
+  target.moveTo((last[0] + first[0]) / 2, (last[1] + first[1]) / 2);
+  for (let i = 0; i < outline.length; i++) {
+    const point = outline[i], next = outline[(i + 1) % outline.length];
+    target.quadraticCurveTo(point[0], point[1], (point[0] + next[0]) / 2, (point[1] + next[1]) / 2);
+  }
+  target.closePath();
+  target.fill();
+  target.restore();
+}
+
+function beginColorBrush(e) {
+  const base = document.createElement('canvas');
+  base.width = colorCanvas.width; base.height = colorCanvas.height;
+  base.getContext('2d').drawImage(colorCanvas, 0, 0);
+  const p = points[0];
+  const pressure = usingPressure ? Math.max(0.005, Math.min(1, e.pressure || 0.005)) : 1;
+  colorBrushStroke = {
+    base, samples:[[p.x, p.y, Math.pow(pressure, 1.2)]],
+    size:Math.max(2, parseFloat(colorBrushSize.value) || 28) * getDisplayDpr(),
+    pressure:usingPressure, color:currentColor, bounds:null, length:0,
+    dirty:true,op:{kind:'brush',mode:'draw',color:currentColor,outline:[]}
+  };
+  scheduleColorBrushUpdate();
+}
+
+function scheduleColorBrushUpdate() {
+  if (!colorBrushStroke) return;
+  colorBrushStroke.dirty=true;
+  if (colorBrushRAF === null) colorBrushRAF = requestAnimationFrame(() => {
+    colorBrushRAF = null;
+    renderColorBrushNow();
+  });
+}
+
+function updateColorBrushShape(finished) {
+  const stroke = colorBrushStroke;
+  if (!stroke) return;
+  stroke.dirty=false;
+  if (finished && !moved) {
+    const p = stroke.samples[0];
+    stroke.op = {kind:'dot',mode:'draw',color:stroke.color,x:p[0],y:p[1],width:Math.max(0.4,stroke.size*p[2])};
+  } else {
+    stroke.op = {
+      kind:'brush',mode:'draw',color:stroke.color,
+      outline:getColorStrokeOutline(stroke.samples, {
+        size:stroke.size / 2, thinning:1, smoothing:.55,
+        streamline:Math.max(0, Math.min(.45, (parseFloat(streamlineSlider.value) || 0) / 250)),
+        simulatePressure:false, last:true,
+        start:{cap:false,taper:Math.min(stroke.size*.35, stroke.length*.2)},
+        end:{cap:false,taper:finished ? Math.min(stroke.size*.4, stroke.length*.25) : 0}
+      })
+    };
+  }
+  if (detailVectorValid && activeDetailStroke) activeDetailStroke.ops = [stroke.op];
+  artworkRevision++;
+  scheduleDetailRender();
+}
+
+function renderColorBrushNow() {
+  const stroke = colorBrushStroke;
+  if (!stroke) return;
+  if (stroke.dirty) updateColorBrushShape(false);
+  let bounds = stroke.bounds;
+  const include = (x, y) => {
+    if (!bounds) bounds = {left:x,top:y,right:x,bottom:y};
+    else { bounds.left=Math.min(bounds.left,x);bounds.top=Math.min(bounds.top,y);bounds.right=Math.max(bounds.right,x);bounds.bottom=Math.max(bounds.bottom,y); }
+  };
+  if (stroke.op.kind === 'dot') {
+    const op = stroke.op;
+    include(op.x-op.width/2,op.y-op.width/2); include(op.x+op.width/2,op.y+op.width/2);
+  } else for (const p of stroke.op.outline) include(p[0],p[1]);
+  if (!bounds) return;
+  stroke.bounds = bounds;
+  const x=Math.max(0,Math.floor(bounds.left)-2),y=Math.max(0,Math.floor(bounds.top)-2);
+  const w=Math.min(colorCanvas.width,Math.ceil(bounds.right)+2)-x;
+  const h=Math.min(colorCanvas.height,Math.ceil(bounds.bottom)+2)-y;
+  if (w<=0 || h<=0) return;
+  colorCtx.save();
+  colorCtx.setTransform(1,0,0,1,0,0);
+  colorCtx.globalCompositeOperation='source-over';
+  colorCtx.beginPath();colorCtx.rect(x,y,w,h);colorCtx.clip();
+  // Restore the previous paint before replacing the active outline. This
+  // prevents old broad tips or overlapping round segments from accumulating.
+  colorCtx.clearRect(x,y,w,h);
+  colorCtx.drawImage(stroke.base,x,y,w,h,x,y,w,h);
+  paintDetailOp(stroke.op,colorCtx);
+  colorCtx.restore();
+}
+
+function continueColorBrush(e) {
+  const stroke=colorBrushStroke;
+  if (!stroke) return;
+  const p=getPos(e),previous=stroke.samples[stroke.samples.length-1];
+  const distance=Math.hypot(p.x-previous[0],p.y-previous[1]);
+  const rawPressure=stroke.pressure
+    ? (e.type==='pointerup' || !(e.pressure>0) ? Math.pow(previous[2],1/1.2) : Math.min(1,e.pressure)) : 1;
+  const pressure=Math.pow(Math.max(.005,rawPressure),1.2);
+  if (distance < .02 * getDisplayDpr() / Math.max(1,view.scale)) {
+    if (Math.abs(pressure-previous[2])>.002) {
+      previous[2]=pressure;scheduleColorBrushUpdate();
+    }
+    return;
+  }
+  stroke.samples.push([p.x,p.y,pressure]);
+  stroke.length+=distance;
+  moved=true;lastPressure=e.pressure;
+  points.push(p);lastRenderedPoint={x:p.x,y:p.y};lastPenPos={x:p.x,y:p.y};
+  scheduleColorBrushUpdate();
+}
+
+function finishColorBrush(cancel = false) {
+  if (!colorBrushStroke) return;
+  if (cancel) {
+    colorBrushStroke.dirty=false;
+    colorBrushStroke.op={kind:'brush',mode:'draw',color:colorBrushStroke.color,outline:[]};
+    activeDetailStroke=null;
+    artworkRevision++;
+  } else updateColorBrushShape(true);
+  if (colorBrushRAF !== null) cancelAnimationFrame(colorBrushRAF);
+  colorBrushRAF=null;
+  renderColorBrushNow();
+  colorBrushStroke=null;
+  scheduleDetailRender();
+}
+
 function startStroke(e) {
   drawing = true;
   beginDetailStroke();
@@ -1795,10 +1963,12 @@ function startStroke(e) {
   usingPressure = e.pointerType === 'pen';
   inputModeEl.textContent = usingPressure ? '(Pencil pressure detected)' : '(no pressure — using speed)';
   lastPenPos = { x: points[0].x, y: points[0].y };
+  if (activeLayer === 'color' && mode === 'draw') beginColorBrush(e);
 }
 
 function continueStroke(e) {
   if (!drawing) return;
+  if (colorBrushStroke) { continueColorBrush(e); return; }
   const p = getPos(e);
   const prev = points[points.length - 1];
   const dt = Math.max(1, p.t - prev.t);
@@ -1883,6 +2053,9 @@ function continueStroke(e) {
 
 function endStroke() {
   if (!drawing) return;
+  if (colorBrushStroke) {
+    finishColorBrush();drawing=false;commitDetailStroke();saveHistory();return;
+  }
   drawing = false;
   if (!moved && points.length > 0) {
     const dpr = getDisplayDpr();
@@ -1925,6 +2098,11 @@ drawCanvas.addEventListener('pointerdown', (e) => {
   if (activePointers.size === 1) {
     startStroke(e);
   } else if (activePointers.size === 2) {
+    if (colorBrushStroke) {
+      const painted=moved;
+      finishColorBrush(!painted);
+      if (painted && !detailVectorValid) saveHistory();
+    }
     if (drawing && activeDetailStroke && activeDetailStroke.ops.length) {
       commitDetailStroke();
       saveHistory();
@@ -1974,7 +2152,7 @@ drawCanvas.addEventListener('pointermove', (e) => {
     gesture.prevMid = newMid;
   } else if (activePointers.size === 1) {
     e.preventDefault();
-    const samples = mode === 'erase' && typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : null;
+    const samples = (mode === 'erase' || colorBrushStroke) && typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : null;
     if (samples && samples.length) for (const sample of samples) continueStroke(sample);
     else continueStroke(e);
   } else if (activePointers.size === 3 && tapCandidate3) {
@@ -2025,7 +2203,7 @@ function onPointerEnd(e) {
   }
 
   if (activePointers.size === 0) {
-    if (drawing && mode === 'erase' && e.type === 'pointerup') continueStroke(e);
+    if (drawing && (mode === 'erase' || colorBrushStroke) && e.type === 'pointerup') continueStroke(e);
     endStroke();
   }
 }
