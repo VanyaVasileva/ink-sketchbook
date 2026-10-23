@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Recording playback verification</title>
+<style>
+  body { font:16px system-ui; background:#f6f4f0; color:#292620; padding:16px; }
+  button { padding:12px 20px; }
+  #fixture { position:relative; width:332px; height:432px; background:white; margin-top:12px; }
+  #drawing { position:absolute; left:16px; top:16px; width:300px; height:400px; transform-origin:0 0; }
+  pre { white-space:pre-wrap; }
+</style>
+<h1>Recording playback verification</h1>
+<button id="run">Run recording test</button>
+<pre id="status">Records a synthetic drawing, then decodes the exported video to verify zoom and playback. No microphone or personal files are used.</pre>
+<div id="fixture"><canvas id="drawing" width="1200" height="1600"></canvas></div>
+<script>
+const status = document.getElementById('status');
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+const until = async predicate => {
+  for (let i = 0; i < 160; i++) {
+    if (predicate()) return;
+    await delay(100);
+  }
+  throw Error('Timed out waiting for the video to decode');
+};
+const log = message => { status.textContent += '\n' + message; };
+document.getElementById('run').onclick = async () => {
+  document.getElementById('run').disabled = true;
+  status.textContent = 'Loading the deployed recorder source…';
+  try {
+    const source = await fetch('../hand-selector-standalone-test.html?verify=' + Date.now(), { cache:'no-store' })
+      .then(response => {
+        if (!response.ok) throw Error('Source download failed');
+        return response.text();
+      });
+    if (!source.includes('// recording-playback-v2')) throw Error('The new recorder has not finished deploying');
+
+    // Exercise the deployed implementation, including its real MediaRecorder
+    // and result panel, against a synthetic drawing. Exclude the access gate,
+    // the drawing UI, and embedded hand assets from this isolated fixture.
+    const recorderCode = source.slice(source.indexOf('// recording-playback-v2'), source.indexOf('// Hand+pencil overlay')) +
+      source.slice(source.indexOf('let selectedRecordingHand ='), source.indexOf('function saveHistory()'));
+    const fixture = document.getElementById('fixture');
+    const drawing = document.getElementById('drawing');
+    const button = document.createElement('button');
+    button.innerHTML = '<span>Record</span>';
+    document.body.appendChild(button);
+    const hint = document.createElement('p');
+    document.body.appendChild(hint);
+    const setup = `
+      const navigator = {
+        userAgent:'Mozilla/5.0 Macintosh Version/26.0 Safari/605.1.15',
+        platform:'MacIntel', maxTouchPoints:5
+      };
+      const recordBtn=fixture.button, isCreatorMode=true, drawCanvas=fixture.drawing, wrap=fixture.wrap, hintText=fixture.hint;
+      const recordingHandSelect=null, recordingHandSize=null, recordingHandSizeValue=null, recordReferenceBtn=null, recordingHands={};
+      const paperColorPicker={value:'#ffffff'}, refVisible=false, refImage=null, backgroundVideoReady=false;
+      const detailVectorValid=true, detailStrokes=[{ops:[{kind:'dot',x:600,y:800,width:80,color:'#ff0000',mode:'draw'}]}], detailVisibleCount=1, activeDetailStroke=null;
+      const t=key=>({recordBtn:'Record',stopRecordBtn:'Stop',recordingHintMsg:'Recording'})[key];
+    `;
+    const api = new Function('fixture', setup + recorderCode + `;
+      return {
+        start:recordBtn.onclick, stop:stopRecording,
+        info:()=>({mime:mediaRecorder&&mediaRecorder.mimeType,bytes:recordedChunks.reduce((n,b)=>n+b.size,0)})
+      };
+    `)({ button, drawing, wrap:fixture, hint });
+    log('Loaded the deployed recording controller and compositor.');
+    await api.start();
+    const mime = api.info().mime;
+    if (!mime) throw Error('Recorder did not start: ' + hint.textContent);
+    log('Encoding ' + mime);
+    await delay(700);
+    drawing.style.width = '600px';
+    drawing.style.height = '800px';
+    drawing.style.transform = 'translate(-150px,-200px)';
+    await delay(900);
+    api.stop();
+    await until(() => document.querySelector('#recordingResultPanel h2')?.textContent === 'Your recording is ready');
+    const video = document.querySelector('#recordingResultPanel video');
+    video.muted = true;
+    const decoded = document.createElement('canvas');
+    decoded.width = video.videoWidth;
+    decoded.height = video.videoHeight;
+    const ctx = decoded.getContext('2d');
+    const sample = async time => {
+      const sought = new Promise((resolve, reject) => {
+        video.addEventListener('seeked', resolve, { once:true });
+        video.addEventListener('error', () => reject(Error('Seek failed')), { once:true });
+      });
+      video.currentTime = time;
+      await sought;
+      ctx.drawImage(video, 0, 0);
+      return [...ctx.getImageData(Math.round(decoded.width/2+50), Math.round(decoded.height/2), 1, 1).data];
+    };
+    const before = await sample(.3);
+    const after = await sample(1.15);
+    if (!(before[0]>200 && before[1]>200 && before[2]>200)) throw Error('Initial exported frame was not the unzoomed drawing: ' + before);
+    if (!(after[0]>160 && after[1]<100 && after[2]<100)) throw Error('The exported video did not include the zoom: ' + after);
+    if (!mime.startsWith('video/mp4')) throw Error('The browser did not select MP4');
+    log('PASS: ' + video.videoWidth + '×' + video.videoHeight + ' MP4 decoded successfully (' + api.info().bytes + ' bytes).');
+    log('PASS: decoded frames contain the zoom movement.');
+    await video.play();
+    await until(() => video.currentTime > 1.35);
+    video.pause();
+    log('PASS: exported MP4 plays.');
+    document.getElementById('recordingResultPanel').remove();
+    await api.start();
+    await delay(500);
+    api.stop();
+    await until(() => document.querySelector('#recordingResultPanel h2')?.textContent === 'Your recording is ready');
+    log('PASS: a second recording also exports and decodes.');
+    log('ALL PLAYBACK CHECKS PASSED');
+  } catch (error) {
+    log('FAIL: ' + error.message);
+    console.error(error);
+  }
+};
+</script>
+</html>
