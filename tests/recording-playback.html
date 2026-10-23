@@ -41,7 +41,9 @@ document.getElementById('run').onclick = async () => {
     // Exercise the deployed implementation, including its real MediaRecorder
     // and result panel, against a synthetic drawing. Exclude the access gate,
     // the drawing UI, and embedded hand assets from this isolated fixture.
-    const recorderCode = source.slice(source.indexOf('// recording-playback-v2'), source.indexOf('// Hand+pencil overlay')) +
+    const brushPainter = source.includes('function paintColorBrushShape(')
+      ? source.slice(source.indexOf('function paintColorBrushShape('), source.indexOf('function beginColorBrush(')) : '';
+    const recorderCode = brushPainter + source.slice(source.indexOf('// recording-playback-v2'), source.indexOf('// Hand+pencil overlay')) +
       source.slice(source.indexOf('let selectedRecordingHand ='), source.indexOf('function saveHistory('));
     const fixture = document.getElementById('fixture');
     const drawing = document.getElementById('drawing');
@@ -63,7 +65,10 @@ document.getElementById('run').onclick = async () => {
       const artworkRevision=0;
       const recordingHandSelect=null, recordingHandSize=null, recordingHandSizeValue=null, recordReferenceBtn=null, recordingHands={};
       const paperColorPicker={value:'#ffffff'}, refVisible=false, refImage=null, backgroundVideoReady=false;
-      const detailVectorValid=true, detailStrokes=[{ops:[{kind:'dot',x:600,y:800,width:80,color:'#ff0000',mode:'draw'}]}], detailVisibleCount=1, activeDetailStroke=null;
+      const detailVectorValid=true, detailStrokes=[
+        {layer:'color',ops:[{kind:'brush',color:'#0055dd',outline:[[220,400],[260,370],[340,370],[380,400],[340,430],[260,430]]}]},
+        {layer:'ink',ops:[{kind:'dot',x:600,y:800,width:80,color:'#ff0000',mode:'draw'}]}
+      ], detailVisibleCount=2, activeDetailStroke=null;
       const t=key=>({recordBtn:'Record',stopRecordBtn:'Stop',recordingHintMsg:'Recording'})[key];
     `;
     const context = { button, drawing, wrap:fixture, hint, audioStream:null };
@@ -107,12 +112,15 @@ document.getElementById('run').onclick = async () => {
       return [...ctx.getImageData(Math.round(decoded.width/2+50), Math.round(decoded.height/2), 1, 1).data];
     };
     const before = await sample(Math.min(.3, video.duration * .15));
+    const colorPixel=[...ctx.getImageData(Math.round(decoded.width*.25),Math.round(decoded.height*.25),1,1).data];
+    if (!(colorPixel[0]<70 && colorPixel[1]<150 && colorPixel[2]>150)) throw Error('The exported MP4 lost the filled color brush shape: '+colorPixel);
     const after = await sample(video.duration);
     if (!(before[0]>200 && before[1]>200 && before[2]>200)) throw Error('Initial exported frame was not the unzoomed drawing: ' + before);
     if (!(after[0]>160 && after[1]<100 && after[2]<100)) throw Error('The exported video did not include the zoom: ' + after);
     if (!mime.startsWith('video/mp4')) throw Error('The browser did not select MP4');
     log('PASS: ' + video.videoWidth + '×' + video.videoHeight + ' MP4 decoded successfully (' + api.info().bytes + ' bytes).');
     log('PASS: decoded frames contain the zoom movement.');
+    log('PASS: the MP4 includes the filled color brush outline.');
     video.currentTime = 0;
     await video.play();
     await until(() => video.currentTime > Math.min(.15, video.duration / 3) || video.ended);
