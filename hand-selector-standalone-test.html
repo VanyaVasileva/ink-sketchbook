@@ -191,8 +191,8 @@
       <div class="slider-group"><span data-i18n="minLabel">Min</span> <input type="range" id="minSlider" min="0.5" max="6" value="0.5" step="0.5"></div>
       <div class="slider-group"><span data-i18n="maxLabel">Max</span> <input type="range" id="maxSlider" min="2" max="16" value="6" step="0.5"></div>
       <div id="colorBrushControls" class="slider-group" hidden>
-        <span><span data-i18n="colorBrushLabel">Color brush size</span> <b id="colorBrushSizeValue">28</b></span>
-        <input type="range" id="colorBrushSize" min="2" max="100" step="1" value="28" aria-label="Color brush size">
+        <span><span data-i18n="colorBrushLabel">Color brush size</span> <b id="colorBrushSizeValue">80</b></span>
+        <input type="range" id="colorBrushSize" min="2" max="240" step="1" value="80" aria-label="Color brush size">
         <small data-i18n="colorLayerHint">Light pressure makes a fine tip; press harder for broad, smooth color beneath your ink lines.</small>
       </div>
       <div class="row palette" id="palette"></div>
@@ -1860,137 +1860,91 @@ function paintColorBrushShape(target, op) {
   target.restore();
 }
 
-function buildColorBrushSweep(stroke) {
-  const centerline=getColorStrokeOutline.getPoints(stroke.samples,{
-    size:stroke.size/2,
-    streamline:Math.max(0,Math.min(.45,(parseFloat(streamlineSlider.value)||0)/250)),
-    last:true
-  });
-  const sweep=[];
-  const spacing=Math.max(.5,stroke.size/12);
-  for(let i=0;i<centerline.length;i++) {
-    const p=centerline[i];
-    if(i===0) { sweep.push([p.point[0],p.point[1],stroke.size*.5*p.pressure]);continue; }
-    const a=centerline[i-1];
-    const distance=Math.hypot(p.point[0]-a.point[0],p.point[1]-a.point[1]);
-    const steps=Math.max(1,Math.min(128,Math.ceil(distance/spacing)));
-    for(let j=1;j<=steps;j++) {
-      const t=j/steps,pressure=a.pressure+(p.pressure-a.pressure)*t;
-      sweep.push([a.point[0]+(p.point[0]-a.point[0])*t,a.point[1]+(p.point[1]-a.point[1])*t,stroke.size*.5*pressure]);
-    }
-  }
-  return sweep;
-}
-
 function beginColorBrush(e) {
-  const base = document.createElement('canvas');
-  base.width = colorCanvas.width; base.height = colorCanvas.height;
-  base.getContext('2d').drawImage(colorCanvas, 0, 0);
-  const p = points[0];
-  const pressure = usingPressure ? Math.max(0.005, Math.min(1, e.pressure || 0.005)) : 1;
-  colorBrushStroke = {
-    base, samples:[[p.x, p.y, Math.pow(pressure, 1.2)]],
-    size:Math.max(2, parseFloat(colorBrushSize.value) || 28) * getDisplayDpr(),
-    pressure:usingPressure, color:currentColor, bounds:null, length:0,
-    dirty:true,op:{kind:'brush',mode:'draw',color:currentColor,outline:[]}
-  };
-  scheduleColorBrushUpdate();
+  // direct-color-brush-v3
+  const base=document.createElement('canvas');
+  base.width=colorCanvas.width;base.height=colorCanvas.height;
+  base.getContext('2d').drawImage(colorCanvas,0,0);
+  const p=points[0],pressure=usingPressure ? Math.max(.005,Math.min(1,e.pressure || .005)) : 1;
+  const size=Math.max(2,parseFloat(colorBrushSize.value) || 80)*getDisplayDpr();
+  const sample=[p.x,p.y,size*.5*pressure];
+  const op={kind:'brush',mode:'draw',color:currentColor,sweep:[sample]};
+  colorBrushStroke={base,size,pressure:usingPressure,color:currentColor,op,bounds:null};
+  if(detailVectorValid && activeDetailStroke) activeDetailStroke.ops=[op];
+  paintColorBrushLive([sample]);
 }
 
-function scheduleColorBrushUpdate() {
-  if (!colorBrushStroke) return;
-  colorBrushStroke.dirty=true;
-  if (colorBrushRAF === null) colorBrushRAF = requestAnimationFrame(() => {
-    colorBrushRAF = null;
-    renderColorBrushNow();
-  });
-}
-
-function updateColorBrushShape(finished) {
-  const stroke = colorBrushStroke;
-  if (!stroke) return;
-  stroke.dirty=false;
-  if (finished && !moved) {
-    const p = stroke.samples[0];
-    stroke.op = {kind:'dot',mode:'draw',color:stroke.color,x:p[0],y:p[1],width:Math.max(0.4,stroke.size*p[2])};
-  } else {
-    stroke.op = {
-      kind:'brush',mode:'draw',color:stroke.color,
-      sweep:buildColorBrushSweep(stroke)
-    };
+function includeColorBrushBounds(sample) {
+  const stroke=colorBrushStroke,[x,y,r]=sample;
+  if(!stroke.bounds) stroke.bounds={left:x-r,top:y-r,right:x+r,bottom:y+r};
+  else {
+    stroke.bounds.left=Math.min(stroke.bounds.left,x-r);stroke.bounds.top=Math.min(stroke.bounds.top,y-r);
+    stroke.bounds.right=Math.max(stroke.bounds.right,x+r);stroke.bounds.bottom=Math.max(stroke.bounds.bottom,y+r);
   }
-  if (detailVectorValid && activeDetailStroke) activeDetailStroke.ops = [stroke.op];
+}
+
+function paintColorBrushLive(sweep) {
+  const stroke=colorBrushStroke;
+  // Only the newest section is painted while moving. No delayed follow point,
+  // whole-stroke geometry rebuild, or second animation frame for zoomed paint.
+  for(const sample of sweep) includeColorBrushBounds(sample);
+  const op={kind:'brush',mode:'draw',color:stroke.color,sweep};
+  paintColorBrushShape(colorCtx,op);
+  drawDetailOpLive(op);
   artworkRevision++;
-  scheduleDetailRender();
 }
 
 function renderColorBrushNow() {
-  const stroke = colorBrushStroke;
-  if (!stroke) return;
-  if (stroke.dirty) updateColorBrushShape(false);
-  let bounds = stroke.bounds;
-  const include = (x, y) => {
-    if (!bounds) bounds = {left:x,top:y,right:x,bottom:y};
-    else { bounds.left=Math.min(bounds.left,x);bounds.top=Math.min(bounds.top,y);bounds.right=Math.max(bounds.right,x);bounds.bottom=Math.max(bounds.bottom,y); }
-  };
-  if (stroke.op.kind === 'dot') {
-    const op = stroke.op;
-    include(op.x-op.width/2,op.y-op.width/2); include(op.x+op.width/2,op.y+op.width/2);
-  } else if (stroke.op.sweep) {
-    for(const p of stroke.op.sweep) { include(p[0]-p[2],p[1]-p[2]);include(p[0]+p[2],p[1]+p[2]); }
-  } else for (const p of stroke.op.outline) include(p[0],p[1]);
-  if (!bounds) return;
-  stroke.bounds = bounds;
+  const stroke=colorBrushStroke,bounds=stroke && stroke.bounds;
+  if(!bounds) return;
   const x=Math.max(0,Math.floor(bounds.left)-2),y=Math.max(0,Math.floor(bounds.top)-2);
   const w=Math.min(colorCanvas.width,Math.ceil(bounds.right)+2)-x;
   const h=Math.min(colorCanvas.height,Math.ceil(bounds.bottom)+2)-y;
-  if (w<=0 || h<=0) return;
-  colorCtx.save();
-  colorCtx.setTransform(1,0,0,1,0,0);
+  if(w<=0 || h<=0) return;
+  colorCtx.save();colorCtx.setTransform(1,0,0,1,0,0);
   colorCtx.globalCompositeOperation='source-over';
   colorCtx.beginPath();colorCtx.rect(x,y,w,h);colorCtx.clip();
-  // Restore the previous paint before replacing the active outline. This
-  // prevents old broad tips or overlapping round segments from accumulating.
   colorCtx.clearRect(x,y,w,h);
   colorCtx.drawImage(stroke.base,x,y,w,h,x,y,w,h);
-  paintDetailOp(stroke.op,colorCtx);
+  // On release, union the complete stroke once for consistent clean edges
+  // in the native artwork, sharp zoom display, exports and recordings.
+  paintColorBrushShape(colorCtx,stroke.op);
   colorCtx.restore();
 }
 
 function continueColorBrush(e) {
   const stroke=colorBrushStroke;
-  if (!stroke) return;
-  const p=getPos(e),previous=stroke.samples[stroke.samples.length-1];
+  if(!stroke) return;
+  const p=getPos(e),sweep=stroke.op.sweep,previous=sweep[sweep.length-1];
   const distance=Math.hypot(p.x-previous[0],p.y-previous[1]);
-  const rawPressure=stroke.pressure
-    ? (e.type==='pointerup' || !(e.pressure>0) ? Math.pow(previous[2],1/1.2) : Math.min(1,e.pressure)) : 1;
-  const pressure=Math.pow(Math.max(.005,rawPressure),1.2);
-  if (distance < .02 * getDisplayDpr() / Math.max(1,view.scale)) {
-    if (Math.abs(pressure-previous[2])>.002) {
-      previous[2]=pressure;scheduleColorBrushUpdate();
+  const pressure=stroke.pressure
+    ? (e.type==='pointerup' || !(e.pressure>0) ? previous[2]/(stroke.size*.5) : Math.min(1,e.pressure)) : 1;
+  const sample=[p.x,p.y,stroke.size*.5*Math.max(.005,pressure)];
+  if(distance<.00001) {
+    // Keep pressure changes at a stationary tip; moving samples are never
+    // filtered, resampled or pulled toward an earlier position.
+    if(Math.abs(sample[2]-previous[2])>.001) {
+      previous[2]=sample[2];includeColorBrushBounds(previous);renderColorBrushNow();
+      artworkRevision++;scheduleDetailRender();
     }
     return;
   }
-  stroke.samples.push([p.x,p.y,pressure]);
-  stroke.length+=distance;
-  moved=true;lastPressure=e.pressure;
+  sweep.push(sample);moved=true;lastPressure=e.pressure;
   points.push(p);lastRenderedPoint={x:p.x,y:p.y};lastPenPos={x:p.x,y:p.y};
-  scheduleColorBrushUpdate();
+  paintColorBrushLive([previous,sample]);
 }
 
-function finishColorBrush(cancel = false) {
-  if (!colorBrushStroke) return;
-  if (cancel) {
-    colorBrushStroke.dirty=false;
-    colorBrushStroke.op={kind:'brush',mode:'draw',color:colorBrushStroke.color,outline:[]};
+function finishColorBrush(cancel=false) {
+  const stroke=colorBrushStroke;
+  if(!stroke) return;
+  if(cancel) {
+    stroke.op={kind:'brush',mode:'draw',color:stroke.color,sweep:[]};
     activeDetailStroke=null;
-    artworkRevision++;
-  } else updateColorBrushShape(true);
-  if (colorBrushRAF !== null) cancelAnimationFrame(colorBrushRAF);
-  colorBrushRAF=null;
+  }
   renderColorBrushNow();
+  stroke.base.width=stroke.base.height=0;
   colorBrushStroke=null;
-  scheduleDetailRender();
+  artworkRevision++;scheduleDetailRender();
 }
 
 function startStroke(e) {
