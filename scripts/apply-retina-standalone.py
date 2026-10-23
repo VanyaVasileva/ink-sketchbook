@@ -1393,6 +1393,195 @@ function finishColorBrush(cancel=false) {
     return text
 
 
+def apply_oval_color_brush(text: str) -> str:
+    """Use a filled tapered oval nib while always painting the newest sample."""
+    if '// oval-color-brush-v4' in text:
+        return text
+
+    first = text.index('function paintColorBrushShape(target, op) {')
+    last = text.index('function startStroke(e) {', first)
+    text = text[:first] + r'''function colorBrushTangent(sweep,index) {
+  if(sweep.length<2) return [Math.SQRT1_2,-Math.SQRT1_2];
+  let before=Math.max(0,index-1),after=Math.min(sweep.length-1,index+1);
+  while(before>0 && sweep[before][0]===sweep[index][0] && sweep[before][1]===sweep[index][1]) before--;
+  while(after<sweep.length-1 && sweep[after][0]===sweep[index][0] && sweep[after][1]===sweep[index][1]) after++;
+  const dx=sweep[after][0]-sweep[before][0],dy=sweep[after][1]-sweep[before][1];
+  const distance=Math.hypot(dx,dy);
+  return distance>.00001 ? [dx/distance,dy/distance] : [Math.SQRT1_2,-Math.SQRT1_2];
+}
+
+function paintColorBrushShape(target,op) {
+  // solid-color-brush-v2
+  // direct-color-brush-v3
+  // oval-color-brush-v4
+  const sweep=op.sweep,outline=op.outline;
+  if(!sweep) {
+    if(!outline || outline.length<3) return;
+    target.save();target.globalCompositeOperation='source-over';target.globalAlpha=1;
+    target.fillStyle=op.color;target.beginPath();
+    const last=outline[outline.length-1],first=outline[0];
+    target.moveTo((last[0]+first[0])/2,(last[1]+first[1])/2);
+    for(let i=0;i<outline.length;i++) {
+      const p=outline[i],next=outline[(i+1)%outline.length];
+      target.quadraticCurveTo(p[0],p[1],(p[0]+next[0])/2,(p[1]+next[1])/2);
+    }
+    target.closePath();target.fill('nonzero');target.restore();return;
+  }
+  if(!sweep.length) return;
+  target.save();target.globalCompositeOperation='source-over';target.globalAlpha=1;
+  target.fillStyle=op.color;target.beginPath();
+  for(let i=0;i<sweep.length;i++) {
+    const p=sweep[i],r=Math.max(.01,p[2]);
+    const tangent=colorBrushTangent(sweep,i),angle=Math.atan2(tangent[1],tangent[0]);
+    // A flattened oval nib gives the stroke a slim, tapered entrance instead
+    // of the large circular blob made by a monoline brush.
+    const along=Math.max(.35,r*.34);
+    target.moveTo(p[0]+tangent[0]*along,p[1]+tangent[1]*along);
+    target.ellipse(p[0],p[1],along,r,angle,0,Math.PI*2);
+    target.closePath();
+    if(i===0) continue;
+    const a=sweep[i-1],dx=p[0]-a[0],dy=p[1]-a[1],distance=Math.hypot(dx,dy);
+    if(distance<.00001) continue;
+    const nx=-dy/distance,ny=dx/distance;
+    // Join every pair of ovals with a solid ribbon. Even a very fast Pencil
+    // jump is filled continuously; repeated stamps can never leave gaps.
+    target.moveTo(a[0]+nx*a[2],a[1]+ny*a[2]);
+    target.lineTo(a[0]-nx*a[2],a[1]-ny*a[2]);
+    target.lineTo(p[0]-nx*r,p[1]-ny*r);
+    target.lineTo(p[0]+nx*r,p[1]+ny*r);
+    target.closePath();
+  }
+  target.fill('nonzero');target.restore();
+}
+
+function colorBrushSmoothstep(value) {
+  const t=Math.max(0,Math.min(1,value));
+  return t*t*(3-2*t);
+}
+
+function beginColorBrush(e) {
+  const base=document.createElement('canvas');
+  base.width=colorCanvas.width;base.height=colorCanvas.height;
+  base.getContext('2d').drawImage(colorCanvas,0,0);
+  const p=points[0],pressure=usingPressure ? Math.max(.005,Math.min(1,e.pressure || .005)) : 1;
+  const size=Math.max(2,parseFloat(colorBrushSize.value) || 80)*getDisplayDpr();
+  const tipRadius=Math.max(.65*getDisplayDpr(),size*.04);
+  const targetRadius=Math.max(tipRadius,size*.5*pressure);
+  const sample=[p.x,p.y,tipRadius,targetRadius,0];
+  const op={kind:'brush',mode:'draw',color:currentColor,sweep:[sample]};
+  colorBrushStroke={base,size,tipRadius,pressure:usingPressure,color:currentColor,op,bounds:null,length:0};
+  if(detailVectorValid && activeDetailStroke) activeDetailStroke.ops=[op];
+  paintColorBrushLive([sample]);
+}
+
+function includeColorBrushBounds(sample) {
+  const stroke=colorBrushStroke,[x,y,r]=sample;
+  if(!stroke.bounds) stroke.bounds={left:x-r,top:y-r,right:x+r,bottom:y+r};
+  else {
+    stroke.bounds.left=Math.min(stroke.bounds.left,x-r);stroke.bounds.top=Math.min(stroke.bounds.top,y-r);
+    stroke.bounds.right=Math.max(stroke.bounds.right,x+r);stroke.bounds.bottom=Math.max(stroke.bounds.bottom,y+r);
+  }
+}
+
+function paintColorBrushLive(sweep) {
+  const stroke=colorBrushStroke;
+  for(const sample of sweep) includeColorBrushBounds(sample);
+  const op={kind:'brush',mode:'draw',color:stroke.color,sweep};
+  // Draw the newest Pencil section synchronously on both native and zoomed
+  // canvases. There is no smoothing follower or animation-frame queue.
+  paintColorBrushShape(colorCtx,op);drawDetailOpLive(op);artworkRevision++;
+}
+
+function renderColorBrushNow() {
+  const stroke=colorBrushStroke,bounds=stroke && stroke.bounds;
+  if(!bounds) return;
+  const x=Math.max(0,Math.floor(bounds.left)-2),y=Math.max(0,Math.floor(bounds.top)-2);
+  const w=Math.min(colorCanvas.width,Math.ceil(bounds.right)+2)-x;
+  const h=Math.min(colorCanvas.height,Math.ceil(bounds.bottom)+2)-y;
+  if(w<=0 || h<=0) return;
+  colorCtx.save();colorCtx.setTransform(1,0,0,1,0,0);
+  colorCtx.globalCompositeOperation='source-over';
+  colorCtx.beginPath();colorCtx.rect(x,y,w,h);colorCtx.clip();
+  colorCtx.clearRect(x,y,w,h);colorCtx.drawImage(stroke.base,x,y,w,h,x,y,w,h);
+  paintColorBrushShape(colorCtx,stroke.op);colorCtx.restore();
+}
+
+function continueColorBrush(e) {
+  const stroke=colorBrushStroke;
+  if(!stroke) return;
+  const p=getPos(e),sweep=stroke.op.sweep,previous=sweep[sweep.length-1];
+  const distance=Math.hypot(p.x-previous[0],p.y-previous[1]);
+  const pressure=stroke.pressure ? Math.max(.005,Math.min(1,e.pressure || .005)) : 1;
+  const targetRadius=Math.max(stroke.tipRadius,stroke.size*.5*pressure);
+  if(distance<.00001) {
+    if(Math.abs(targetRadius-previous[3])>.001 && sweep.length>1) {
+      previous[3]=targetRadius;
+      const ramp=colorBrushSmoothstep(previous[4]/Math.max(4,stroke.size*.3));
+      previous[2]=stroke.tipRadius+(targetRadius-stroke.tipRadius)*ramp;
+      includeColorBrushBounds(previous);renderColorBrushNow();
+      artworkRevision++;scheduleDetailRender();
+    }
+    return;
+  }
+  stroke.length+=distance;
+  const ramp=colorBrushSmoothstep(stroke.length/Math.max(4,stroke.size*.3));
+  const radius=stroke.tipRadius+(targetRadius-stroke.tipRadius)*ramp;
+  const sample=[p.x,p.y,radius,targetRadius,stroke.length];
+  sweep.push(sample);moved=true;lastPressure=e.pressure;
+  points.push(p);lastRenderedPoint={x:p.x,y:p.y};lastPenPos={x:p.x,y:p.y};
+  paintColorBrushLive([previous,sample]);
+}
+
+function taperColorBrushEnd(stroke) {
+  const sweep=stroke.op.sweep;
+  if(sweep.length<2) return;
+  let travelled=0;
+  const taperLength=Math.max(5*getDisplayDpr(),stroke.size*.42);
+  for(let i=sweep.length-1;i>=0;i--) {
+    if(i<sweep.length-1) travelled+=Math.hypot(sweep[i+1][0]-sweep[i][0],sweep[i+1][1]-sweep[i][1]);
+    const mix=colorBrushSmoothstep(travelled/taperLength);
+    const target=sweep[i][3] === undefined ? sweep[i][2] : sweep[i][3];
+    sweep[i][2]=stroke.tipRadius+(target-stroke.tipRadius)*mix;
+    if(mix>=1) break;
+  }
+}
+
+function finishColorBrush(cancel=false) {
+  const stroke=colorBrushStroke;
+  if(!stroke) return;
+  if(cancel) {
+    stroke.op={kind:'brush',mode:'draw',color:stroke.color,sweep:[]};activeDetailStroke=null;
+  } else {
+    taperColorBrushEnd(stroke);
+    if(detailVectorValid && activeDetailStroke) activeDetailStroke.ops=[stroke.op];
+  }
+  renderColorBrushNow();stroke.base.width=stroke.base.height=0;
+  colorBrushStroke=null;artworkRevision++;scheduleDetailRender();
+}
+
+''' + text[last:]
+
+    helper = r'''function continueStrokeWithLatestPointer(e) {
+  const samples=(mode==='erase' || colorBrushStroke) && typeof e.getCoalescedEvents==='function'
+    ? e.getCoalescedEvents() : null;
+  if(samples && samples.length) for(const sample of samples) continueStroke(sample);
+  // getCoalescedEvents may contain only the older positions. Always process
+  // the dispatch event too so the paint reaches the current Pencil tip now.
+  continueStroke(e);
+}
+
+'''
+    text = replace_one(text, 'const activePointers = new Map();',
+                       helper + 'const activePointers = new Map();', 'Latest Pencil sample helper')
+    old = """    const samples = (mode === 'erase' || colorBrushStroke) && typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : null;
+    if (samples && samples.length) for (const sample of samples) continueStroke(sample);
+    else continueStroke(e);"""
+    text = replace_one(text, old, '    continueStrokeWithLatestPointer(e);', 'Latest Pencil position')
+    text = text.replace('Light pressure makes a fine tip; press harder for broad, smooth color beneath your ink lines.',
+                        'A tapered oval brush that follows your Pencil directly; press harder for broader color beneath your ink lines.')
+    return text
+
+
 # Vanya prefers an unobstructed tip while erasing. The pointer handlers can set
 # inline display values, so keep the outline hidden for every input device.
 eraser_cursor_style = '<style id="eraserCursorVisibility">#eraserCursor{display:none!important}</style>'
@@ -1407,14 +1596,14 @@ native_retina_hooks = [
     "drawCanvas.style.opacity = '0';",
 ]
 if MARKER in s:
-    PATH.write_text(apply_direct_color_brush(apply_solid_color_brush(apply_color_pressure_brush(apply_precise_eraser(apply_color_layer(s))))))
+    PATH.write_text(apply_oval_color_brush(apply_direct_color_brush(apply_solid_color_brush(apply_color_pressure_brush(apply_precise_eraser(apply_color_layer(s)))))))
     print('Standalone defaults checked; retina layer already present.')
     raise SystemExit(0)
 if all(item in s for item in native_retina_hooks):
     anchor = "detailCanvas.id = 'detailCanvas';"
     s = s.replace(anchor, "// " + MARKER + "\n" + anchor, 1)
     PATH.write_text(s)
-    PATH.write_text(apply_direct_color_brush(apply_solid_color_brush(apply_color_pressure_brush(apply_precise_eraser(apply_color_layer(s))))))
+    PATH.write_text(apply_oval_color_brush(apply_direct_color_brush(apply_solid_color_brush(apply_color_pressure_brush(apply_precise_eraser(apply_color_layer(s)))))))
     print('Standalone already has native retina detail rendering; added compatibility marker.')
     raise SystemExit(0)
 
@@ -1810,4 +1999,4 @@ for item in required:
 
 PATH.write_text(s)
 print('Patched exact standalone hand-selector page with retina-sharp zoom display.')
-PATH.write_text(apply_direct_color_brush(apply_solid_color_brush(apply_color_pressure_brush(apply_precise_eraser(apply_color_layer(s))))))
+PATH.write_text(apply_oval_color_brush(apply_direct_color_brush(apply_solid_color_brush(apply_color_pressure_brush(apply_precise_eraser(apply_color_layer(s)))))))
