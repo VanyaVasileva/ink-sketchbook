@@ -126,15 +126,18 @@ function finishColorBrush(cancel=false) {
 
 def apply_rounded_taper(text: str) -> str:
     """Narrow rounded endpoints; continuous filled ribbons, never tip stamps."""
-    if '// rounded-taper-marker-v6' in text:
+    if '// gradual-rounded-marker-v7' in text:
         return text
-    helpers = r'''// rounded-taper-marker-v6
+    if '// rounded-taper-marker-v6' in text:
+        return text.replace('// rounded-taper-marker-v6', '// gradual-rounded-marker-v7', 1).replace(
+            'const taper = op.width * .75;', 'const taper = op.width * 3;', 1)
+    helpers = r'''// gradual-rounded-marker-v7
 function markerRibbonSamples(op) {
   const raw = op.sweep, result = [];
   if (!raw || !raw.length) return result;
   const full = op.width / 2, tip = op.width * .22;
   const end = raw[raw.length-1][3] || 0;
-  const taper = op.width * .75;
+  const taper = op.width * 3;
   const smooth = x => { x=Math.max(0,Math.min(1,x)); return x*x*(3-2*x); };
   const add = (x,y,d) => {
     let radius = tip+(full-tip)*smooth(d/taper);
