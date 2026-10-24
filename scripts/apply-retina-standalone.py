@@ -21,7 +21,7 @@ s = s.replace("ink:'#2a2620'", "ink:'#000000'")
 s = s.replace("const colors = ['#2a2620',", "const colors = ['#000000',")
 s = s.replace('id="colorPicker" value="#2a2620"', 'id="colorPicker" value="#000000"')
 if 'scripts/sketchbook-color-picker.js' not in s:
-    s = s.replace('</body>', '<script src="scripts/sketchbook-color-picker.js?v=1"></script>\n</body>')
+    s = s.replace('</head>', '<script defer src="scripts/sketchbook-color-picker.js?v=1"></script>\n</head>')
 PATH.write_text(s)
 
 
