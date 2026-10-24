@@ -206,9 +206,9 @@
       <div class="slider-group"><span data-i18n="minLabel">Min</span> <input type="range" id="minSlider" min="0.5" max="6" value="0.5" step="0.5"></div>
       <div class="slider-group"><span data-i18n="maxLabel">Max</span> <input type="range" id="maxSlider" min="2" max="16" value="6" step="0.5"></div>
       <div id="colorBrushControls" class="slider-group" hidden>
-        <span><span data-i18n="colorBrushLabel">Color brush size</span> <b id="colorBrushSizeValue">80</b></span>
-        <input type="range" id="colorBrushSize" min="2" max="240" step="1" value="80" aria-label="Color brush size">
-        <small data-i18n="colorLayerHint">Solid opaque color beneath your ink lines. Use the size slider to set a fixed marker width.</small>
+        <span><span data-i18n="colorBrushLabel">Color brush size</span> <b id="colorBrushSizeValue">24</b></span>
+        <input type="range" id="colorBrushSize" min="2" max="240" step="1" value="24" aria-label="Color brush size">
+        <small data-i18n="colorLayerHint">Solid opaque color with gently narrower, rounded starts and ends. Use the size slider for the body width.</small>
       </div>
       <div class="row palette" id="palette"></div>
       <input type="color" id="colorPicker" value="#000000" style="width:32px; height:32px; border:2px solid #d8d3c6; border-radius:6px; padding:0; cursor:pointer;">
@@ -301,6 +301,7 @@ const colorLayerBtn = document.getElementById('colorLayerBtn');
 const colorBrushControls = document.getElementById('colorBrushControls');
 const colorBrushSize = document.getElementById('colorBrushSize');
 const colorBrushSizeValue = document.getElementById('colorBrushSizeValue');
+colorBrushSize.value = '24'; colorBrushSizeValue.textContent = '24';
 const wrap = document.querySelector('.canvas-wrap');
 
 // retina-detail-display-v1: screen-resolution ink replay used only while zoomed.
@@ -369,7 +370,7 @@ const langSelect = document.getElementById('langSelect');
 const TRANSLATIONS = {
   en: {
     layerLabel: "Layer", inkLayerLabel: "Ink", colorLayerLabel: "Color",
-    colorBrushLabel: "Color brush size", colorLayerHint: "Solid opaque color beneath your ink lines. Use the size slider to set a fixed marker width.",
+    colorBrushLabel: "Color brush size", colorLayerHint: "Solid opaque color with gently narrower, rounded starts and ends. Use the size slider for the body width.",
     clearInkLayer: "Clear ink layer", clearColorLayer: "Clear color layer",
     lockText: "Enter the access code from your purchase to unlock the tool.",
     unlockBtn: "Unlock", passcodePlaceholder: "Access code",
@@ -1889,7 +1890,77 @@ function colorBrushTangent(sweep,index) {
   return distance>.00001 ? [dx/distance,dy/distance] : [Math.SQRT1_2,-Math.SQRT1_2];
 }
 
+// rounded-taper-marker-v6
+function markerRibbonSamples(op) {
+  const raw = op.sweep, result = [];
+  if (!raw || !raw.length) return result;
+  const full = op.width / 2, tip = op.width * .22;
+  const end = raw[raw.length-1][3] || 0;
+  const taper = op.width * .75;
+  const smooth = x => { x=Math.max(0,Math.min(1,x)); return x*x*(3-2*x); };
+  const add = (x,y,d) => {
+    let radius = tip+(full-tip)*smooth(d/taper);
+    if (op.finished) radius=Math.min(radius,tip+(full-tip)*smooth((end-d)/Math.min(taper,Math.max(.01,end*.5))));
+    result.push([x,y,radius,d]);
+  };
+  add(raw[0][0],raw[0][1],raw[0][3] || 0);
+  for (let i=1;i<raw.length;i++) {
+    const a=raw[i-1],b=raw[i],d0=a[3] || 0,d1=b[3] || 0;
+    // Interpolate geometry only in the two short taper zones. The centerline
+    // always reaches the actual newest Pencil sample without a follower.
+    const tapered=d0<taper || (op.finished && end-d1<taper);
+    const steps=tapered ? Math.max(1,Math.ceil((d1-d0)/Math.max(1,op.width*.08))) : 1;
+    for(let j=1;j<=steps;j++) {
+      const t=j/steps;add(a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,d0+(d1-d0)*t);
+    }
+  }
+  return result;
+}
+
+function paintMarkerRibbon(target,op) {
+  const path=markerRibbonSamples(op);
+  if(!path.length) return;
+  target.save();target.globalCompositeOperation='source-over';target.globalAlpha=1;
+  target.fillStyle=op.color;target.shadowColor='transparent';target.shadowBlur=0;
+  target.shadowOffsetX=target.shadowOffsetY=0;target.filter='none';target.beginPath();
+  const sector=(p,r,from,to) => {
+    if(to<from) [from,to]=[to,from];
+    target.moveTo(p[0],p[1]);target.lineTo(p[0]+Math.cos(from)*r,p[1]+Math.sin(from)*r);
+    target.arc(p[0],p[1],r,from,to,false);target.closePath();
+  };
+  if(path.length===1) {
+    target.arc(path[0][0],path[0][1],path[0][2],0,Math.PI*2);
+  } else {
+    let previousAngle=null,firstAngle=0,lastAngle=0;
+    for(let i=1;i<path.length;i++) {
+      const a=path[i-1],b=path[i],dx=b[0]-a[0],dy=b[1]-a[1],length=Math.hypot(dx,dy);
+      if(length<.000001) continue;
+      const nx=-dy/length,ny=dx/length,angle=Math.atan2(dy,dx);
+      if(previousAngle===null) firstAngle=angle;
+      // Filled ribbon sections share their complete edges. Positive winding
+      // makes crossings add solid coverage rather than cut holes.
+      target.moveTo(a[0]-nx*a[2],a[1]-ny*a[2]);
+      target.lineTo(b[0]-nx*b[2],b[1]-ny*b[2]);
+      target.lineTo(b[0]+nx*b[2],b[1]+ny*b[2]);
+      target.lineTo(a[0]+nx*a[2],a[1]+ny*a[2]);target.closePath();
+      if(previousAngle!==null) {
+        const turn=Math.atan2(Math.sin(angle-previousAngle),Math.cos(angle-previousAngle));
+        if(Math.abs(turn)>.000001) {
+          const from=previousAngle+(turn>0 ? -Math.PI/2 : Math.PI/2);
+          // Only an outer corner join, never a repeated circular brush tip.
+          sector(a,a[2],from,from+turn);
+        }
+      }
+      previousAngle=angle;lastAngle=angle;
+    }
+    if(path[0][3]===0) sector(path[0],path[0][2],firstAngle+Math.PI/2,firstAngle+3*Math.PI/2);
+    if(op.finished) sector(path[path.length-1],path[path.length-1][2],lastAngle-Math.PI/2,lastAngle+Math.PI/2);
+  }
+  target.fill('nonzero');target.restore();
+}
+
 function paintColorBrushShape(target,op) {
+  if(op.roundedTaper) { paintMarkerRibbon(target,op); return; }
   // solid-color-brush-v2
   // direct-color-brush-v3
   // oval-color-brush-v4
@@ -1968,12 +2039,12 @@ function beginColorBrush(e) {
   base.width = colorCanvas.width; base.height = colorCanvas.height;
   base.getContext('2d').drawImage(colorCanvas, 0, 0);
   const p = points[0];
-  const size = Math.max(2, Number(colorBrushSize.value) || 80) * getDisplayDpr();
-  const sample = [p.x, p.y, size / 2];
-  const op = {kind:'brush', mode:'draw', marker:true, width:size, color:currentColor, sweep:[sample]};
-  colorBrushStroke = {base, size, color:currentColor, op, bounds:null};
+  const size = Math.max(2, Number(colorBrushSize.value) || 24) * getDisplayDpr();
+  const sample = [p.x, p.y, size / 2, 0];
+  const op = {kind:'brush', mode:'draw', marker:true, roundedTaper:true, finished:false, width:size, color:currentColor, sweep:[sample]};
+  colorBrushStroke = {base, size, color:currentColor, op, bounds:null, length:0};
   if (detailVectorValid && activeDetailStroke) activeDetailStroke.ops = [op];
-  inputModeEl.textContent = '(Solid marker — fixed width)';
+  inputModeEl.textContent = '(Solid marker — narrow rounded ends)';
   paintColorBrushLive([sample]);
 }
 
@@ -1991,7 +2062,7 @@ function includeColorBrushBounds(sample) {
 function paintColorBrushLive(sweep) {
   const stroke = colorBrushStroke;
   for (const sample of sweep) includeColorBrushBounds(sample);
-  const op = {kind:'brush', mode:'draw', marker:true, width:stroke.size, color:stroke.color, sweep};
+  const op = {kind:'brush', mode:'draw', marker:true, roundedTaper:true, finished:false, width:stroke.size, color:stroke.color, sweep};
   // Draw each incoming segment immediately with the same renderer used by
   // zoom replay and recordings. No follower, stamps, or pressure simulation.
   paintColorBrushShape(colorCtx, op);
@@ -2019,10 +2090,11 @@ function continueColorBrush(e) {
   const p = getPos(e), sweep = stroke.op.sweep, previous = sweep[sweep.length-1];
   // Holding still or changing pressure cannot enlarge or darken the stroke.
   if (Math.hypot(p.x-previous[0], p.y-previous[1]) < .00001) return;
-  const sample = [p.x, p.y, stroke.size / 2];
+  stroke.length += Math.hypot(p.x-previous[0], p.y-previous[1]);
+  const sample = [p.x, p.y, stroke.size / 2, stroke.length];
   sweep.push(sample); moved = true;
   points.push(p); lastRenderedPoint = {x:p.x, y:p.y}; lastPenPos = {x:p.x, y:p.y};
-  paintColorBrushLive([previous, sample]);
+  paintColorBrushLive(sweep.slice(-3));
 }
 
 function finishColorBrush(cancel=false) {
@@ -2030,7 +2102,10 @@ function finishColorBrush(cancel=false) {
   if (!stroke) return;
   if (cancel) {
     stroke.op = {...stroke.op, sweep:[]}; activeDetailStroke = null;
-  } else if (detailVectorValid && activeDetailStroke) activeDetailStroke.ops = [stroke.op];
+  } else {
+    stroke.op.finished = true;
+    if (detailVectorValid && activeDetailStroke) activeDetailStroke.ops = [stroke.op];
+  }
   renderColorBrushNow(); stroke.base.width = stroke.base.height = 0;
   colorBrushStroke = null; artworkRevision++; scheduleDetailRender();
 }
