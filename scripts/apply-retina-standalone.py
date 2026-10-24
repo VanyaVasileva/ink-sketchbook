@@ -14,6 +14,17 @@ def replace_one(text: str, old: str, new: str, label: str) -> str:
 
 s = PATH.read_text()
 
+# Opening defaults and the inline colour picker; preserve all drawing code.
+s = s.replace('id="wobbleSlider" min="0" max="3" value="1"', 'id="wobbleSlider" min="0" max="3" value="0.5"')
+s = s.replace("let currentColor = '#2a2620';", "let currentColor = '#000000';")
+s = s.replace("ink:'#2a2620'", "ink:'#000000'")
+s = s.replace("const colors = ['#2a2620',", "const colors = ['#000000',")
+s = s.replace('id="colorPicker" value="#2a2620"', 'id="colorPicker" value="#000000"')
+if 'scripts/sketchbook-color-picker.js' not in s:
+    s = s.replace('</body>', '<script src="scripts/sketchbook-color-picker.js?v=1"></script>\n</body>')
+PATH.write_text(s)
+
+
 # Use the high-resolution pencil sprite without changing its calibrated pose.
 # Fresh standalone builds contain the base hand maps but not the wooden-pencil
 # assignment yet, while already-patched pages contain explicit assignments.
