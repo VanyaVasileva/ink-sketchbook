@@ -208,7 +208,7 @@
       <div id="colorBrushControls" class="slider-group" hidden>
         <span><span data-i18n="colorBrushLabel">Color brush size</span> <b id="colorBrushSizeValue">80</b></span>
         <input type="range" id="colorBrushSize" min="2" max="240" step="1" value="80" aria-label="Color brush size">
-        <small data-i18n="colorLayerHint">A tapered oval brush that follows your Pencil directly; press harder for broader color beneath your ink lines.</small>
+        <small data-i18n="colorLayerHint">Solid opaque color beneath your ink lines. Use the size slider to set a fixed marker width.</small>
       </div>
       <div class="row palette" id="palette"></div>
       <input type="color" id="colorPicker" value="#000000" style="width:32px; height:32px; border:2px solid #d8d3c6; border-radius:6px; padding:0; cursor:pointer;">
@@ -369,7 +369,7 @@ const langSelect = document.getElementById('langSelect');
 const TRANSLATIONS = {
   en: {
     layerLabel: "Layer", inkLayerLabel: "Ink", colorLayerLabel: "Color",
-    colorBrushLabel: "Color brush size", colorLayerHint: "A tapered oval brush that follows your Pencil directly; press harder for broader color beneath your ink lines.",
+    colorBrushLabel: "Color brush size", colorLayerHint: "Solid opaque color beneath your ink lines. Use the size slider to set a fixed marker width.",
     clearInkLayer: "Clear ink layer", clearColorLayer: "Clear color layer",
     lockText: "Enter the access code from your purchase to unlock the tool.",
     unlockBtn: "Unlock", passcodePlaceholder: "Access code",
@@ -1893,6 +1893,31 @@ function paintColorBrushShape(target,op) {
   // solid-color-brush-v2
   // direct-color-brush-v3
   // oval-color-brush-v4
+  // simple-solid-marker-v5
+  if (op.marker) {
+    const path = op.sweep;
+    if (!path || !path.length) return;
+    target.save();
+    target.globalCompositeOperation = 'source-over';
+    target.globalAlpha = 1;
+    target.shadowColor = 'transparent'; target.shadowBlur = 0;
+    target.shadowOffsetX = 0; target.shadowOffsetY = 0;
+    target.filter = 'none';
+    target.strokeStyle = op.color; target.fillStyle = op.color;
+    target.lineWidth = op.width; target.lineCap = 'round'; target.lineJoin = 'round';
+    target.beginPath();
+    if (path.length === 1) {
+      // A single tap is one round dot, not a chain of repeated stamps.
+      target.arc(path[0][0], path[0][1], op.width / 2, 0, Math.PI * 2);
+      target.fill();
+    } else {
+      target.moveTo(path[0][0], path[0][1]);
+      for (let i = 1; i < path.length; i++) target.lineTo(path[i][0], path[i][1]);
+      target.stroke();
+    }
+    target.restore(); return;
+  }
+  // Retain replay support for strokes created before the plain marker.
   const sweep=op.sweep,outline=op.outline;
   if(!sweep) {
     if(!outline || outline.length<3) return;
@@ -1939,103 +1964,75 @@ function colorBrushSmoothstep(value) {
 }
 
 function beginColorBrush(e) {
-  const base=document.createElement('canvas');
-  base.width=colorCanvas.width;base.height=colorCanvas.height;
-  base.getContext('2d').drawImage(colorCanvas,0,0);
-  const p=points[0],pressure=usingPressure ? Math.max(.005,Math.min(1,e.pressure || .005)) : 1;
-  const size=Math.max(2,parseFloat(colorBrushSize.value) || 80)*getDisplayDpr();
-  const tipRadius=Math.max(.65*getDisplayDpr(),size*.04);
-  const targetRadius=Math.max(tipRadius,size*.5*pressure);
-  const sample=[p.x,p.y,tipRadius,targetRadius,0];
-  const op={kind:'brush',mode:'draw',color:currentColor,sweep:[sample]};
-  colorBrushStroke={base,size,tipRadius,pressure:usingPressure,color:currentColor,op,bounds:null,length:0};
-  if(detailVectorValid && activeDetailStroke) activeDetailStroke.ops=[op];
+  const base = document.createElement('canvas');
+  base.width = colorCanvas.width; base.height = colorCanvas.height;
+  base.getContext('2d').drawImage(colorCanvas, 0, 0);
+  const p = points[0];
+  const size = Math.max(2, Number(colorBrushSize.value) || 80) * getDisplayDpr();
+  const sample = [p.x, p.y, size / 2];
+  const op = {kind:'brush', mode:'draw', marker:true, width:size, color:currentColor, sweep:[sample]};
+  colorBrushStroke = {base, size, color:currentColor, op, bounds:null};
+  if (detailVectorValid && activeDetailStroke) activeDetailStroke.ops = [op];
+  inputModeEl.textContent = '(Solid marker — fixed width)';
   paintColorBrushLive([sample]);
 }
 
 function includeColorBrushBounds(sample) {
-  const stroke=colorBrushStroke,[x,y,r]=sample;
-  if(!stroke.bounds) stroke.bounds={left:x-r,top:y-r,right:x+r,bottom:y+r};
+  const stroke = colorBrushStroke, [x,y,r] = sample;
+  if (!stroke.bounds) stroke.bounds = {left:x-r, top:y-r, right:x+r, bottom:y+r};
   else {
-    stroke.bounds.left=Math.min(stroke.bounds.left,x-r);stroke.bounds.top=Math.min(stroke.bounds.top,y-r);
-    stroke.bounds.right=Math.max(stroke.bounds.right,x+r);stroke.bounds.bottom=Math.max(stroke.bounds.bottom,y+r);
+    stroke.bounds.left = Math.min(stroke.bounds.left, x-r);
+    stroke.bounds.top = Math.min(stroke.bounds.top, y-r);
+    stroke.bounds.right = Math.max(stroke.bounds.right, x+r);
+    stroke.bounds.bottom = Math.max(stroke.bounds.bottom, y+r);
   }
 }
 
 function paintColorBrushLive(sweep) {
-  const stroke=colorBrushStroke;
-  for(const sample of sweep) includeColorBrushBounds(sample);
-  const op={kind:'brush',mode:'draw',color:stroke.color,sweep};
-  // Draw the newest Pencil section synchronously on both native and zoomed
-  // canvases. There is no smoothing follower or animation-frame queue.
-  paintColorBrushShape(colorCtx,op);drawDetailOpLive(op);artworkRevision++;
+  const stroke = colorBrushStroke;
+  for (const sample of sweep) includeColorBrushBounds(sample);
+  const op = {kind:'brush', mode:'draw', marker:true, width:stroke.size, color:stroke.color, sweep};
+  // Draw each incoming segment immediately with the same renderer used by
+  // zoom replay and recordings. No follower, stamps, or pressure simulation.
+  paintColorBrushShape(colorCtx, op);
+  drawDetailOpLive(op); artworkRevision++;
 }
 
 function renderColorBrushNow() {
-  const stroke=colorBrushStroke,bounds=stroke && stroke.bounds;
-  if(!bounds) return;
-  const x=Math.max(0,Math.floor(bounds.left)-2),y=Math.max(0,Math.floor(bounds.top)-2);
-  const w=Math.min(colorCanvas.width,Math.ceil(bounds.right)+2)-x;
-  const h=Math.min(colorCanvas.height,Math.ceil(bounds.bottom)+2)-y;
-  if(w<=0 || h<=0) return;
-  colorCtx.save();colorCtx.setTransform(1,0,0,1,0,0);
-  colorCtx.globalCompositeOperation='source-over';
-  colorCtx.beginPath();colorCtx.rect(x,y,w,h);colorCtx.clip();
-  colorCtx.clearRect(x,y,w,h);colorCtx.drawImage(stroke.base,x,y,w,h,x,y,w,h);
-  paintColorBrushShape(colorCtx,stroke.op);colorCtx.restore();
+  const stroke = colorBrushStroke, bounds = stroke && stroke.bounds;
+  if (!bounds) return;
+  const x = Math.max(0, Math.floor(bounds.left)-2), y = Math.max(0, Math.floor(bounds.top)-2);
+  const w = Math.min(colorCanvas.width, Math.ceil(bounds.right)+2)-x;
+  const h = Math.min(colorCanvas.height, Math.ceil(bounds.bottom)+2)-y;
+  if (w <= 0 || h <= 0) return;
+  colorCtx.save(); colorCtx.setTransform(1,0,0,1,0,0);
+  colorCtx.globalCompositeOperation = 'source-over'; colorCtx.globalAlpha = 1;
+  colorCtx.beginPath(); colorCtx.rect(x,y,w,h); colorCtx.clip();
+  colorCtx.clearRect(x,y,w,h); colorCtx.drawImage(stroke.base,x,y,w,h,x,y,w,h);
+  // Repaint the final continuous path once, without segment-edge seams.
+  paintColorBrushShape(colorCtx, stroke.op); colorCtx.restore();
 }
 
 function continueColorBrush(e) {
-  const stroke=colorBrushStroke;
-  if(!stroke) return;
-  const p=getPos(e),sweep=stroke.op.sweep,previous=sweep[sweep.length-1];
-  const distance=Math.hypot(p.x-previous[0],p.y-previous[1]);
-  const pressure=stroke.pressure ? Math.max(.005,Math.min(1,e.pressure || .005)) : 1;
-  const targetRadius=Math.max(stroke.tipRadius,stroke.size*.5*pressure);
-  if(distance<.00001) {
-    if(Math.abs(targetRadius-previous[3])>.001 && sweep.length>1) {
-      previous[3]=targetRadius;
-      const ramp=colorBrushSmoothstep(previous[4]/Math.max(4,stroke.size*.3));
-      previous[2]=stroke.tipRadius+(targetRadius-stroke.tipRadius)*ramp;
-      includeColorBrushBounds(previous);renderColorBrushNow();
-      artworkRevision++;scheduleDetailRender();
-    }
-    return;
-  }
-  stroke.length+=distance;
-  const ramp=colorBrushSmoothstep(stroke.length/Math.max(4,stroke.size*.3));
-  const radius=stroke.tipRadius+(targetRadius-stroke.tipRadius)*ramp;
-  const sample=[p.x,p.y,radius,targetRadius,stroke.length];
-  sweep.push(sample);moved=true;lastPressure=e.pressure;
-  points.push(p);lastRenderedPoint={x:p.x,y:p.y};lastPenPos={x:p.x,y:p.y};
-  paintColorBrushLive([previous,sample]);
-}
-
-function taperColorBrushEnd(stroke) {
-  const sweep=stroke.op.sweep;
-  if(sweep.length<2) return;
-  let travelled=0;
-  const taperLength=Math.max(5*getDisplayDpr(),stroke.size*.42);
-  for(let i=sweep.length-1;i>=0;i--) {
-    if(i<sweep.length-1) travelled+=Math.hypot(sweep[i+1][0]-sweep[i][0],sweep[i+1][1]-sweep[i][1]);
-    const mix=colorBrushSmoothstep(travelled/taperLength);
-    const target=sweep[i][3] === undefined ? sweep[i][2] : sweep[i][3];
-    sweep[i][2]=stroke.tipRadius+(target-stroke.tipRadius)*mix;
-    if(mix>=1) break;
-  }
+  const stroke = colorBrushStroke;
+  if (!stroke) return;
+  const p = getPos(e), sweep = stroke.op.sweep, previous = sweep[sweep.length-1];
+  // Holding still or changing pressure cannot enlarge or darken the stroke.
+  if (Math.hypot(p.x-previous[0], p.y-previous[1]) < .00001) return;
+  const sample = [p.x, p.y, stroke.size / 2];
+  sweep.push(sample); moved = true;
+  points.push(p); lastRenderedPoint = {x:p.x, y:p.y}; lastPenPos = {x:p.x, y:p.y};
+  paintColorBrushLive([previous, sample]);
 }
 
 function finishColorBrush(cancel=false) {
-  const stroke=colorBrushStroke;
-  if(!stroke) return;
-  if(cancel) {
-    stroke.op={kind:'brush',mode:'draw',color:stroke.color,sweep:[]};activeDetailStroke=null;
-  } else {
-    taperColorBrushEnd(stroke);
-    if(detailVectorValid && activeDetailStroke) activeDetailStroke.ops=[stroke.op];
-  }
-  renderColorBrushNow();stroke.base.width=stroke.base.height=0;
-  colorBrushStroke=null;artworkRevision++;scheduleDetailRender();
+  const stroke = colorBrushStroke;
+  if (!stroke) return;
+  if (cancel) {
+    stroke.op = {...stroke.op, sweep:[]}; activeDetailStroke = null;
+  } else if (detailVectorValid && activeDetailStroke) activeDetailStroke.ops = [stroke.op];
+  renderColorBrushNow(); stroke.base.width = stroke.base.height = 0;
+  colorBrushStroke = null; artworkRevision++; scheduleDetailRender();
 }
 
 function startStroke(e) {
