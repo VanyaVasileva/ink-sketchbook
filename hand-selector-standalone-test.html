@@ -43,6 +43,13 @@
   #sidePanel .row.palette { flex-wrap: wrap; }
   canvas { position: absolute; touch-action: none; transform-origin: 0 0; box-shadow: 0 0 0 1px #ddd8cc; }
   #refCanvas { z-index: 1; }
+  /* paper-multiply-v1: isolate blending from surrounding interface. */
+  .canvas-wrap { isolation: isolate; }
+  .canvas-wrap.paper-multiply #refDomLayer,
+  .canvas-wrap.paper-multiply #refCanvas {
+    z-index: 7; mix-blend-mode: multiply; pointer-events: none;
+  }
+
   #refDomLayer { position:absolute; z-index:1; pointer-events:none; transform-origin:0 0; overflow:visible; }
   #refDomImage { position:absolute; display:block; max-width:none; max-height:none; object-fit:fill; image-rendering:auto; }
   #colorCanvas { z-index: 2; pointer-events: none; }
@@ -185,6 +192,13 @@
       <input type="file" id="fileInput" accept="image/*" />
       <button id="toggleRefBtn" class="active">👁</button>
       <button id="removeRefBtn" style="display:none;">✕ <span data-i18n="removeRefBtn">Remove</span></button>
+      <label class="slider-group" style="flex-direction:row;align-items:center;">
+        <input type="checkbox" id="paperMultiplyToggle"> Multiply paper texture
+      </label>
+      <div class="slider-group">
+        <label for="paperMultiplyStrength">Texture strength <output id="paperMultiplyValue">100%</output></label>
+        <input type="range" id="paperMultiplyStrength" min="0" max="100" value="100" disabled>
+      </div>
       <div class="slider-group"><span>Background opacity</span> <input type="range" id="opacitySlider" min="10" max="100" value="100"></div>
       <div class="slider-group"><span>Background size</span> <input type="range" id="refSizeSlider" min="25" max="500" value="100"></div><div id="videoBackgroundSection" style="border-top:1px solid #e5e1d8;padding-top:10px;display:flex;flex-direction:column;gap:8px;"><div style="font-size:12px;font-weight:700;color:#2a2620;">Video background <span style="font-weight:500;color:#8a8373;">· draw while it plays</span></div><label class="filebtn" for="videoBgInput">🎬 Upload video</label><input type="file" id="videoBgInput" accept="video/*" /><div id="videoBgPlayback" style="display:none;flex-direction:column;gap:7px;"><div id="videoBgStatus" style="font-size:11px;color:#8a8373;text-align:center;">No video selected</div><div id="videoBgQuality" style="font-size:11px;line-height:1.35;color:#8a8373;text-align:center;"></div><div class="row" style="gap:6px;"><button id="videoBgPlayBtn" type="button">▶ Play</button><button id="videoBgLoopBtn" type="button" class="active">↻ Loop: On</button></div><input id="videoBgScrub" type="range" min="0" max="1000" value="0" step="1" style="width:100%;" aria-label="Video position"><div id="videoBgTime" style="font-size:11px;color:#8a8373;text-align:center;">0:00 / 0:00</div><button id="removeVideoBgBtn" type="button">✕ Remove video</button></div></div><div id="guideControls" style="border-top:1px solid #e5e1d8;padding-top:10px;display:flex;flex-direction:column;gap:8px;"><div style="font-size:12px;font-weight:700;color:#2a2620;">Sketch overlay <span style="font-weight:500;color:#8a8373;">· hidden from recording</span></div><label class="filebtn" for="guideFileInput">📝 Upload sketch overlay</label><input type="file" id="guideFileInput" accept="image/*" /><button id="toggleGuideBtn" class="active" type="button">👁 Sketch overlay visible</button><button id="moveGuideBtn" type="button">↔ Move sketch</button><button id="removeGuideBtn" type="button" style="display:none;">✕ Remove sketch</button><div class="slider-group"><span>Sketch opacity</span> <input type="range" id="guideOpacitySlider" min="5" max="100" value="45"></div><div class="slider-group"><span>Sketch size</span> <input type="range" id="guideSizeSlider" min="10" max="500" value="100"></div><button id="resetGuidePosBtn" type="button">◎ Center sketch</button></div>
       <div class="slider-group"><span data-i18n="wobbleLabel">Wobble</span> <input type="range" id="wobbleSlider" min="0" max="3" value="0.5" step="0.5"></div><div class="slider-group"><span>Streamline</span> <input type="range" id="streamlineSlider" min="0" max="100" value="35" step="5"></div><button id="recordReferenceBtn" type="button" class="active">🎞 Background in recording: On</button><div class="slider-group"><span>Recording hand</span><select id="recordingHandSelect" style="width:100%;border:1px solid #d8d3c6;border-radius:7px;padding:8px 10px;background:#fff;color:#2a2620;font-size:16px;"><option value="human">Original</option><option value="cream">Cream sleeve</option><option value="sage">Sage sleeve</option><option value="pink">Pink sleeve</option><option value="dark">Dark sleeve</option><option value="brownOatmeal">Brown + oatmeal</option><option value="woodenPencil" selected>Wooden pencil</option><option value="modernFineLiner">Modern fine liner</option><option value="classicInkPen">Classic ink pen</option></select></div><div class="slider-group"><span>Hand size <b id="recordingHandSizeValue" style="font-weight:600;">115%</b></span> <input type="range" id="recordingHandSize" min="60" max="140" value="115" step="5"></div>
@@ -563,6 +577,51 @@ langSelect.addEventListener('change', () => {
 });
 applyTranslations();
 
+const paperMultiplyToggle = document.getElementById('paperMultiplyToggle');
+const paperMultiplyStrength = document.getElementById('paperMultiplyStrength');
+const paperMultiplyValue = document.getElementById('paperMultiplyValue');
+function paperMultiplyActive() {
+  return paperMultiplyToggle.checked && !!refImage && !backgroundVideoReady;
+}
+function paperMultiplyAlpha() {
+  return paperMultiplyActive() ? Number(paperMultiplyStrength.value) / 100 : 1;
+}
+function syncPaperMultiplyDisplay() {
+  wrap.classList.toggle('paper-multiply', paperMultiplyActive());
+  paperMultiplyStrength.disabled = !paperMultiplyToggle.checked;
+  paperMultiplyValue.value = paperMultiplyStrength.value + '%';
+}
+paperMultiplyToggle.addEventListener('change', drawRef);
+paperMultiplyStrength.addEventListener('input', drawRef);
+
+// Share the same image placement and crop as the native-quality background.
+// Keep this above the artwork but below the recorded illustrated hand.
+function paintPaperMultiply(target, source) {
+  if (!paperMultiplyActive() || !refVisible) return;
+  const iw = refImage.naturalWidth || refImage.width;
+  const ih = refImage.naturalHeight || refImage.height;
+  const cw = refCanvas.width, ch = refCanvas.height;
+  if (!iw || !ih || !cw || !ch) return;
+  const scale = Math.min(Math.min(cw / iw, ch / ih) * .9, 1)
+    * (Number(refSizeSlider.value) || 100) / 100;
+  const w = iw * scale, h = ih * scale;
+  const rx = cw / drawCanvas.width, ry = ch / drawCanvas.height;
+  const sx = target.canvas.width / (source.width * rx);
+  const sy = target.canvas.height / (source.height * ry);
+  target.save();
+  target.globalCompositeOperation = 'multiply';
+  target.globalAlpha = Number(opacitySlider.value) / 100 * paperMultiplyAlpha();
+  target.imageSmoothingEnabled = true;
+  target.imageSmoothingQuality = 'high';
+  target.setTransform(sx, 0, 0, sy, -source.x * rx * sx, -source.y * ry * sy);
+  target.beginPath(); target.rect(0, 0, cw, ch); target.clip();
+  target.drawImage(refImage, (cw - w) / 2, (ch - h) / 2, w, h);
+  target.restore();
+}
+function paperArtworkRect() {
+  return {x:0, y:0, width:drawCanvas.width, height:drawCanvas.height};
+}
+
 let refImage = null;
 let guideImage = null;
 let guideVisible = true;
@@ -906,12 +965,13 @@ function syncStillBackgroundDom() {
   refDomImage.style.top = (y / ch * 100) + '%';
   refDomImage.style.width = (w / cw * 100) + '%';
   refDomImage.style.height = (h / ch * 100) + '%';
-  refDomImage.style.opacity = String(Math.max(0, Math.min(1, (parseFloat(opacitySlider.value) || 100) / 100)));
+  refDomImage.style.opacity = String(Number(opacitySlider.value) / 100 * paperMultiplyAlpha());
   refDomLayer.style.display = 'block';
   return true;
 }
 
 function drawRef() {
+  syncPaperMultiplyDisplay();
   ensureStillBackgroundNativeQuality();
   refCtx.clearRect(0, 0, refCanvas.width, refCanvas.height);
   if (!refVisible) {
@@ -944,7 +1004,7 @@ function drawRef() {
   const x = (cw - w) / 2, y = (ch - h) / 2;
   refCtx.imageSmoothingEnabled = true;
   refCtx.imageSmoothingQuality = 'high';
-  refCtx.globalAlpha = opacitySlider.value / 100;
+  refCtx.globalAlpha = opacitySlider.value / 100 * paperMultiplyAlpha();
   try { refCtx.drawImage(activeRef, x, y, w, h); } catch (_) {}
   refCtx.globalAlpha = 1;
 }
@@ -1384,7 +1444,7 @@ function compositeRecordFrame() {
   recordCtx.fillStyle = paperColorPicker.value || '#ffffff';
   recordCtx.fillRect(0, 0, recordCanvas.width, recordCanvas.height);
   const source = getLiveRecordingSourceRect();
-  if (recordReferenceInVideo && refVisible && (refImage || backgroundVideoReady)) {
+  if (recordReferenceInVideo && refVisible && (refImage || backgroundVideoReady) && !paperMultiplyActive()) {
     const activeRecordingRef = backgroundVideoReady ? backgroundVideo : refImage;
     const iw = backgroundVideoReady ? backgroundVideo.videoWidth : (refImage.naturalWidth || refImage.width);
     const ih = backgroundVideoReady ? backgroundVideo.videoHeight : (refImage.naturalHeight || refImage.height);
@@ -1421,6 +1481,7 @@ function compositeRecordFrame() {
   recordCtx.drawImage(drawCanvas, source.x, source.y, source.width, source.height, 0, 0, recordCanvas.width, recordCanvas.height);
   recordCtx.restore();
   }
+  if (recordReferenceInVideo) paintPaperMultiply(recordCtx, source);
   const recordScaleX = recordCanvas.width / source.width;
   const recordScaleY = recordCanvas.height / source.height;
   const recordPenX = lastPenPos ? (lastPenPos.x - source.x) * recordScaleX : 0;
@@ -2300,8 +2361,13 @@ function composeArtworkCanvas() {
   const artwork = document.createElement('canvas');
   artwork.width = drawCanvas.width; artwork.height = drawCanvas.height;
   const target = artwork.getContext('2d');
+  if (paperMultiplyActive() && refVisible) {
+    target.fillStyle = paperColorPicker.value || '#ffffff';
+    target.fillRect(0, 0, artwork.width, artwork.height);
+  }
   target.drawImage(colorCanvas, 0, 0);
   target.drawImage(drawCanvas, 0, 0);
+  paintPaperMultiply(target, paperArtworkRect());
   return artwork;
 }
 
@@ -2316,6 +2382,7 @@ function flattenOntoBackground(bgColor) {
   fctx.fillRect(0, 0, w, h);
   fctx.drawImage(colorCanvas, 0, 0);
   fctx.drawImage(drawCanvas, 0, 0);
+  paintPaperMultiply(fctx, paperArtworkRect());
   return flat;
 }
 
