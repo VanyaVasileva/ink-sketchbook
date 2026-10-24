@@ -2,8 +2,18 @@
 
 
 def apply_solid_marker(text: str) -> str:
+    text = text.replace('<b id="colorBrushSizeValue">80</b>', '<b id="colorBrushSizeValue">24</b>')
+    text = text.replace('id="colorBrushSize" min="2" max="240" step="1" value="80"',
+                        'id="colorBrushSize" min="2" max="240" step="1" value="24"')
+    text = text.replace('Number(colorBrushSize.value) || 80', 'Number(colorBrushSize.value) || 24')
+    sync = "colorBrushSize.value = '24'; colorBrushSizeValue.textContent = '24';"
+    if sync not in text:
+        anchor = "const colorBrushSizeValue = document.getElementById('colorBrushSizeValue');"
+        if text.count(anchor) != 1:
+            raise SystemExit('Marker opening size anchor missing')
+        text = text.replace(anchor, anchor + '\n' + sync, 1)
     if '// simple-solid-marker-v5' in text:
-        return text
+        return apply_rounded_taper(text)
     anchor = '  const sweep=op.sweep,outline=op.outline;'
     if text.count(anchor) != 1:
         raise SystemExit('Solid marker renderer anchor missing or ambiguous')
@@ -40,7 +50,7 @@ def apply_solid_marker(text: str) -> str:
   base.width = colorCanvas.width; base.height = colorCanvas.height;
   base.getContext('2d').drawImage(colorCanvas, 0, 0);
   const p = points[0];
-  const size = Math.max(2, Number(colorBrushSize.value) || 80) * getDisplayDpr();
+  const size = Math.max(2, Number(colorBrushSize.value) || 24) * getDisplayDpr();
   const sample = [p.x, p.y, size / 2];
   const op = {kind:'brush', mode:'draw', marker:true, width:size, color:currentColor, sweep:[sample]};
   colorBrushStroke = {base, size, color:currentColor, op, bounds:null};
@@ -111,4 +121,95 @@ function finishColorBrush(cancel=false) {
     text = text.replace(
         'A tapered oval brush that follows your Pencil directly; press harder for broader color beneath your ink lines.',
         'Solid opaque color beneath your ink lines. Use the size slider to set a fixed marker width.')
+    return apply_rounded_taper(text)
+
+
+def apply_rounded_taper(text: str) -> str:
+    """Narrow rounded endpoints; continuous filled ribbons, never tip stamps."""
+    if '// rounded-taper-marker-v6' in text:
+        return text
+    helpers = r'''// rounded-taper-marker-v6
+function markerRibbonSamples(op) {
+  const raw = op.sweep, result = [];
+  if (!raw || !raw.length) return result;
+  const full = op.width / 2, tip = op.width * .22;
+  const end = raw[raw.length-1][3] || 0;
+  const taper = op.width * .75;
+  const smooth = x => { x=Math.max(0,Math.min(1,x)); return x*x*(3-2*x); };
+  const add = (x,y,d) => {
+    let radius = tip+(full-tip)*smooth(d/taper);
+    if (op.finished) radius=Math.min(radius,tip+(full-tip)*smooth((end-d)/Math.min(taper,Math.max(.01,end*.5))));
+    result.push([x,y,radius,d]);
+  };
+  add(raw[0][0],raw[0][1],raw[0][3] || 0);
+  for (let i=1;i<raw.length;i++) {
+    const a=raw[i-1],b=raw[i],d0=a[3] || 0,d1=b[3] || 0;
+    // Interpolate geometry only in the two short taper zones. The centerline
+    // always reaches the actual newest Pencil sample without a follower.
+    const tapered=d0<taper || (op.finished && end-d1<taper);
+    const steps=tapered ? Math.max(1,Math.ceil((d1-d0)/Math.max(1,op.width*.08))) : 1;
+    for(let j=1;j<=steps;j++) {
+      const t=j/steps;add(a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,d0+(d1-d0)*t);
+    }
+  }
+  return result;
+}
+
+function paintMarkerRibbon(target,op) {
+  const path=markerRibbonSamples(op);
+  if(!path.length) return;
+  target.save();target.globalCompositeOperation='source-over';target.globalAlpha=1;
+  target.fillStyle=op.color;target.shadowColor='transparent';target.shadowBlur=0;
+  target.shadowOffsetX=target.shadowOffsetY=0;target.filter='none';target.beginPath();
+  const sector=(p,r,from,to) => {
+    if(to<from) [from,to]=[to,from];
+    target.moveTo(p[0],p[1]);target.lineTo(p[0]+Math.cos(from)*r,p[1]+Math.sin(from)*r);
+    target.arc(p[0],p[1],r,from,to,false);target.closePath();
+  };
+  if(path.length===1) {
+    target.arc(path[0][0],path[0][1],path[0][2],0,Math.PI*2);
+  } else {
+    let previousAngle=null,firstAngle=0,lastAngle=0;
+    for(let i=1;i<path.length;i++) {
+      const a=path[i-1],b=path[i],dx=b[0]-a[0],dy=b[1]-a[1],length=Math.hypot(dx,dy);
+      if(length<.000001) continue;
+      const nx=-dy/length,ny=dx/length,angle=Math.atan2(dy,dx);
+      if(previousAngle===null) firstAngle=angle;
+      // Filled ribbon sections share their complete edges. Positive winding
+      // makes crossings add solid coverage rather than cut holes.
+      target.moveTo(a[0]-nx*a[2],a[1]-ny*a[2]);
+      target.lineTo(b[0]-nx*b[2],b[1]-ny*b[2]);
+      target.lineTo(b[0]+nx*b[2],b[1]+ny*b[2]);
+      target.lineTo(a[0]+nx*a[2],a[1]+ny*a[2]);target.closePath();
+      if(previousAngle!==null) {
+        const turn=Math.atan2(Math.sin(angle-previousAngle),Math.cos(angle-previousAngle));
+        if(Math.abs(turn)>.000001) {
+          const from=previousAngle+(turn>0 ? -Math.PI/2 : Math.PI/2);
+          // Only an outer corner join, never a repeated circular brush tip.
+          sector(a,a[2],from,from+turn);
+        }
+      }
+      previousAngle=angle;lastAngle=angle;
+    }
+    if(path[0][3]===0) sector(path[0],path[0][2],firstAngle+Math.PI/2,firstAngle+3*Math.PI/2);
+    if(op.finished) sector(path[path.length-1],path[path.length-1][2],lastAngle-Math.PI/2,lastAngle+Math.PI/2);
+  }
+  target.fill('nonzero');target.restore();
+}
+
+'''
+    anchor='function paintColorBrushShape(target,op) {'
+    if text.count(anchor)!=1:
+        raise SystemExit('Rounded marker renderer anchor missing')
+    text=text.replace(anchor,helpers+anchor+"\n  if(op.roundedTaper) { paintMarkerRibbon(target,op); return; }",1)
+    text=text.replace("const sample = [p.x, p.y, size / 2];", "const sample = [p.x, p.y, size / 2, 0];",1)
+    text=text.replace("marker:true, width:size, color:currentColor, sweep:[sample]", "marker:true, roundedTaper:true, finished:false, width:size, color:currentColor, sweep:[sample]",1)
+    text=text.replace("colorBrushStroke = {base, size, color:currentColor, op, bounds:null};", "colorBrushStroke = {base, size, color:currentColor, op, bounds:null, length:0};",1)
+    text=text.replace("inputModeEl.textContent = '(Solid marker — fixed width)';", "inputModeEl.textContent = '(Solid marker — narrow rounded ends)';",1)
+    text=text.replace("marker:true, width:stroke.size, color:stroke.color, sweep", "marker:true, roundedTaper:true, finished:false, width:stroke.size, color:stroke.color, sweep",1)
+    text=text.replace("  const sample = [p.x, p.y, stroke.size / 2];", "  stroke.length += Math.hypot(p.x-previous[0], p.y-previous[1]);\n  const sample = [p.x, p.y, stroke.size / 2, stroke.length];",1)
+    text=text.replace("  paintColorBrushLive([previous, sample]);", "  paintColorBrushLive(sweep.slice(-3));",1)
+    text=text.replace("  } else if (detailVectorValid && activeDetailStroke) activeDetailStroke.ops = [stroke.op];", "  } else {\n    stroke.op.finished = true;\n    if (detailVectorValid && activeDetailStroke) activeDetailStroke.ops = [stroke.op];\n  }",1)
+    text=text.replace('Solid opaque color beneath your ink lines. Use the size slider to set a fixed marker width.',
+                      'Solid opaque color with gently narrower, rounded starts and ends. Use the size slider for the body width.')
     return text
