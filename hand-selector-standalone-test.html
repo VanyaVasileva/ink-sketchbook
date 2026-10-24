@@ -1890,13 +1890,13 @@ function colorBrushTangent(sweep,index) {
   return distance>.00001 ? [dx/distance,dy/distance] : [Math.SQRT1_2,-Math.SQRT1_2];
 }
 
-// rounded-taper-marker-v6
+// gradual-rounded-marker-v7
 function markerRibbonSamples(op) {
   const raw = op.sweep, result = [];
   if (!raw || !raw.length) return result;
   const full = op.width / 2, tip = op.width * .22;
   const end = raw[raw.length-1][3] || 0;
-  const taper = op.width * .75;
+  const taper = op.width * 3;
   const smooth = x => { x=Math.max(0,Math.min(1,x)); return x*x*(3-2*x); };
   const add = (x,y,d) => {
     let radius = tip+(full-tip)*smooth(d/taper);
