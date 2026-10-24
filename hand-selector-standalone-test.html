@@ -2099,7 +2099,17 @@ function renderColorBrushNow() {
 function continueColorBrush(e) {
   const stroke = colorBrushStroke;
   if (!stroke) return;
-  const p = getPos(e), sweep = stroke.op.sweep, previous = sweep[sweep.length-1];
+  // color-marker-streamline-v1: filter positions, preserving pressure geometry.
+  const raw = getPos(e), sweep = stroke.op.sweep, previous = sweep[sweep.length-1];
+  const strength = Math.max(0, Math.min(1, (Number(streamlineSlider.value) || 0) / 100));
+  // Never catch up or change the ending after lifting the Pencil.
+  if (strength > 0 && e.type === 'pointerup') return;
+  const lastRaw = stroke.rawPoint || {x:sweep[0][0], y:sweep[0][1]};
+  if (Math.hypot(raw.x-lastRaw.x, raw.y-lastRaw.y) < .00001) return;
+  stroke.rawPoint = {x:raw.x, y:raw.y};
+  const follow = 1 - strength * .82;
+  const p = {x:previous[0]+(raw.x-previous[0])*follow,
+             y:previous[1]+(raw.y-previous[1])*follow};
   // Holding still or changing pressure cannot enlarge or darken the stroke.
   if (Math.hypot(p.x-previous[0], p.y-previous[1]) < .00001) return;
   const distance = Math.hypot(p.x-previous[0], p.y-previous[1]);
