@@ -1,7 +1,7 @@
 """Replace the color brush's new strokes with a plain opaque canvas marker."""
 
 
-def apply_solid_marker(text: str) -> str:
+def _apply_solid_marker_base(text: str) -> str:
     text = text.replace('<b id="colorBrushSizeValue">80</b>', '<b id="colorBrushSizeValue">24</b>')
     text = text.replace('id="colorBrushSize" min="2" max="240" step="1" value="80"',
                         'id="colorBrushSize" min="2" max="240" step="1" value="24"')
@@ -216,3 +216,84 @@ function paintMarkerRibbon(target,op) {
     text=text.replace('Solid opaque color beneath your ink lines. Use the size slider to set a fixed marker width.',
                       'Solid opaque color with gently narrower, rounded starts and ends. Use the size slider for the body width.')
     return text
+
+
+def apply_pressure_marker(text: str) -> str:
+    """Pressure controls only moving-stroke width; endpoint limits win."""
+    if '// pressure-ribbon-marker-v8' in text:
+        return text
+
+    def change(old, new):
+        nonlocal text
+        if text.count(old) != 1:
+            raise SystemExit('Pressure marker anchor missing or ambiguous: ' + old[:70])
+        text = text.replace(old, new, 1)
+
+    first = text.index('function markerRibbonSamples(op) {')
+    last = text.index('function paintMarkerRibbon(target,op) {', first)
+    text = text[:first] + r'''// pressure-ribbon-marker-v8
+function markerRibbonSamples(op) {
+  const raw=op.sweep,result=[];
+  if(!raw || !raw.length) return result;
+  const full=op.width/2,tip=op.pressureWidth ? (op.tipRadius || op.width*.08) : op.width*.22;
+  const end=raw[raw.length-1][3] || 0,taper=op.width*3;
+  const smooth=x=>{x=Math.max(0,Math.min(1,x));return x*x*(3-2*x);};
+  const add=(x,y,d,body) => {
+    const startGain=smooth(d/taper);
+    const endGain=op.finished ? smooth((end-d)/Math.min(taper,Math.max(.01,end*.5))) : 1;
+    // Blend the width envelopes instead of taking a hard minimum. That avoids
+    // shoulders where the pressure width meets an endpoint limit.
+    let radius=op.pressureWidth
+      ? tip+(Math.max(tip,Math.min(full,body))-tip)*startGain*endGain
+      : tip+(full-tip)*startGain;
+    if(!op.pressureWidth && op.finished) radius=Math.min(radius,tip+(full-tip)*endGain);
+    result.push([x,y,radius,d]);
+  };
+  add(raw[0][0],raw[0][1],raw[0][3] || 0,raw[0][2]);
+  for(let i=1;i<raw.length;i++) {
+    const a=raw[i-1],b=raw[i],d0=a[3] || 0,d1=b[3] || 0;
+    const tapered=d0<taper || (op.finished && end-d1<taper);
+    const steps=tapered || op.pressureWidth ? Math.max(1,Math.ceil((d1-d0)/Math.max(1,op.width*.08))) : 1;
+    for(let j=1;j<=steps;j++) {
+      const t=j/steps;
+      // Smooth width interpolation, independent of position: the centerline
+      // still reaches the newest Pencil coordinates synchronously.
+      const blend=smooth(t);
+      add(a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,d0+(d1-d0)*t,a[2]+(b[2]-a[2])*blend);
+    }
+  }
+  return result;
+}
+
+''' + text[last:]
+    change('  const sample = [p.x, p.y, size / 2, 0];', '''  const pen = e.pointerType === 'pen';
+  const pressure = pen ? Math.max(0,Math.min(1,Number(e.pressure) || 0)) : .65;
+  const tipRadius = Math.min(size*.08,1.5*getDisplayDpr());
+  const bodyRadius = tipRadius + (size/2-tipRadius)*Math.pow(pressure,.85);
+  const sample = [p.x, p.y, bodyRadius, 0];''')
+    change("marker:true, roundedTaper:true, finished:false, width:size", "marker:true, roundedTaper:true, pressureWidth:true, tipRadius, finished:false, width:size")
+    change("colorBrushStroke = {base, size, color:currentColor, op, bounds:null, length:0};", "colorBrushStroke = {base, size, color:currentColor, op, bounds:null, length:0, pen};")
+    change("inputModeEl.textContent = '(Solid marker — narrow rounded ends)';", "inputModeEl.textContent = pen ? '(Pressure width — protected thin ends)' : '(Color marker — thin rounded ends)';")
+    change("marker:true, roundedTaper:true, finished:false, width:stroke.size", "marker:true, roundedTaper:true, pressureWidth:true, tipRadius:stroke.op.tipRadius, finished:false, width:stroke.size")
+    change('  const stroke = colorBrushStroke, [x,y,r] = sample;', '  const stroke = colorBrushStroke, [x,y] = sample, r = stroke.size / 2;')
+    change('''  stroke.length += Math.hypot(p.x-previous[0], p.y-previous[1]);
+  const sample = [p.x, p.y, stroke.size / 2, stroke.length];''', '''  const distance = Math.hypot(p.x-previous[0], p.y-previous[1]);
+  stroke.length += distance;
+  // Pressure changes at a stationary tip never paint. Ease width as distance
+  // is travelled, and limit the slope so hard presses cannot form a step.
+  const pressure = stroke.pen ? Math.max(0,Math.min(1,Number(e.pressure) || 0)) : .65;
+  const tip = stroke.op.tipRadius;
+  const desired = e.type === 'pointerup' ? previous[2]
+    : tip + (stroke.size/2-tip)*Math.pow(pressure,.85);
+  const eased = previous[2] + (desired-previous[2])*(1-Math.exp(-distance/Math.max(1,stroke.size*.65)));
+  const limit = distance*.18;
+  const radius = Math.max(tip, Math.min(stroke.size/2,
+    previous[2]+Math.max(-limit,Math.min(limit,eased-previous[2]))));
+  const sample = [p.x, p.y, radius, stroke.length];''')
+    text=text.replace('Solid opaque color with gently narrower, rounded starts and ends. Use the size slider for the body width.',
+                      'Pencil pressure changes width while moving; starts and ends stay thin and rounded. Color stays fully opaque.')
+    return text
+
+
+def apply_solid_marker(text: str) -> str:
+    return apply_pressure_marker(_apply_solid_marker_base(text))
