@@ -296,7 +296,7 @@ function markerRibbonSamples(op) {
 
 
 def apply_solid_marker(text: str) -> str:
-    return preserve_marker_on_lift(apply_pressure_marker(_apply_solid_marker_base(text)))
+    return apply_marker_streamline(preserve_marker_on_lift(apply_pressure_marker(_apply_solid_marker_base(text))))
 
 
 def preserve_marker_on_lift(text: str) -> str:
@@ -314,3 +314,24 @@ def preserve_marker_on_lift(text: str) -> str:
     text = text.replace('Pencil pressure changes width while moving; starts and ends stay thin and rounded. Color stays fully opaque.',
                         'Pencil pressure changes width while moving. Starts stay thin; ease pressure for a thinner ending. Lifting preserves your stroke.')
     return text
+
+
+def apply_marker_streamline(text: str) -> str:
+    """Use the existing Streamline control for colour-brush positions only."""
+    if '// color-marker-streamline-v1' in text:
+        return text
+    old = '  const p = getPos(e), sweep = stroke.op.sweep, previous = sweep[sweep.length-1];'
+    new = '''  // color-marker-streamline-v1: filter positions, preserving pressure geometry.
+  const raw = getPos(e), sweep = stroke.op.sweep, previous = sweep[sweep.length-1];
+  const strength = Math.max(0, Math.min(1, (Number(streamlineSlider.value) || 0) / 100));
+  // Never catch up or change the ending after lifting the Pencil.
+  if (strength > 0 && e.type === 'pointerup') return;
+  const lastRaw = stroke.rawPoint || {x:sweep[0][0], y:sweep[0][1]};
+  if (Math.hypot(raw.x-lastRaw.x, raw.y-lastRaw.y) < .00001) return;
+  stroke.rawPoint = {x:raw.x, y:raw.y};
+  const follow = 1 - strength * .82;
+  const p = {x:previous[0]+(raw.x-previous[0])*follow,
+             y:previous[1]+(raw.y-previous[1])*follow};'''
+    if text.count(old) != 1:
+        raise SystemExit('Colour marker streamline position anchor missing')
+    return text.replace(old, new, 1)
