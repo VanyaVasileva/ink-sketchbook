@@ -296,4 +296,21 @@ function markerRibbonSamples(op) {
 
 
 def apply_solid_marker(text: str) -> str:
-    return apply_pressure_marker(_apply_solid_marker_base(text))
+    return preserve_marker_on_lift(apply_pressure_marker(_apply_solid_marker_base(text)))
+
+
+def preserve_marker_on_lift(text: str) -> str:
+    """Commit the live stroke without narrowing or repainting it on lift."""
+    if '// preserve-marker-on-lift-v9' in text:
+        return text
+    old = '    stroke.op.finished = true;'
+    if text.count(old) != 1:
+        raise SystemExit('Marker release geometry anchor missing')
+    text = text.replace(old, '    // preserve-marker-on-lift-v9: keep the live geometry on release.', 1)
+    old = '  renderColorBrushNow(); stroke.base.width = stroke.base.height = 0;'
+    if text.count(old) != 1:
+        raise SystemExit('Marker release repaint anchor missing')
+    text = text.replace(old, '  if (cancel) renderColorBrushNow();\n  stroke.base.width = stroke.base.height = 0;', 1)
+    text = text.replace('Pencil pressure changes width while moving; starts and ends stay thin and rounded. Color stays fully opaque.',
+                        'Pencil pressure changes width while moving. Starts stay thin; ease pressure for a thinner ending. Lifting preserves your stroke.')
+    return text
