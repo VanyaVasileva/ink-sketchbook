@@ -208,7 +208,7 @@
       <div id="colorBrushControls" class="slider-group" hidden>
         <span><span data-i18n="colorBrushLabel">Color brush size</span> <b id="colorBrushSizeValue">24</b></span>
         <input type="range" id="colorBrushSize" min="2" max="240" step="1" value="24" aria-label="Color brush size">
-        <small data-i18n="colorLayerHint">Pencil pressure changes width while moving; starts and ends stay thin and rounded. Color stays fully opaque.</small>
+        <small data-i18n="colorLayerHint">Pencil pressure changes width while moving. Starts stay thin; ease pressure for a thinner ending. Lifting preserves your stroke.</small>
       </div>
       <div class="row palette" id="palette"></div>
       <input type="color" id="colorPicker" value="#000000" style="width:32px; height:32px; border:2px solid #d8d3c6; border-radius:6px; padding:0; cursor:pointer;">
@@ -370,7 +370,7 @@ const langSelect = document.getElementById('langSelect');
 const TRANSLATIONS = {
   en: {
     layerLabel: "Layer", inkLayerLabel: "Ink", colorLayerLabel: "Color",
-    colorBrushLabel: "Color brush size", colorLayerHint: "Pencil pressure changes width while moving; starts and ends stay thin and rounded. Color stays fully opaque.",
+    colorBrushLabel: "Color brush size", colorLayerHint: "Pencil pressure changes width while moving. Starts stay thin; ease pressure for a thinner ending. Lifting preserves your stroke.",
     clearInkLayer: "Clear ink layer", clearColorLayer: "Clear color layer",
     lockText: "Enter the access code from your purchase to unlock the tool.",
     unlockBtn: "Unlock", passcodePlaceholder: "Access code",
@@ -2126,10 +2126,11 @@ function finishColorBrush(cancel=false) {
   if (cancel) {
     stroke.op = {...stroke.op, sweep:[]}; activeDetailStroke = null;
   } else {
-    stroke.op.finished = true;
+    // preserve-marker-on-lift-v9: keep the live geometry on release.
     if (detailVectorValid && activeDetailStroke) activeDetailStroke.ops = [stroke.op];
   }
-  renderColorBrushNow(); stroke.base.width = stroke.base.height = 0;
+  if (cancel) renderColorBrushNow();
+  stroke.base.width = stroke.base.height = 0;
   colorBrushStroke = null; artworkRevision++; scheduleDetailRender();
 }
 
