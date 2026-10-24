@@ -6,6 +6,7 @@ on:
     paths:
       - 'hand-selector-standalone-test.html'
       - 'scripts/apply-retina-standalone.py'
+      - 'scripts/solid_marker_patch.py'
       - '.github/workflows/apply-retina-standalone.yml'
 
 permissions:
