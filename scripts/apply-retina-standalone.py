@@ -2,6 +2,7 @@ from pathlib import Path
 import base64
 import re
 from paper_multiply_patch import apply_paper_multiply
+from solid_marker_patch import apply_solid_marker
 
 PATH = Path('hand-selector-standalone-test.html')
 MARKER = 'retina-detail-display-v2-standalone'
@@ -1608,14 +1609,14 @@ native_retina_hooks = [
     "drawCanvas.style.opacity = '0';",
 ]
 if MARKER in s:
-    PATH.write_text(apply_paper_multiply(apply_oval_color_brush(apply_direct_color_brush(apply_solid_color_brush(apply_color_pressure_brush(apply_precise_eraser(apply_color_layer(s))))))))
+    PATH.write_text(apply_solid_marker(apply_paper_multiply(apply_oval_color_brush(apply_direct_color_brush(apply_solid_color_brush(apply_color_pressure_brush(apply_precise_eraser(apply_color_layer(s)))))))))
     print('Standalone defaults checked; retina layer already present.')
     raise SystemExit(0)
 if all(item in s for item in native_retina_hooks):
     anchor = "detailCanvas.id = 'detailCanvas';"
     s = s.replace(anchor, "// " + MARKER + "\n" + anchor, 1)
     PATH.write_text(s)
-    PATH.write_text(apply_paper_multiply(apply_oval_color_brush(apply_direct_color_brush(apply_solid_color_brush(apply_color_pressure_brush(apply_precise_eraser(apply_color_layer(s))))))))
+    PATH.write_text(apply_solid_marker(apply_paper_multiply(apply_oval_color_brush(apply_direct_color_brush(apply_solid_color_brush(apply_color_pressure_brush(apply_precise_eraser(apply_color_layer(s)))))))))
     print('Standalone already has native retina detail rendering; added compatibility marker.')
     raise SystemExit(0)
 
@@ -2011,4 +2012,4 @@ for item in required:
 
 PATH.write_text(s)
 print('Patched exact standalone hand-selector page with retina-sharp zoom display.')
-PATH.write_text(apply_paper_multiply(apply_oval_color_brush(apply_direct_color_brush(apply_solid_color_brush(apply_color_pressure_brush(apply_precise_eraser(apply_color_layer(s))))))))
+PATH.write_text(apply_solid_marker(apply_paper_multiply(apply_oval_color_brush(apply_direct_color_brush(apply_solid_color_brush(apply_color_pressure_brush(apply_precise_eraser(apply_color_layer(s)))))))))
