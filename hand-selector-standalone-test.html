@@ -202,6 +202,13 @@
       <div class="slider-group"><span>Background opacity</span> <input type="range" id="opacitySlider" min="10" max="100" value="100"></div>
       <div class="slider-group"><span>Background size</span> <input type="range" id="refSizeSlider" min="25" max="500" value="100"></div><div id="videoBackgroundSection" style="border-top:1px solid #e5e1d8;padding-top:10px;display:flex;flex-direction:column;gap:8px;"><div style="font-size:12px;font-weight:700;color:#2a2620;">Video background <span style="font-weight:500;color:#8a8373;">· draw while it plays</span></div><label class="filebtn" for="videoBgInput">🎬 Upload video</label><input type="file" id="videoBgInput" accept="video/*" /><div id="videoBgPlayback" style="display:none;flex-direction:column;gap:7px;"><div id="videoBgStatus" style="font-size:11px;color:#8a8373;text-align:center;">No video selected</div><div id="videoBgQuality" style="font-size:11px;line-height:1.35;color:#8a8373;text-align:center;"></div><div class="row" style="gap:6px;"><button id="videoBgPlayBtn" type="button">▶ Play</button><button id="videoBgLoopBtn" type="button" class="active">↻ Loop: On</button></div><input id="videoBgScrub" type="range" min="0" max="1000" value="0" step="1" style="width:100%;" aria-label="Video position"><div id="videoBgTime" style="font-size:11px;color:#8a8373;text-align:center;">0:00 / 0:00</div><button id="removeVideoBgBtn" type="button">✕ Remove video</button></div></div><div id="guideControls" style="border-top:1px solid #e5e1d8;padding-top:10px;display:flex;flex-direction:column;gap:8px;"><div style="font-size:12px;font-weight:700;color:#2a2620;">Sketch overlay <span style="font-weight:500;color:#8a8373;">· hidden from recording</span></div><label class="filebtn" for="guideFileInput">📝 Upload sketch overlay</label><input type="file" id="guideFileInput" accept="image/*" /><button id="toggleGuideBtn" class="active" type="button">👁 Sketch overlay visible</button><button id="moveGuideBtn" type="button">↔ Move sketch</button><button id="removeGuideBtn" type="button" style="display:none;">✕ Remove sketch</button><div class="slider-group"><span>Sketch opacity</span> <input type="range" id="guideOpacitySlider" min="5" max="100" value="45"></div><div class="slider-group"><span>Sketch size</span> <input type="range" id="guideSizeSlider" min="10" max="500" value="100"></div><button id="resetGuidePosBtn" type="button">◎ Center sketch</button></div>
       <div class="slider-group"><span data-i18n="wobbleLabel">Wobble</span> <input type="range" id="wobbleSlider" min="0" max="3" value="0.5" step="0.5"></div><div class="slider-group"><span>Streamline</span> <input type="range" id="streamlineSlider" min="0" max="100" value="35" step="5"></div><button id="recordReferenceBtn" type="button" class="active">🎞 Background in recording: On</button><div class="slider-group"><span>Recording hand</span><select id="recordingHandSelect" style="width:100%;border:1px solid #d8d3c6;border-radius:7px;padding:8px 10px;background:#fff;color:#2a2620;font-size:16px;"><option value="human">Original</option><option value="cream">Cream sleeve</option><option value="sage">Sage sleeve</option><option value="pink">Pink sleeve</option><option value="dark">Dark sleeve</option><option value="brownOatmeal">Brown + oatmeal</option><option value="woodenPencil" selected>Wooden pencil</option><option value="modernFineLiner">Modern fine liner</option><option value="classicInkPen">Classic ink pen</option></select></div><div class="slider-group"><span>Hand size <b id="recordingHandSizeValue" style="font-weight:600;">115%</b></span> <input type="range" id="recordingHandSize" min="60" max="140" value="115" step="5"></div>
+      <label class="slider-group" style="flex-direction:row;align-items:center;">
+        <input type="checkbox" id="paperToothToggle"> Paper Tooth
+      </label>
+      <div class="slider-group">
+        <label for="paperToothStrength">Strength <output id="paperToothValue">35%</output></label>
+        <input type="range" id="paperToothStrength" min="0" max="100" value="35" disabled>
+      </div>
       <div class="slider-group"><span data-i18n="thicknessLabel">Thickness</span> <input type="range" id="thicknessSlider" min="0.5" max="3" value="1.25" step="0.25"></div>
       <div class="slider-group"><span data-i18n="minLabel">Min</span> <input type="range" id="minSlider" min="0.5" max="6" value="0.5" step="0.5"></div>
       <div class="slider-group"><span data-i18n="maxLabel">Max</span> <input type="range" id="maxSlider" min="2" max="16" value="6" step="0.5"></div>
@@ -787,12 +794,14 @@ function paintDetailOp(op, target = detailCtx) {
 function renderDetailView() {
   detailRenderRAF = null;
   if (!detailZoomIsActive()) {
+    syncPaperToothDisplay(false);
     detailCanvas.style.display = detailColorCanvas.style.display = 'none';
     drawCanvas.style.opacity = '';
     colorCanvas.style.opacity = '';
     return;
   }
   ensureDetailCanvasSize();
+  syncPaperToothDisplay(true);
   for (const [canvas, target, layer] of [[detailColorCanvas, detailColorCtx, 'color'], [detailCanvas, detailCtx, 'ink']]) {
     target.setTransform(1, 0, 0, 1, 0, 0);
     target.globalCompositeOperation = 'source-over';
@@ -1406,7 +1415,7 @@ function paintRecordingInk(source) {
     }
     const activeCount = activeDetailStroke ? activeDetailStroke.ops.length : 0;
     const key = [artworkRevision, detailVisibleCount, activeCount, source.x, source.y,
-      source.width, source.height, recordCanvas.width, recordCanvas.height].join(':');
+      source.width, source.height, recordCanvas.width, recordCanvas.height, paperToothKey()].join(':');
     if (key !== oldKey) {
       const target = canvas.getContext('2d');
       target.setTransform(1, 0, 0, 1, 0, 0);
@@ -1432,6 +1441,13 @@ function paintRecordingInk(source) {
       if (activeDetailStroke && (activeDetailStroke.layer || 'ink') === layer)
         for (const op of activeDetailStroke.ops) paint(op);
       target.restore();
+      if (layer === 'ink' && paperToothActive()) {
+        target.save();
+        target.setTransform(sx, 0, 0, sy, -source.x * sx, -source.y * sy);
+        target.globalCompositeOperation = 'destination-in';
+        target.drawImage(paperToothMask(), 0, 0);
+        target.restore();
+      }
       target.globalCompositeOperation = 'source-over';
       if (layer === 'color') recordingColorKey = key; else recordingInkKey = key;
     }
@@ -1479,7 +1495,7 @@ function compositeRecordFrame() {
   recordCtx.save();
   recordCtx.imageSmoothingEnabled = false;
   recordCtx.drawImage(colorCanvas, source.x, source.y, source.width, source.height, 0, 0, recordCanvas.width, recordCanvas.height);
-  recordCtx.drawImage(drawCanvas, source.x, source.y, source.width, source.height, 0, 0, recordCanvas.width, recordCanvas.height);
+  recordCtx.drawImage(paperToothInk(), source.x, source.y, source.width, source.height, 0, 0, recordCanvas.width, recordCanvas.height);
   recordCtx.restore();
   }
   if (recordReferenceInVideo) paintPaperMultiply(recordCtx, source);
@@ -2472,7 +2488,7 @@ function composeArtworkCanvas() {
     target.fillRect(0, 0, artwork.width, artwork.height);
   }
   target.drawImage(colorCanvas, 0, 0);
-  target.drawImage(drawCanvas, 0, 0);
+  target.drawImage(paperToothInk(), 0, 0);
   paintPaperMultiply(target, paperArtworkRect());
   return artwork;
 }
@@ -2487,7 +2503,7 @@ function flattenOntoBackground(bgColor) {
   fctx.fillStyle = bgColor;
   fctx.fillRect(0, 0, w, h);
   fctx.drawImage(colorCanvas, 0, 0);
-  fctx.drawImage(drawCanvas, 0, 0);
+  fctx.drawImage(paperToothInk(), 0, 0);
   paintPaperMultiply(fctx, paperArtworkRect());
   return flat;
 }
@@ -3127,6 +3143,128 @@ drawCanvas.addEventListener('pointerup', e => { if (e.pointerType === 'touch') h
 drawModeBtn.addEventListener('click', () => { drawCanvas.style.cursor = ''; hideEraserCursor(); });
 eraseModeBtn.addEventListener('click', () => { drawCanvas.style.cursor = 'none'; });
 syncEraserSize();
+
+
+// paper-tooth-v1: optional, non-destructive final ink opacity mask.
+// Deliberately local to this standalone file. Never consumes the stroke RNG.
+const paperToothToggle = document.getElementById('paperToothToggle');
+const paperToothStrength = document.getElementById('paperToothStrength');
+const paperToothValue = document.getElementById('paperToothValue');
+let toothMask = null, toothMaskKey = '', toothMaskUrl = '';
+let toothInk = null, toothInkKey = '', toothDisplayKey = '';
+function paperToothActive() {
+  return paperToothToggle.checked && Number(paperToothStrength.value) > 0;
+}
+function paperToothKey() {
+  return paperToothActive() ? [drawCanvas.width, drawCanvas.height, currentDpr, paperToothStrength.value].join(':') : '';
+}
+function paperToothMask() {
+  const key = paperToothKey();
+  if (toothMask && key === toothMaskKey) return toothMask;
+  const w = drawCanvas.width, h = drawCanvas.height;
+  const mask = document.createElement('canvas'); mask.width = w; mask.height = h;
+  const m = mask.getContext('2d');
+  m.fillStyle = '#fff'; m.fillRect(0, 0, w, h);
+  m.globalCompositeOperation = 'destination-out';
+  const strength = Number(paperToothStrength.value) / 100;
+  const unit = Math.max(0.5, currentDpr / 3);
+  let seed = 0x71a5b93d;
+  const random = () => {
+    seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5;
+    return (seed >>> 0) / 4294967296;
+  };
+  // Smooth, non-periodic fiber-density field; no tiled image or pixel noise.
+  const hash = (x, y) => {
+    let n = Math.imul(x, 374761393) ^ Math.imul(y, 668265263) ^ 0x1b873593;
+    n = Math.imul(n ^ (n >>> 13), 1274126177);
+    return ((n ^ (n >>> 16)) >>> 0) / 4294967296;
+  };
+  const field = (x, y) => {
+    const ix = Math.floor(x), iy = Math.floor(y);
+    let u = x - ix, v = y - iy;
+    u = u * u * (3 - 2 * u); v = v * v * (3 - 2 * v);
+    return (hash(ix, iy) * (1-u) + hash(ix+1, iy) * u) * (1-v) +
+      (hash(ix, iy+1) * (1-u) + hash(ix+1, iy+1) * u) * v;
+  };
+  const count = Math.ceil(w * h * 0.012 / (unit * unit));
+  for (let i = 0; i < count; i++) {
+    const x = random() * w, y = random() * h;
+    const pick = random(), angleJitter = random(), lengthPick = random();
+    const widthPick = random(), bendPick = random(), opacityPick = random();
+    const density = field(x / (37*unit), y / (37*unit));
+    if (pick > (0.15 + 0.85 * density) * (0.2 + 0.8 * strength)) continue;
+    const angle = field(x / (53*unit) + 19, y / (53*unit) + 7) * Math.PI * 2 + angleJitter * 2.3;
+    const length = (1.3 + lengthPick * lengthPick * 8) * unit;
+    const width = (0.45 + widthPick * widthPick * 1.65) * unit;
+    const dx = Math.cos(angle) * length, dy = Math.sin(angle) * length;
+    const bend = (bendPick - 0.5) * 0.85;
+    const alpha = Math.min(1, strength * strength * (0.6 + opacityPick * 3.8));
+    m.beginPath();
+    m.moveTo(x - dx/2, y - dy/2);
+    m.quadraticCurveTo(x - dy*bend, y + dx*bend, x + dx/2, y + dy/2);
+    m.lineCap = 'round';
+    // A faint shoulder softens only the microscopic gaps, never the ink itself.
+    m.lineWidth = width + 0.65 * unit; m.strokeStyle = `rgba(0,0,0,${alpha*0.16})`; m.stroke();
+    m.lineWidth = width; m.strokeStyle = `rgba(0,0,0,${alpha})`; m.stroke();
+  }
+  toothMask = mask; toothMaskKey = key;
+  toothMaskUrl = mask.toDataURL('image/png');
+  toothDisplayKey = ''; toothInkKey = '';
+  return mask;
+}
+function paperToothInk() {
+  if (!paperToothActive()) return drawCanvas; // exact original source when off
+  const mask = paperToothMask(), key = toothMaskKey + ':' + artworkRevision;
+  if (toothInk && toothInkKey === key) return toothInk;
+  if (!toothInk) toothInk = document.createElement('canvas');
+  toothInk.width = drawCanvas.width; toothInk.height = drawCanvas.height;
+  const target = toothInk.getContext('2d');
+  target.drawImage(drawCanvas, 0, 0);
+  target.globalCompositeOperation = 'destination-in'; target.drawImage(mask, 0, 0);
+  target.globalCompositeOperation = 'source-over';
+  toothInkKey = key;
+  return toothInk;
+}
+function setPaperToothCss(canvas, url) {
+  if (url) {
+    canvas.style.maskImage = canvas.style.webkitMaskImage = `url("${url}")`;
+    canvas.style.maskSize = canvas.style.webkitMaskSize = '100% 100%';
+    canvas.style.maskRepeat = canvas.style.webkitMaskRepeat = 'no-repeat';
+  } else {
+    for (const name of ['mask-image', '-webkit-mask-image', 'mask-size', '-webkit-mask-size', 'mask-repeat', '-webkit-mask-repeat']) canvas.style.removeProperty(name);
+  }
+}
+function syncPaperToothDisplay(detail) {
+  if (!paperToothActive()) {
+    if (toothDisplayKey) {
+      setPaperToothCss(drawCanvas, ''); setPaperToothCss(detailCanvas, '');
+      toothDisplayKey = '';
+    }
+    return;
+  }
+  const mask = paperToothMask();
+  const key = [toothMaskKey, detail, detailCanvas.width, detailCanvas.height,
+    canvasDisplayCssW, canvasDisplayCssH, canvasDisplayLeft, canvasDisplayTop,
+    view.x, view.y, view.scale, view.rotation, detailPixelRatio].join(':');
+  if (key === toothDisplayKey) return;
+  setPaperToothCss(drawCanvas, toothMaskUrl);
+  if (detail) {
+    const viewportMask = document.createElement('canvas');
+    viewportMask.width = detailCanvas.width; viewportMask.height = detailCanvas.height;
+    const target = viewportMask.getContext('2d');
+    setDetailTransform(target); target.drawImage(mask, 0, 0);
+    setPaperToothCss(detailCanvas, viewportMask.toDataURL('image/png'));
+  }
+  toothDisplayKey = key;
+}
+function updatePaperTooth() {
+  paperToothStrength.disabled = !paperToothToggle.checked;
+  paperToothValue.textContent = paperToothStrength.value + '%';
+  scheduleDetailRender();
+}
+paperToothToggle.addEventListener('change', updatePaperTooth);
+paperToothStrength.addEventListener('input', updatePaperTooth);
+paperToothStrength.addEventListener('change', updatePaperTooth);
 
 </script>
 </body>
