@@ -225,9 +225,9 @@
       </div>
       <div id="stippleSettings" hidden>
         <div class="slider-group"><label for="stippleArea">Shading area <b id="stippleAreaValue">34</b></label><input id="stippleArea" type="range" min="8" max="120" value="34" step="1"></div>
-        <div class="slider-group"><label for="stippleGrain">Speck size <b id="stippleGrainValue">1.4</b></label><input id="stippleGrain" type="range" min="0.4" max="3" value="1.4" step="0.1"></div>
+        <div class="slider-group"><label for="stippleGrain">Dot size <b id="stippleGrainValue">1.4</b></label><input id="stippleGrain" type="range" min="0.4" max="3" value="1.4" step="0.1"></div>
         <div class="slider-group"><label for="stippleFlow">Ink flow <b id="stippleFlowValue">38</b></label><input id="stippleFlow" type="range" min="5" max="100" value="38" step="1"></div>
-        <small style="color:#6b6558;line-height:1.5;display:block;margin:6px 0 10px">Uneven ink specks for natural shading. Sweep lightly; slow down or pass again to deepen the shadows. Use on the Ink layer.</small>
+        <small style="color:#6b6558;line-height:1.5;display:block;margin:6px 0 10px">Rounded ink dots with subtle shape and size variation. Sweep lightly; slow down or pass again to deepen the shadows. Use on the Ink layer.</small>
       </div>
       <div class="row palette" id="palette"></div>
       <input type="color" id="colorPicker" value="#000000" style="width:32px; height:32px; border:2px solid #d8d3c6; border-radius:6px; padding:0; cursor:pointer;">
@@ -2174,7 +2174,7 @@ function finishColorBrush(cancel=false) {
   colorBrushStroke = null; artworkRevision++; scheduleDetailRender();
 }
 
-// natural-stipple-v1
+// natural-stipple-v2-rounded-dots
 const stippleTool = document.getElementById('stippleTool');
 const stippleSettings = document.getElementById('stippleSettings');
 const stippleArea = document.getElementById('stippleArea');
@@ -2196,8 +2196,8 @@ function stippleRandom(seed) {
   return () => { state ^= state << 13; state ^= state >>> 17; state ^= state << 5; return (state >>> 0) / 4294967296; };
 }
 function paintStipple(target, op) {
-  // Replay the same irregular geometry at every resolution. No circular stamps,
-  // tiled texture, blur filter or fresh randomness during export/recording.
+  // Replay the same softly rounded ink dots at every resolution. Gentle
+  // contour and size variation keeps the dots natural without angular flakes.
   const random = stippleRandom(op.seed);
   target.save();
   target.globalCompositeOperation = 'source-over';
@@ -2208,21 +2208,25 @@ function paintStipple(target, op) {
     const x=op.x+Math.cos(theta)*reach, y=op.y+Math.sin(theta)*reach;
     const edge=reach/Math.max(0.001,op.radius);
     if(random()>1-edge*edge*0.82) continue;
-    const size=op.grain*(0.23+Math.pow(random(),1.7)*0.92);
+    const size=op.grain*(0.78+random()*0.44);
     const angle=op.angle+(random()-0.5)*Math.PI*1.7;
-    const fleck=random()<0.17;
-    const length=size*(fleck?1.9+random()*1.5:0.85+random()*0.65);
-    const width=size*(0.55+random()*0.48);
-    const vertices=6+Math.floor(random()*4);
+    const aspect=0.96+random()*0.08;
+    const vertices=12;
     const ca=Math.cos(angle),sa=Math.sin(angle);
     target.globalAlpha=(0.30+random()*0.65)*(0.82-0.20*edge);
-    target.beginPath();
+    const points=[];
     for(let j=0;j<vertices;j++) {
       const a=j/vertices*Math.PI*2;
-      const irregular=0.64+random()*0.54;
-      const u=Math.cos(a)*length*irregular/2, v=Math.sin(a)*width*irregular/2;
-      const px=x+u*ca-v*sa,py=y+u*sa+v*ca;
-      if(j===0) target.moveTo(px,py); else target.lineTo(px,py);
+      const radius=size/2*(0.94+random()*0.12);
+      const u=Math.cos(a)*radius*aspect, v=Math.sin(a)*radius/aspect;
+      points.push({x:x+u*ca-v*sa,y:y+u*sa+v*ca});
+    }
+    target.beginPath();
+    const last=points[vertices-1],first=points[0];
+    target.moveTo((last.x+first.x)/2,(last.y+first.y)/2);
+    for(let j=0;j<vertices;j++) {
+      const point=points[j],next=points[(j+1)%vertices];
+      target.quadraticCurveTo(point.x,point.y,(point.x+next.x)/2,(point.y+next.y)/2);
     }
     target.closePath(); target.fill();
   }
