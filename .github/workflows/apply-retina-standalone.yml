@@ -7,6 +7,7 @@ on:
       - 'hand-selector-standalone-test.html'
       - 'scripts/apply-retina-standalone.py'
       - 'scripts/solid_marker_patch.py'
+      - 'scripts/stipple_brush_patch.py'
       - '.github/workflows/apply-retina-standalone.yml'
 
 permissions:
@@ -29,6 +30,7 @@ jobs:
           s = Path('hand-selector-standalone-test.html').read_text()
           required = [
               'retina-detail-display-v2-standalone',
+              'natural-stipple-v2-rounded-dots',
               "detailCanvas.id = 'detailCanvas'",
               'const DETAIL_ZOOM_THRESHOLD = 1.12;',
               'recordDetailSegment(',
