@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Wet Watercolor Studio</title>
+<style>
+:root{color-scheme:light;font-family:system-ui,-apple-system,sans-serif;color:#48473f;background:#f4f1eb}*{box-sizing:border-box}body{margin:0}header{max-width:1180px;margin:auto;padding:25px 24px 18px;display:flex;justify-content:space-between;align-items:center;gap:16px}h1{font-family:Georgia,serif;font-weight:400;margin:0 0 6px;font-size:29px}p{margin:0;color:#77766c;font-size:14px;line-height:1.5}.tag{border:1px solid #d9d4c9;border-radius:20px;padding:8px 12px;font-size:12px;white-space:nowrap}main{max-width:1180px;margin:auto;padding:0 24px 24px;display:grid;grid-template-columns:250px 1fr;gap:20px}.panel{background:#fdfcf8;border:1px solid #e0ddd4;border-radius:15px;padding:20px;align-self:start}label,.label{display:block;font-size:12px;color:#767366;margin:22px 0 10px;letter-spacing:.04em}button{font:inherit;cursor:pointer;border:1px solid #dcd8ce;border-radius:9px;background:#fffefa;color:#4b4b42;min-height:42px;padding:9px 12px;touch-action:manipulation}button:hover{background:#efeee5}button:focus-visible,input:focus-visible{outline:3px solid #8aa3ad;outline-offset:3px}button.active{background:#657b7b;border-color:#657b7b;color:white}.tools{display:grid;grid-template-columns:1fr 1fr;gap:7px}.tools button{font-size:13px}.swatches{display:flex;gap:8px;flex-wrap:wrap}.swatch{min-height:29px;width:29px;border-radius:50%;padding:0;border:3px solid #fdfcf8;outline:1px solid #ded9d0}.swatch.chosen{outline:2px solid #59594f}input[type=range]{width:100%;accent-color:#778b88;margin:0}input[type=color]{width:42px;height:30px;border:0;background:none;padding:0;vertical-align:middle;cursor:pointer}.custom{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:12px}.value{float:right;color:#4e5f5d;font-variant-numeric:tabular-nums}.check{display:flex;align-items:center;gap:9px;font-size:13px;margin-top:20px}input[type=checkbox]{accent-color:#657b7b;width:17px;height:17px}.actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:18px}.actions button{flex:1;font-size:12px}.workspace{min-width:0}.paper{position:relative;background:white;border:1px solid #e0ddd4;border-radius:4px;overflow:hidden;box-shadow:0 10px 35px #635d4810;aspect-ratio:1}canvas{display:block;width:100%;height:100%;touch-action:none;cursor:crosshair}.hint{position:absolute;inset:0;pointer-events:none;display:flex;align-items:center;justify-content:center;text-align:center;padding:35px;color:#aaa79d;line-height:1.8;font-family:Georgia,serif;font-size:20px}.footer{display:flex;justify-content:space-between;gap:12px;align-items:center;padding-top:14px;font-size:12px;color:#77766c}.footer button{font-size:12px}.note{font-size:11px;margin-top:15px;color:#8b877c}.status{min-height:22px;font-size:12px;margin-top:12px;color:#667c79}@media(max-width:720px){header{padding:18px 14px}h1{font-size:25px}header .tag{display:none}main{padding:0 12px 20px;display:flex;flex-direction:column;gap:12px}.panel{width:100%;padding:14px;display:grid;grid-template-columns:1fr 1fr;gap:12px}.panel>section{min-width:0}.label,label{margin:12px 0 8px}.panel .tools{margin-bottom:12px}.panel .note{grid-column:1/-1;margin:0}.swatches{gap:7px}.swatch{width:27px;min-height:27px}.actions{margin-top:10px}.check{margin-top:12px}.status{margin-top:8px}.workspace{width:100%}}
+</style></head><body>
+<header><div><h1>Wet Watercolor Studio</h1><p>Clear water first. A touch of pigment. Watch it wander.</p></div><span class="tag">Vanya’s painting experiment · v0.1</span></header>
+<main><aside class="panel"><section><div class="tools"><button id="water" class="active" aria-pressed="true">1 · Water</button><button id="paint" aria-pressed="false">2 · Pigment</button></div>
+<div class="label">PIGMENT</div><div id="swatches" class="swatches"></div><div class="custom"><input type="color" id="color" value="#b9735d" aria-label="Custom pigment color"><span>Choose any color</span></div>
+<label for="size">BRUSH SIZE <span class="value" id="sizeValue">70</span></label><input id="size" type="range" min="4" max="160" value="70">
+<label for="load">PIGMENT LOAD <span class="value" id="loadValue">35%</span></label><input id="load" type="range" min="5" max="100" value="35">
+<div class="check"><input id="showWet" type="checkbox" checked><label for="showWet" style="margin:0;letter-spacing:0;color:inherit">Show wet areas in blue</label></div></section>
+<section><label for="spread">SPREAD <span class="value" id="spreadValue">65%</span></label><input id="spread" type="range" min="0" max="100" value="65">
+<label for="drying">DRYING SPEED <span class="value" id="dryingValue">20%</span></label><input id="drying" type="range" min="0" max="100" value="20">
+<div class="actions"><button id="pause">Pause</button><button id="dry">Dry now</button></div><div class="actions"><button id="undo" disabled>Undo stroke</button><button id="clear">Clear paper</button></div><div class="actions"><button id="demo">Try an example</button></div><div id="status" class="status" role="status">Paint a wet shape to begin.</div></section>
+<p class="note">Experimental water and pigment simulation. Blue is a guide and is excluded from PNG exports. Works locally; no uploads or accounts.</p></aside>
+<section class="workspace"><div class="paper"><canvas id="canvas" width="768" height="768" aria-label="Watercolor painting surface"></canvas><div class="hint" id="hint">Paint a shape with water.<br>Choose Pigment and touch the wet area.</div></div><div class="footer"><span id="state">Water brush · wet the paper</span><div><label for="transparent" style="display:inline;margin:0;font-size:12px;letter-spacing:0"><input id="transparent" type="checkbox"> Transparent</label> <button id="export">Export PNG</button></div></div></section></main>
+<script>
+'use strict';
+// Conservative finite-volume transport. Three optical-density channels mix subtractively.
+class Watercolor {
+ constructor(n=256){this.n=n;this.count=n*n;this.w=new Float32Array(this.count);this.p=new Float32Array(this.count*3);this.d=new Float32Array(this.count*3);this.dw=new Float32Array(this.count);this.dp=new Float32Array(this.count*3);}
+ snapshot(){return {w:this.w.slice(),p:this.p.slice(),d:this.d.slice()};}
+ restore(s){this.w.set(s.w);this.p.set(s.p);this.d.set(s.d);}
+ clear(){this.w.fill(0);this.p.fill(0);this.d.fill(0);}
+ dry(){for(let i=0;i<this.p.length;i++){this.d[i]+=this.p[i];this.p[i]=0;}this.w.fill(0);}
+ dab(x,y,r,mode,rgb,amount=0.35){
+  const n=this.n;for(let yy=Math.max(0,Math.floor(y-r));yy<=Math.min(n-1,Math.ceil(y+r));yy++)for(let xx=Math.max(0,Math.floor(x-r));xx<=Math.min(n-1,Math.ceil(x+r));xx++){
+   const dist=Math.hypot(xx-x,yy-y)/r;if(dist>=1)continue;const f=Math.min(1,(1-dist)*5),i=yy*n+xx;
+   if(mode==='water'){
+    this.w[i]=Math.min(1.5,this.w[i]+f*.24);
+    // Clear water can lift a small fraction of settled pigment.
+    for(let c=0;c<3;c++){const j=i*3+c,lift=this.d[j]*f*.025;this.d[j]-=lift;this.p[j]+=lift;}
+   }else{
+    const wet=this.w[i]>.025;for(let c=0;c<3;c++){const od=-Math.log(Math.max(.025,rgb[c]/255))*amount*f*.17;if(wet)this.p[i*3+c]+=od;else this.d[i*3+c]+=od;}
+   }
+  }
+ }
+ step(spread=.65,drying=.2){
+  const {n,count,w,p,d,dw,dp}=this;dw.fill(0);dp.fill(0);
+  const k=.19*spread;
+  const edge=(a,b)=>{
+   const wa=w[a],wb=w[b];if(wa<.00001&&wb<.00001)return;
+   const wf=(wa-wb)*.035;dw[a]-=wf;dw[b]+=wf;
+   const wet=Math.min(1,wa*5,wb*5),donor=wf>0?a:b,water=wf>0?wa:wb;
+   for(let c=0;c<3;c++){
+    const ai=a*3+c,bi=b*3+c;
+    const transport=wf*p[donor*3+c]/Math.max(.05,water);
+    const diffusion=k*wet*(p[ai]-p[bi]);const f=transport+diffusion;
+    dp[ai]-=f;dp[bi]+=f;
+   }
+  };
+  for(let y=0;y<n;y++)for(let x=0;x<n;x++){const i=y*n+x;if(x+1<n)edge(i,i+1);if(y+1<n)edge(i,i+n);}
+  for(let i=0;i<count;i++){
+   w[i]=Math.max(0,w[i]+dw[i]-drying*.00065);
+   const settle=w[i]<.025?1:drying*.0007;
+   for(let c=0;c<3;c++){const j=i*3+c,v=Math.max(0,p[j]+dp[j]);d[j]+=v*settle;p[j]=v*(1-settle);}
+  }
+ }
+}
+const $=id=>document.getElementById(id),sim=new Watercolor(),canvas=$('canvas'),ctx=canvas.getContext('2d'),raster=document.createElement('canvas');raster.width=raster.height=sim.n;
+const rc=raster.getContext('2d'),pixels=rc.createImageData(sim.n,sim.n);
+let mode='water',rgb=[185,115,93],drawing=null,last=null,paused=false,history=[],hasMarks=false,frameTime=0,accum=0;
+const palette=['#b9735d','#c59b55','#7c8d73','#708d99','#9b7d90','#786b5e'];
+const parseColor=s=>[1,3,5].map(i=>parseInt(s.slice(i,i+2),16));
+palette.forEach(hex=>{const b=document.createElement('button');b.className='swatch'+(hex===palette[0]?' chosen':'');b.style.background=hex;b.setAttribute('aria-label','Choose '+hex);b.onclick=()=>{$('color').value=hex;chooseColor();};$('swatches').append(b);});
+function chooseColor(){rgb=parseColor($('color').value);document.querySelectorAll('.swatch').forEach((b,i)=>b.classList.toggle('chosen',palette[i]===$('color').value));}
+$('color').oninput=chooseColor;
+function selectMode(m){mode=m;for(const id of ['water','paint']){$(id).classList.toggle('active',id===m);$(id).setAttribute('aria-pressed',id===m?'true':'false');}$('state').textContent=m==='water'?'Water brush · wet the paper':'Pigment brush · touch a wet area';if(m==='paint')$('size').value=24;else $('size').value=70;sync();}
+$('water').onclick=()=>selectMode('water');$('paint').onclick=()=>selectMode('paint');
+function sync(){['size','load','spread','drying'].forEach(id=>$(id+'Value').textContent=$(id).value+(id==='size'?'':'%'));}
+['size','load','spread','drying'].forEach(id=>$(id).oninput=sync);
+function saveUndo(){history.push(sim.snapshot());if(history.length>8)history.shift();$('undo').disabled=false;}
+function marked(){hasMarks=true;$('hint').style.display='none';}
+function point(e){const r=canvas.getBoundingClientRect();return {x:(e.clientX-r.left)/r.width*sim.n,y:(e.clientY-r.top)/r.height*sim.n,pressure:e.pointerType==='pen'?Math.max(.15,e.pressure):.65};}
+function stroke(a,b){const radius=+$('size').value/768*sim.n/2,dist=Math.hypot(b.x-a.x,b.y-a.y),steps=Math.max(1,Math.ceil(dist/Math.max(.6,radius*.25)));for(let s=1;s<=steps;s++){const t=s/steps;sim.dab(a.x+(b.x-a.x)*t,a.y+(b.y-a.y)*t,radius*(.6+b.pressure*.6),mode,rgb,+$('load').value/100);}marked();}
+canvas.onpointerdown=e=>{if(drawing!==null||e.button>0)return;e.preventDefault();canvas.setPointerCapture(e.pointerId);drawing=e.pointerId;saveUndo();last=point(e);stroke(last,last);$('status').textContent=mode==='water'?'Water laid down. Add pigment to the wet area.':'Pigment added. The wetness controls its movement.';};
+canvas.onpointermove=e=>{if(drawing!==e.pointerId)return;e.preventDefault();const b=point(e);stroke(last,b);last=b;};
+function endStroke(e){if(drawing===e.pointerId){drawing=null;last=null;}}
+canvas.onpointerup=endStroke;canvas.onpointercancel=endStroke;canvas.onlostpointercapture=endStroke;
+$('pause').onclick=()=>{paused=!paused;$('pause').textContent=paused?'Resume':'Pause';$('status').textContent=paused?'Flow and drying paused.':'Flow and drying resumed.';};
+$('dry').onclick=()=>{saveUndo();sim.dry();$('status').textContent='Pigment settled. Add water to gently lift it again.';render();};
+$('undo').onclick=()=>{if(history.length){sim.restore(history.pop());hasMarks=sim.w.some(v=>v>0)||sim.p.some(v=>v>0)||sim.d.some(v=>v>0);$('hint').style.display=hasMarks?'none':'flex';$('undo').disabled=!history.length;$('status').textContent='Previous state restored.';render();}};
+$('clear').onclick=()=>{saveUndo();sim.clear();hasMarks=false;$('hint').style.display='flex';$('status').textContent='Fresh paper. Paint a wet shape.';render();};
+$('demo').onclick=()=>{saveUndo();sim.clear();for(let t=0;t<Math.PI*2;t+=.055){const x=128+45*Math.cos(t),y=128+24*Math.sin(t);sim.dab(x,y,28,'water',rgb);}
+ for(let q=0;q<7;q++){sim.dab(102+q*2,127,10,'paint',parseColor('#b9735d'),.5);sim.dab(149-q,133,9,'paint',parseColor('#708d99'),.45);}marked();paused=false;$('pause').textContent='Pause';selectMode('paint');$('status').textContent='Two pigments spreading inside one wet shape.';};
+function fillImage(transparent=false,wetGuide=false){const data=pixels.data;for(let i=0;i<sim.count;i++){const j=i*3,a=i*4;const od=[0,1,2].map(c=>sim.p[j+c]+sim.d[j+c]);const light=od.map(v=>Math.exp(-v*2.3));const opacity=1-Math.min(...light);
+ for(let c=0;c<3;c++){let color=transparent&&opacity>0?(light[c]-1+opacity)/opacity*255:light[c]*255;if(wetGuide)color=color*(1-Math.min(.2,sim.w[i]*.17))+[130,185,218][c]*Math.min(.2,sim.w[i]*.17);data[a+c]=Math.max(0,Math.min(255,color));}data[a+3]=transparent?Math.round(opacity*255):255;}rc.putImageData(pixels,0,0);}
+function render(){fillImage(false,$('showWet').checked);ctx.clearRect(0,0,768,768);ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(raster,0,0,768,768);}
+$('showWet').onchange=render;
+$('export').onclick=()=>{fillImage($('transparent').checked,false);const output=document.createElement('canvas');output.width=output.height=768;const oc=output.getContext('2d');oc.imageSmoothingEnabled=true;oc.imageSmoothingQuality='high';oc.drawImage(raster,0,0,768,768);output.toBlob(blob=>{if(!blob){$('status').textContent='Export failed. Please try again.';return;}const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='watercolor-study.png';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);$('status').textContent='PNG prepared — 768 × 768 pixels.';},'image/png');render();};
+function tick(time){const dt=Math.min(.1,(time-frameTime)/1000||0);frameTime=time;accum+=dt;if(accum>=1/30){if(!paused&&hasMarks){for(let s=0;s<4;s++)sim.step(+$('spread').value/100,+$('drying').value/100);}render();accum=0;}requestAnimationFrame(tick);}
+sync();render();requestAnimationFrame(tick);
+</script></body></html>
